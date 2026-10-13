@@ -54,6 +54,18 @@ the header.
 > will not load. Uninstall any previous **v1** version of this plugin before
 > installing, then approve the v2 app from *Market → Installed*.
 
+### Scope
+
+This app manages a **source / local deployment** of Strata — the one you get by
+running `START-HERE.bat` (Windows) or `./setup.sh` (Linux) in a Strata checkout,
+which runs `serve/server.py` **as a local process**.
+
+**Docker deployments are not supported in this version.** If your Strata runs in
+a container (the official `Dockerfile` / `docker-entrypoint.sh`), the service
+lives inside the container — there is no local `serve/server.py` process, config
+is driven by container environment variables, and start/stop is `docker`, not
+this app. Docker support is planned for a future version.
+
 The app itself talks to the local Strata API (`127.0.0.1` / `localhost`) and to
 `api.github.com` for release checks.
 
@@ -162,6 +174,16 @@ Requires a Hana install that provides `scripts/validate-app.mjs`
 > v2 App 安装到 `<HANA_HOME>/apps/`，使用 `manifestVersion: 2`。
 > 旧版 Hana（v1 插件体系，`<HANA_HOME>/plugins/`）无法加载本 App。
 > 若之前装过本插件的 **v1** 版本，请先卸载，再在「市场 → 已安装」批准 v2 版本。
+
+### 适用范围
+
+本 App 管理的是 Strata 的**源码 / 本地部署** —— 即在 Strata 目录里跑
+`START-HERE.bat`（Windows）或 `./setup.sh`（Linux）的那种，服务以
+**本地进程**形式运行 `serve/server.py`。
+
+**本版不支持 Docker 部署。** 若你的 Strata 跑在容器里（官方 `Dockerfile` /
+`docker-entrypoint.sh`），服务在容器内部 —— 没有本地 `serve/server.py` 进程，
+配置由容器环境变量驱动，启停靠 `docker` 而不是本 App。Docker 支持计划在后续版本加入。
 
 App 只访问本机 Strata API（`127.0.0.1` / `localhost`），以及用于版本检查的
 `api.github.com`。
