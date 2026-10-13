@@ -1,6 +1,10 @@
 # 路线图 / 待办
 
-## 下一版：Docker 部署支持
+版本规划：
+- **1.0.0**（当前）：v2 App 首发，本地源码部署
+- **1.1.0**（下一版）：Docker 部署适配
+
+## 1.1.0：Docker 部署支持
 
 **背景**：Strata 官方支持 Docker 部署（仓库根有 `Dockerfile` + `docker-entrypoint.sh`，
 文档在 `docs/INSTALL.md`）。当前版本（1.0.0）**只支持本地源码部署**。
