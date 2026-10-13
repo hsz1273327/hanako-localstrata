@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strata Console</title>
+  <link rel="stylesheet" href="./assets/app-ui.css">
+  <link rel="stylesheet" href="./assets/panel.css">
+</head>
+<body>
+  <main class="panel" data-hana-app-ui>
+    <header class="panel-header">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path opacity="0.12" d="M12 3L22 8L12 13L2 8L12 3Z" fill="currentColor"/>
+            <path d="M12 3L22 8L12 13L2 8L12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 16L12 21L22 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="title">Strata</span>
+      </div>
+      <div class="header-actions">
+        <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
+        <button id="refreshBtn" class="icon-btn" type="button" title="Refresh" data-i18n-title="common.refresh" aria-label="Refresh" data-i18n-aria-label="common.refresh">&#x21bb;</button>
+      </div>
+    </header>
+
+    <!-- macOS 等不支持平台：只显示提示，隐藏所有操作与配置 -->
+    <section id="unsupportedBox" class="unsupported-box" hidden>
+      <div class="unsupported-head">
+        <span class="unsupported-icon" aria-hidden="true">⚠</span>
+        <span id="unsupportedTitle" class="unsupported-title" data-i18n="unsupported.title">macOS not supported</span>
+      </div>
+      <div class="unsupported-body">
+        <p id="unsupportedMessage" class="unsupported-text" data-i18n="unsupported.message">Strata currently supports Windows and Linux only, not macOS.</p>
+        <p class="unsupported-label" data-i18n="unsupported.projectUrl">Project:</p>
+        <button id="unsupportedLink" class="unsupported-link" type="button">github.com/Niko1221/Strata</button>
+      </div>
+    </section>
+
+    <!-- 状态卡片：状态行 + 短值项 + 地址/Key 长值项 -->
+    <section id="statusCard" class="status" aria-live="polite">
+      <div class="status-top">
+        <div class="status-head">
+          <span id="dot" class="dot stopped"></span>
+          <span id="stateText" class="state-text" data-i18n="state.checking">Checking…</span>
+          <span id="netMode" class="net-mode local" data-i18n="netMode.local">Local</span>
+        </div>
+        <div class="status-actions">
+          <button id="modeBtn" class="icon-btn status-action" type="button" title="Local mode (click to switch to LAN)" data-i18n-title="modeBtn.local" aria-label="Local mode (click to switch to LAN)" data-i18n-aria-label="modeBtn.local"></button>
+          <button id="actionBtn" class="icon-btn status-action" type="button" title="Start service" data-i18n-title="action.start" aria-label="Start service" data-i18n-aria-label="action.start"></button>
+        </div>
+      </div>
+      <div class="status-body">
+        <div class="stat-group">
+          <div class="stat-row">
+            <span class="stat-label" data-i18n="label.model">Model</span>
+            <span id="model" class="stat-value">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label" data-i18n="label.uptime">Uptime</span>
+            <span id="uptime" class="stat-value">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label" data-i18n="label.port">Port</span>
+            <span id="port" class="stat-value">—</span>
+          </div>
+        </div>
+        <div id="accessRows" class="stat-blocks" hidden></div>
+      </div>
+      <div id="statusConfigBox" class="status-config" hidden></div>
+    </section>
+
+    <!-- ① 版本区 -->
+    <section class="group-box" id="versionBox">
+      <h2 class="group-title" data-i18n="group.version">Version</h2>
+      <div id="versionRows" class="kv-rows">—</div>
+    </section>
+
+    <!-- ② 服务配置区 -->
+    <section class="group-box" id="configBox">
+      <h2 class="group-title" data-i18n="group.config">Service</h2>
+      <div id="configRows" class="kv-rows">—</div>
+    </section>
+
+    <!-- ③ 性能区 -->
+    <section class="group-box" id="speedBox">
+      <h2 class="group-title" data-i18n="group.speed">Performance</h2>
+      <div id="speedRows" class="kv-rows">—</div>
+    </section>
+
+    <!-- ④ 资源占用 -->
+    <section class="group-box" id="resourceBox">
+      <h2 class="group-title" data-i18n="group.resource">Resources</h2>
+      <div class="resources">
+        <div class="res-row">
+          <span class="res-label" data-i18n="resource.gpu">VRAM</span>
+          <div class="bar" role="img" aria-label="VRAM usage" data-i18n-aria-label="resource.gpuAria">
+            <div id="gpuBar" class="bar-fill"></div>
+          </div>
+          <span id="gpuText" class="res-text">—</span>
+        </div>
+        <div class="res-row">
+          <span class="res-label" data-i18n="resource.mem">RAM</span>
+          <div class="bar" role="img" aria-label="RAM usage" data-i18n-aria-label="resource.memAria">
+            <div id="memBar" class="bar-fill"></div>
+          </div>
+          <span id="memText" class="res-text">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑤ 日志 -->
+    <details class="logs" id="logsBox">
+      <summary data-i18n="group.logs">Logs</summary>
+      <pre id="logLines" class="log-lines">—</pre>
+    </details>
+
+    <!-- ⑥ 参数编辑 -->
+    <details class="settings" id="settingsBox">
+      <summary data-i18n="group.edit">Parameters</summary>
+      <form id="editForm" class="edit-form">
+        <fieldset class="group">
+          <legend><span data-i18n="edit.startupLegend">Startup</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <label class="field"><span data-i18n="edit.context">Context length</span>
+            <select id="ed-context" data-key="context">
+              <option value="8192">8192</option>
+              <option value="32768">32768</option>
+              <option value="65536">65536</option>
+              <option value="131072">131072</option>
+              <option value="262144">262144</option>
+            </select>
+          </label>
+          <label class="field"><span data-i18n="edit.kv">KV quantization</span>
+            <select id="ed-kv" data-key="kv">
+              <option value="int8">int8</option>
+              <option value="q4_0">q4_0</option>
+              <option value="k8v4">k8v4</option>
+            </select>
+          </label>
+          <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
+            <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">
+          </label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend><span data-i18n="edit.samplingLegend">Sampling</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <label class="field">temperature
+            <input id="ed-temperature" data-key="temperature" type="number" min="0" step="0.1">
+          </label>
+          <label class="field">top_p
+            <input id="ed-top_p" data-key="top_p" type="number" min="0" max="1" step="0.01">
+          </label>
+          <label class="field">top_k
+            <input id="ed-top_k" data-key="top_k" type="number" min="0" step="1">
+          </label>
+          <label class="field">min_p
+            <input id="ed-min_p" data-key="min_p" type="number" min="0" max="1" step="0.01">
+          </label>
+          <label class="field">presence_penalty
+            <input id="ed-presence_penalty" data-key="presence_penalty" type="number" min="0" step="0.1">
+          </label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend><span data-i18n="edit.sharedLegend">Shared</span> <span class="note" data-i18n="edit.takesEffect">takes effect now</span></legend>
+          <label class="field"><span data-i18n="edit.maxTokens">Max output</span>
+            <input id="ed-max_tokens" data-key="max_tokens" type="number" min="1" step="1">
+          </label>
+          <label class="field"><span data-i18n="edit.reasoningEffort">Reasoning effort</span>
+            <select id="ed-reasoning_effort" data-key="reasoning_effort">
+              <option value="off">off</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="xhigh">xhigh</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <div id="diffBox" class="diff-box" hidden>
+          <div class="diff-title" data-i18n="edit.pendingDiff">Pending changes</div>
+          <ul id="diffList" class="diff-list"></ul>
+        </div>
+
+        <div class="edit-actions">
+          <button id="saveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
+          <button id="saveRestartBtn" class="btn warn" type="button" data-i18n="common.saveRestart">Save &amp; restart</button>
+        </div>
+        <p id="editMessage" class="message" role="status"></p>
+      </form>
+    </details>
+
+    <p id="error" class="error" role="status" hidden></p>
+
+    <template id="pluginSettingsTemplate">
+      <form id="pluginSettingsForm" class="plugin-settings-form">
+        <div id="psNotInstalledBox" class="not-installed-box" hidden>
+          <div class="not-installed-title" data-i18n="setup.notInstalledTitle">Strata not found at:</div>
+          <div id="psServerScript" class="not-installed-path"></div>
+          <div class="not-installed-sub" data-i18n="setup.notInstalledSub">Check the path, or install Strata first</div>
+        </div>
+        <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
+          <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
+        </label>
+        <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
+          <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="Leave empty to use system Python (python3)" data-i18n-placeholder="field.pythonPathPlaceholder">
+          <span id="ps-pythonPath-hint" class="field-hint" hidden data-i18n="setup.pythonMissingHint">Python interpreter not found</span>
+        </label>
+        <p id="psMessage" class="message" role="status"></p>
+        <button id="psSaveBtn" class="btn primary" type="button" data-i18n="setup.saveAndDetect">Save &amp; detect</button>
+      </form>
+    </template>
+
+    <template id="configSelectTemplate">
+      <form id="configSelectForm" class="config-select-form">
+        <div id="csTitle" class="config-select-title" data-i18n="setup.chooseConfig">Found the following config files, pick one:</div>
+        <div id="csList" class="config-candidates"></div>
+        <p id="csMessage" class="message" role="status"></p>
+        <button id="csUseBtn" class="btn primary" type="button" data-i18n="setup.useSelected">Use selected config</button>
+      </form>
+    </template>
+
+    <!-- 统一二次确认浮层：position:absolute 脱离文档流，锚定在触发按钮附近，
+         复用 .panel 的 position:relative；超时/点外部/取消均关闭。 -->
+    <div id="confirmPopover" class="confirm-popover" role="dialog" aria-modal="false" hidden>
+      <div id="confirmTitle" class="confirm-popover-title"></div>
+      <div id="confirmSub" class="confirm-popover-sub" hidden></div>
+      <div class="confirm-popover-actions">
+        <button id="confirmOk" class="btn warn" type="button" data-i18n="common.confirm">Confirm</button>
+        <button id="confirmCancel" class="btn cancel" type="button" data-i18n="common.cancel">Cancel</button>
+      </div>
+    </div>
+
+    <!-- 全屏操作遮罩（乐观更新：点击操作按钮后立刻出现，盖住整个面板） -->
+    <div id="overlay" class="overlay" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="overlayText" class="overlay-text" data-i18n="common.working">Working…</div>
+      <div id="overlayStep" class="overlay-step" hidden></div>
+      <div id="overlayHint" class="hint" hidden></div>
+      <button id="overlayForceRefresh" class="btn primary" type="button" hidden data-i18n="overlay.forceRefresh">Force refresh</button>
+      <button id="overlayLogBtn" class="btn primary" type="button" hidden data-i18n="overlay.viewFullLog">View full log</button>
+      <pre id="overlayLog" class="overlay-log" hidden></pre>
+    </div>
+  </main>
+
+  <script>
+    window.addEventListener('error', () => {
+      const box = document.getElementById('error');
+      if (!box) return;
+      const lang = (navigator.language || 'en').toLowerCase().split('-')[0];
+      const messages = {
+        zh: '面板启动失败，请检查 App 资源并运行校验器。',
+        en: 'Panel failed to start. Check the App resources and run the validator.',
+        fr: "Échec du démarrage du panneau. Vérifiez les ressources de l'App et lancez le validateur.",
+        ru: 'Не удалось запустить панель. Проверьте ресурсы App и запустите валидатор.',
+        ja: 'パネルの起動に失敗しました。App リソースを確認し、バリデータを実行してください。',
+        ko: '패널 시작에 실패했습니다. App 리소스를 확인하고 검증기를 실행하세요.'
+      };
+      box.textContent = messages[lang] || messages.en;
+      box.hidden = false;
+    }, true);
+  </script>
+  <script type="module" src="./assets/panel.js"></script>
+</body>
+</html>

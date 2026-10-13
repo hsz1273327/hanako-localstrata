@@ -1,0 +1,51 @@
+{
+  "manifestVersion": 2,
+  "id": "hanako-localstrata",
+  "name": "Strata Console",
+  "version": "1.0.0",
+  "description": "Monitor and control your local Strata inference service.",
+  "entry": "index.js",
+  "icon": "assets/icon.svg",
+  "minAppVersion": "1.1.0-beta",
+  "capabilities": [
+    "app/tools.expose-to-model",
+    "app/ui.open-external",
+    "app/ui.clipboard-write",
+    "app/process.spawn"
+  ],
+  "network": {
+    "allowedHosts": ["api.github.com", "127.0.0.1", "localhost"],
+    "methods": ["GET"],
+    "allowLocalhost": true,
+    "defaultTimeoutMs": 5000
+  },
+  "contributes": {
+    "settings": {
+      "title": "Local Strata",
+      "schema": {
+        "properties": {
+          "strataDir":  { "type": "string",  "title": "Strata directory",              "default": "" },
+          "pythonPath": { "type": "string",  "title": "Python interpreter",            "default": "" },
+          "configFile": { "type": "string",  "title": "Config file (auto, leave empty)", "default": "" },
+          "port":       { "type": "integer", "title": "Service port (0 = use config)",   "default": 0 },
+          "autoStart":  { "type": "boolean", "title": "Start with Hana",                "default": false },
+          "refreshSec": { "type": "integer", "title": "Refresh interval (seconds)",     "default": 5 },
+          "apiKey":     { "type": "string",  "title": "Strata API Key",   "default": "", "sensitive": true }
+        }
+      }
+    },
+    "cards": [
+      {
+        "id": "panel",
+        "title": "Strata Console",
+        "description": "Monitor and control your local Strata inference service",
+        "route": "/panel.html",
+        "cardForm": "flush",
+        "realization": "page",
+        "siteNavEntry": true,
+        "pageIcon": "assets/icon.svg",
+        "face": { "image": "assets/cover.svg" }
+      }
+    ]
+  }
+}
