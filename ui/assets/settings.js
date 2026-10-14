@@ -591,7 +591,10 @@ const ICONS = {
 function renderProfiles() {
   els.profileList.replaceChildren();
   for (const p of profiles) {
+    // The persisted selection — highlighted whether or not the service runs.
     const isActive = p.id === activeProfileId;
+    // The service is actually running from this profile right now.
+    const inUse = serviceRunning && isActive;
     const row = document.createElement("div");
     row.className = "profile-row";
     if (isActive) row.classList.add("active");
@@ -611,11 +614,13 @@ function renderProfiles() {
 
     const actions = document.createElement("div");
     actions.className = "profile-row-actions";
-    // The row only marks which profile is running ("使用中") and offers the
-    // configuration actions. Switching the profile is deliberately NOT here:
-    // that belongs to the stop page's start flow (stop → pick → start), so a
-    // running service can never be swapped out from behind the settings page.
-    if (isActive) {
+    // The badge marks the profile the service is actually RUNNING from
+    // ("使用中"); the green row highlight above already shows which one is
+    // merely selected, and a selection survives a stop. Switching the profile
+    // is deliberately NOT here: that belongs to the stop page's start flow
+    // (stop → pick → start), so a running service can never be swapped out from
+    // behind the settings page.
+    if (inUse) {
       const active = document.createElement("span");
       active.className = "profile-active-badge";
       active.textContent = t("profile.active");
@@ -630,7 +635,6 @@ function renderProfiles() {
     // running deployment, so they stay editable. The in-use profile opens as a
     // read-only "view" instead, because it must not be changed under a running
     // service.
-    const inUse = serviceRunning && isActive;
     edit.textContent = inUse ? t("profile.view") : t("profile.edit");
     edit.insertAdjacentHTML("afterbegin", inUse ? ICONS.eye : ICONS.pencil);
     edit.disabled = working;

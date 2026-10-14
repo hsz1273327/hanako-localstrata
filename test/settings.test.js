@@ -180,6 +180,12 @@ test("settings page has no profile-switch entry, only the running badge", () => 
   assert.match(src, /t\(\s*["']profile\.active["']\s*\)/);
   assert.match(src, /profile-active-badge/);
   assert.doesNotMatch(src, /ICONS\.check/);
+  // "使用中" means RUNNING, not merely selected: the badge is gated on
+  // inUse (serviceRunning && isActive), while the green row highlight — which
+  // expresses the persisted selection — stays on isActive.
+  assert.match(src, /if \(inUse\) \{\s*const active = document\.createElement\("span"\)/);
+  assert.doesNotMatch(src, /if \(isActive\) \{\s*const active = document\.createElement\("span"\)/);
+  assert.match(src, /if \(isActive\) row\.classList\.add\("active"\)/);
   // Edit / delete / add are untouched by the removal.
   assert.match(src, /api\(\s*["']profiles\/save["']/);
   assert.match(src, /api\(\s*["']profiles\/delete["']/);
