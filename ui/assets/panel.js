@@ -1110,6 +1110,7 @@ const FIELD_LABEL_KEYS = {
   context: "edit.context",
   kv: "edit.kv",
   sessionCache: "edit.sessionCache",
+  mtp: "edit.mtp",
   max_tokens: "edit.maxTokens",
   reasoning_effort: "edit.reasoningEffort",
 };
