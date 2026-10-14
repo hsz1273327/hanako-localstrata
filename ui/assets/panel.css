@@ -904,20 +904,20 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
-/* Header badge: the environment control in its READ-ONLY state. The same chip
- * as the picker below — same size / font / padding / place — but quiet: no
- * arrow, no fill, muted text, so nothing invites a click. */
+/* Header badge: the environment control in its READ-ONLY state. Same specs as the
+ * picker (and as #langSelect: height / padding / border / radius / background /
+ * font / cursor) but the FORM of a label: no ▾, muted text — nothing invites a
+ * click, so it never reads as the picker. */
 .profile-badge {
   appearance: none;
   font-family: inherit;
   height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  padding: 0 4px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
   border-radius: 6px;
-  background: transparent;
+  background: var(--bg-card, #fcfaf5);
   color: var(--text-light, #6b6f73);
   font-size: 12px;
-  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   white-space: nowrap;
@@ -933,10 +933,10 @@ body {
 
 /* Header environment picker (shown while stopped). A compact chip, like the
  * badge it replaces, so the title row keeps its shape. */
-/* Header environment control, PICKER state (shown while stopped). The same
- * chip metrics as .profile-badge, but it reads as a control: a filled surface,
- * stronger text, and a monochrome ▾ in the text colour. Width is content-driven
- * (no cap) and min-width:0 lets the header shrink it when it is tight. */
+/* Header environment control, PICKER state (shown while stopped). The #langSelect
+ * control specs, plus the "you can pick" cue: a monochrome ▾ in the control's own
+ * text colour. Width is content-driven (no cap) and min-width:0 lets the header
+ * shrink it when it is tight. */
 .env-select-wrap {
   position: relative;
   display: inline-flex;
@@ -948,14 +948,13 @@ body {
 .env-select {
   appearance: none;
   height: 28px;
-  padding: 0 20px 0 8px;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  padding: 0 18px 0 4px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
   border-radius: 6px;
   background: var(--bg-card, #fcfaf5);
   color: inherit;
   font: inherit;
   font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
   width: 100%;
   min-width: 0;
