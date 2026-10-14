@@ -38,14 +38,18 @@ the header.
 - **First-run setup** — point at the Strata directory and a Python
   interpreter, then pick one of the discovered `strata-*.json` config files.
 - **Auto-start** — optionally bring Strata up together with Hana.
+- **Deploy mode** — you pick **Local** (a `serve/server.py` process) or
+  **Docker** (a managed container). The two are mutually exclusive; the first
+  run offers a default based on the Docker image, and every later change is an
+  explicit choice.
 
 ### Requirements
 
 | Item | Requirement |
 |---|---|
 | Hana | **`1.1.0-beta` or newer** |
-| Platform | **Windows 10/11**, **Linux** — macOS is not supported by Strata |
-| Strata | A deployed Strata checkout plus a Python environment |
+| Platform | **Windows 10/11**, **Linux** — macOS is not supported by Strata; **Docker mode is Linux-only** |
+| Strata | A deployed Strata checkout plus a Python environment, **or** a Docker image/container |
 | Update feature | `git` and a CUDA toolchain if you use the in-app updater |
 
 > ⚠️ **This is a Hana v2 App — it does NOT work on Hana v1.**
@@ -56,18 +60,32 @@ the header.
 
 ### Scope
 
-This app manages a **source / local deployment** of Strata — the one you get by
-running `START-HERE.bat` (Windows) or `./setup.sh` (Linux) in a Strata checkout,
-which runs `serve/server.py` **as a local process**.
+This app manages a Strata service deployed either way:
 
-**Docker deployments are not supported in this version.** If your Strata runs in
-a container (the official `Dockerfile` / `docker-entrypoint.sh`), the service
-lives inside the container — there is no local `serve/server.py` process, config
-is driven by container environment variables, and start/stop is `docker`, not
-this app. Docker support is planned for a future version.
+- **Source / local deployment** — the one you get by running `START-HERE.bat`
+  (Windows) or `./setup.sh` (Linux) in a Strata checkout, which runs
+  `serve/server.py` **as a local process**. Start/stop uses process signals,
+  config is a writable `strata-*.json`, logs are files under the checkout.
+- **Docker deployment** (Linux only) — Strata running in a container built
+  from the official `Dockerfile` / `docker-entrypoint.sh`. Start/stop uses
+  `docker start` / `docker stop`, config is read from the `/data` volume (and
+  written back through `docker cp`), logs come from `docker logs` and the
+  container's writable layer.
+
+The two modes are **mutually exclusive**: one machine does not have the memory
+for both, and both want the same port. Switching modes asks for confirmation
+and stops the running instance first.
+
+In Docker mode the image is the anchor: the first run defaults to Docker when
+the configured image exists. The app **creates and rebuilds the container** from
+run parameters sampled from the real container (falling back to the official
+`docker run` recipe), so `--gpus`, `--ulimit memlock`, the `/data` volume and
+the published port are reproduced faithfully instead of guessed from scratch.
+Only the image, container and volume names are shown in the config form.
 
 The app itself talks to the local Strata API (`127.0.0.1` / `localhost`) and to
-`api.github.com` for release checks.
+`api.github.com` for release checks. Docker is driven through the `docker` CLI,
+so pulls/builds do not go through the app's network whitelist.
 
 ### Permissions
 
@@ -102,11 +120,19 @@ Configured in Hana's settings page (app **Local Strata**):
 |---|---|---|
 | `strataDir` | — | Path to the Strata project; also set from the in-app setup form |
 | `pythonPath` | — | Python interpreter; empty = auto-detect `python3` / `python.exe` |
-| `configFile` | — | Auto-discovered `strata-*.json`; no need to type it |
+| `ggufDir` | — | Folder with the GGUF shards. Local: `setup.py --gguf-dir`. Docker: mounted at `/gguf` + `GGUF_DIR`. Empty = first start downloads the model |
+| `configFile` | — | Optional override; empty = auto-use the newest `strata-*.json` (or generate one on first start) |
 | `port` | `0` | `0` = use the port from the selected config file |
 | `autoStart` | `false` | Try to start Strata together with Hana |
 | `refreshSec` | `5` | Status polling interval, in seconds |
 | `apiKey` | — | Strata API key, if the service requires one |
+| `deployMode` | — | `local` / `docker`; unset until the first run picks a default from the image list. No auto-switching. Docker is Linux-only. |
+| `containerName` | `strata` | Name of the Docker container to manage |
+| `imageName` | `strata` | Image the app checks for, builds and runs |
+| `imageNames` | `["strata"]` | Images checked by first-run detection |
+| `volumeName` | `strata-data` | Host volume (or bind) mounted at `/data` (`STRATA_DATA`); the generated config lives here |
+| `dockerStopTimeoutSec` | `60` | Grace period passed to `docker stop` / `docker restart` (`-t`) |
+| `dockerRunConfig` | — | Internal sampled run parameters for rebuilds; do not edit |
 
 ### Tech notes
 
@@ -218,7 +244,8 @@ manifest 的 `id`。
 |---|---|---|
 | `strataDir` | — | Strata 项目目录；也可在 App 内首次配置表单填写 |
 | `pythonPath` | — | Python 解释器；留空则自动探测 `python3` / `python.exe` |
-| `configFile` | — | 自动发现 `strata-*.json`，无需手填 |
+| `ggufDir` | — | 含全部分片 GGUF 的目录。本机：`setup.py --gguf-dir`；Docker：挂载到 `/gguf` 并传 `GGUF_DIR`。留空则首次启动下载模型 |
+| `configFile` | — | 可选覆盖；留空则自动使用最新的 `strata-*.json`（没有则在首次启动时生成） |
 | `port` | `0` | `0` = 使用所选配置文件里的端口 |
 | `autoStart` | `false` | 随 Hana 启动时尝试拉起 Strata |
 | `refreshSec` | `5` | 状态刷新间隔（秒）|

@@ -1,10 +1,28 @@
 # 路线图 / 待办
 
 版本规划：
-- **1.0.0**（当前）：v2 App 首发，本地源码部署
-- **1.1.0**（下一版）：Docker 部署适配
+- **1.0.0**：v2 App 首发，本地源码部署
+- **1.1.0**（当前）：本机 / Docker 双模式，用户显式二选一
+- **1.1.1**（下一版）：AMD / 社区镜像支持
 
-## 1.1.0：Docker 部署支持
+## 1.1.0：本机 / Docker 双模式
+
+> **状态：已定稿实现（1.1.0）。** 实现记录见
+> [`v1.1-docker-notes.md`](./v1.1-docker-notes.md)。`lib/deployer/` 抽出
+> local + docker 两个实现与统一门面。
+>
+> 定稿语义（覆盖早期 `auto` 设计）：`deployMode ∈ {local, docker}`，**无
+> auto、无自动切换**；首次只看镜像给默认并持久化；两模式互斥，切换先停旧并
+> 弹确认；Docker 以镜像为锚，App 用采样的 run 参数创建/重建容器；
+> `routes/update.js` 在 docker 模式转发到 `DockerDeployer.update()`；
+> **Docker 模式仅 Linux**。
+>
+> **第二批（首次启动）已实现**：配置页从「选已有配置文件」改成「指定
+> GGUF 模型目录」；没有可用配置时，同一个启动按钮先跑 setup 生成配置再
+> 起服务（本机 `setup.py --setup --gguf-dir … --no-start`；Docker 用
+> `GGUF_DIR` + `STRATA_DATA` 首启）；首次启动进度分四段
+> （下载 → 转换 → 生成配置 → 加载）。实现记录见
+> [`v1.1-firstrun-notes.md`](./v1.1-firstrun-notes.md)。已有配置路径零回归。
 
 **背景**：Strata 官方支持 Docker 部署（仓库根有 `Dockerfile` + `docker-entrypoint.sh`，
 文档在 `docs/INSTALL.md`）。当前版本（1.0.0）**只支持本地源码部署**。
@@ -29,6 +47,16 @@
 3. manifest 可能需要加 `docker` 相关配置项（容器名、compose 文件路径）
 
 **接口不变的部分**：状态查询仍走 `/v1/status`（HTTP API 一致）。
+
+## 1.1.1：AMD / 社区镜像
+
+1.1.0 只做**官方路径**（官方 Dockerfile，CUDA/NVIDIA）。以下整体留给 1.1.1：
+
+- 按 AMD 型号自适应社区镜像：MI50 有现成 `xxdoman/strata-mi50:latest`；
+  RX 7900 XTX / 9060 XT / 9070 XT 只有 ROCm 基座，需自建。
+- 「使用社区镜像」勾选 + 免责声明 + 拉取选项（**仅手动选 Docker 时出现**）。
+- 检测到**整机所有卡都不被 Strata 支持**（如纯 MI50）时置灰「本机」模式。
+- 内置「Strata 支持的 GPU 型号」列表（源：`Strata/docs/INSTALL.md:16`）。
 
 ## 其他待办
 

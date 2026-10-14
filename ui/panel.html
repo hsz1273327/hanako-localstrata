@@ -23,6 +23,7 @@
       </div>
       <div class="header-actions">
         <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
+        <button id="configBtn" class="icon-btn" type="button" title="Configure deployment" data-i18n-title="deploy.openConfig" aria-label="Configure deployment" data-i18n-aria-label="deploy.openConfig">&#x2699;</button>
         <button id="refreshBtn" class="icon-btn" type="button" title="Refresh" data-i18n-title="common.refresh" aria-label="Refresh" data-i18n-aria-label="common.refresh">&#x21bb;</button>
       </div>
     </header>
@@ -194,20 +195,59 @@
 
     <p id="error" class="error" role="status" hidden></p>
 
+    <!-- 部署配置：顶部本机 / Docker 二选一，下面只显示对应字段 -->
     <template id="pluginSettingsTemplate">
       <form id="pluginSettingsForm" class="plugin-settings-form">
-        <div id="psNotInstalledBox" class="not-installed-box" hidden>
-          <div class="not-installed-title" data-i18n="setup.notInstalledTitle">Strata not found at:</div>
-          <div id="psServerScript" class="not-installed-path"></div>
-          <div class="not-installed-sub" data-i18n="setup.notInstalledSub">Check the path, or install Strata first</div>
+        <div class="deploy-mode-row">
+          <span class="deploy-mode-label" data-i18n="deploy.modeLabel">Deploy mode</span>
+          <div class="segmented" role="radiogroup" aria-label="Deploy mode" data-i18n-aria-label="deploy.modeLabel">
+            <button id="psModeLocal" type="button" class="seg-btn" data-mode="local" data-i18n="deploy.modeLocal">Local</button>
+            <button id="psModeDocker" type="button" class="seg-btn" data-mode="docker" data-i18n="deploy.modeDocker">Docker</button>
+          </div>
         </div>
-        <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
-          <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
-        </label>
-        <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
-          <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="Leave empty to use system Python (python3)" data-i18n-placeholder="field.pythonPathPlaceholder">
-          <span id="ps-pythonPath-hint" class="field-hint" hidden data-i18n="setup.pythonMissingHint">Python interpreter not found</span>
-        </label>
+        <p id="psSwitchHint" class="deploy-switch-hint" hidden data-i18n="deploy.switchHint"></p>
+
+        <div id="psLocalFields" class="deploy-fields">
+          <div id="psNotInstalledBox" class="not-installed-box" hidden>
+            <div class="not-installed-title" data-i18n="setup.notInstalledTitle">Strata not found at:</div>
+            <div id="psServerScript" class="not-installed-path"></div>
+            <div class="not-installed-sub" data-i18n="setup.notInstalledSub">Check the path, or install Strata first</div>
+          </div>
+          <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
+            <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
+          </label>
+          <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
+            <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="Leave empty to use system Python (python3)" data-i18n-placeholder="field.pythonPathPlaceholder">
+            <span id="ps-pythonPath-hint" class="field-hint" hidden data-i18n="setup.pythonMissingHint">Python interpreter not found</span>
+          </label>
+          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
+            <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+            <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+          </label>
+          <label class="field"><span data-i18n="field.configFile">Config file (optional override)</span>
+            <select id="ps-configFile" data-key="configFile"></select>
+            <span id="ps-configHint" class="field-hint" hidden></span>
+          </label>
+        </div>
+
+        <div id="psDockerFields" class="deploy-fields" hidden>
+          <label class="field"><span data-i18n="field.volumeName">Data directory (STRATA_DATA)</span>
+            <input id="ps-volumeName" data-key="volumeName" type="text" autocomplete="off" spellcheck="false" placeholder="strata-data">
+            <span class="field-hint" data-i18n="field.dataDirHint">Volume or bind mounted at /data; the generated config lives here</span>
+          </label>
+          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
+            <input id="ps-dockerGgufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+            <span class="field-hint" data-i18n="field.dockerGgufHint">Mounted at /gguf and passed as GGUF_DIR; empty downloads in the container</span>
+          </label>
+          <label class="field"><span data-i18n="field.imageName">Image name</span>
+            <input id="ps-imageName" data-key="imageName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+          </label>
+          <label class="field"><span data-i18n="field.containerName">Container name</span>
+            <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+          </label>
+          <p class="field-hint" data-i18n="deploy.dockerHint">The container is created and updated from parameters sampled from the real container; run flags are not hand-edited.</p>
+        </div>
+
         <p id="psMessage" class="message" role="status"></p>
         <button id="psSaveBtn" class="btn primary" type="button" data-i18n="setup.saveAndDetect">Save &amp; detect</button>
       </form>
@@ -238,6 +278,7 @@
       <div class="spinner" aria-hidden="true"></div>
       <div id="overlayText" class="overlay-text" data-i18n="common.working">Working…</div>
       <div id="overlayStep" class="overlay-step" hidden></div>
+      <ol id="overlayStages" class="overlay-stages" hidden></ol>
       <div id="overlayHint" class="hint" hidden></div>
       <button id="overlayForceRefresh" class="btn primary" type="button" hidden data-i18n="overlay.forceRefresh">Force refresh</button>
       <button id="overlayLogBtn" class="btn primary" type="button" hidden data-i18n="overlay.viewFullLog">View full log</button>

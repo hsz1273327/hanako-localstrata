@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "hanako-localstrata",
   "name": "Strata Console",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Monitor and control your local Strata inference service.",
   "entry": "index.js",
   "icon": "assets/icon.svg",
@@ -26,11 +26,19 @@
         "properties": {
           "strataDir":  { "type": "string",  "title": "Strata directory",              "default": "" },
           "pythonPath": { "type": "string",  "title": "Python interpreter",            "default": "" },
-          "configFile": { "type": "string",  "title": "Config file (auto, leave empty)", "default": "" },
+          "ggufDir":    { "type": "string",  "title": "GGUF model directory",          "default": "", "description": "Folder holding the GGUF shards. Local: setup.py --gguf-dir. Docker: mounted at /gguf with GGUF_DIR. Empty means the first setup downloads the model." },
+          "configFile": { "type": "string",  "title": "Config file (optional override, auto)", "default": "" },
           "port":       { "type": "integer", "title": "Service port (0 = use config)",   "default": 0 },
           "autoStart":  { "type": "boolean", "title": "Start with Hana",                "default": false },
           "refreshSec": { "type": "integer", "title": "Refresh interval (seconds)",     "default": 5 },
-          "apiKey":     { "type": "string",  "title": "Strata API Key",   "default": "", "sensitive": true }
+          "apiKey":     { "type": "string",  "title": "Strata API Key",   "default": "", "sensitive": true },
+          "deployMode": { "type": "string",  "title": "Deploy mode", "enum": ["local", "docker"], "ui": { "enumLabels": ["Local", "Docker"] }, "description": "local: run Strata as a local source process; docker: manage a container (Linux only). Left unset until the first run picks a default from the image list." },
+          "imageName": { "type": "string",  "title": "Docker image name", "default": "strata", "description": "Image tag the app checks for, builds and runs" },
+          "imageNames": { "type": "array", "items": { "type": "string" }, "title": "Docker image names (detection)", "default": ["strata"], "description": "Images checked by first-run detection" },
+          "containerName": { "type": "string",  "title": "Docker container name", "default": "strata" },
+          "volumeName": { "type": "string",  "title": "Data directory (STRATA_DATA, volume or bind)", "default": "strata-data", "description": "Host volume or bind mounted at /data; the install config lives here" },
+          "dockerStopTimeoutSec": { "type": "integer", "title": "Docker stop timeout (seconds)", "default": 60, "description": "Grace period passed to docker stop/restart (-t)" },
+          "dockerRunConfig": { "type": "string",  "title": "Docker run parameters (internal)", "default": "", "description": "Internal: run parameters sampled from the container for rebuilds; do not edit" }
         }
       }
     },

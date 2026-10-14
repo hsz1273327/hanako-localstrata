@@ -12,7 +12,8 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 
-import { getStatus, resolvePort } from "../lib/strata.js";
+import { getStatus, resolvePort, applyConfigEdits, getConfigView, pickConfigFile } from "../lib/strata.js";
+import { needsInitialSetup } from "../lib/firstrun.js";
 import { resolvePython } from "../lib/python.js";
 import {
   listStrataPids,
@@ -45,10 +46,14 @@ after(() => {
 // Fake plugin ctx: config comes from a plain object, and network.fetch rejects
 // immediately so getStatus never touches the real GitHub API.
 function makeCtx(values) {
+  // Pin the deploy mode to local so the source-mode regression tests never
+  // touch the machine's real docker/image state. 1.1.0 has no auto switching;
+  // an unset deployMode would run the first-run image detection once.
+  const pinned = { deployMode: "local", ...values };
   return {
     config: {
       async get(key) {
-        return values[key];
+        return pinned[key];
       },
       async set() {},
       async setMany() {},
@@ -134,12 +139,28 @@ test("no-config when there are no strata-*.json files", async () => {
   assert.deepEqual(status.configCandidates, []);
 });
 
-test("needs-config when config files exist but none is selected", async () => {
+test("auto-selects the newest config when none is selected (no setup)", async () => {
   const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 18080 } } });
   const status = await getStatus(makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3" }));
-  assert.equal(status.state, "needs-config");
-  assert.equal(status.configCandidates.length, 1);
-  assert.equal(status.configCandidates[0].file, "strata-demo.json");
+  // The config field is an optional override now: an existing config is found
+  // automatically, so the first-run path is not entered (zero regression).
+  assert.notEqual(status.state, "no-config");
+  assert.notEqual(status.state, "needs-config");
+  assert.equal(status.configFile, "strata-demo.json");
+  assert.equal(status.autoSelected, true);
+  assert.equal(needsInitialSetup(status), false);
+});
+
+test("pickConfigFile prefers the most recently used config", () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, "strata-old.json"), JSON.stringify({ port: 1 }));
+  fs.writeFileSync(path.join(dir, "strata-new.json"), JSON.stringify({ port: 2 }));
+  // Make the mtime ordering explicit rather than relying on write order.
+  fs.utimesSync(path.join(dir, "strata-old.json"), new Date(1000), new Date(1000));
+  fs.utimesSync(path.join(dir, "strata-new.json"), new Date(2000), new Date(2000));
+  const candidates = ["strata-old.json", "strata-new.json"].map((file) => ({ file }));
+  assert.equal(pickConfigFile(dir, candidates), "strata-new.json");
+  assert.equal(pickConfigFile(dir, []), "");
 });
 
 test("config selected but no server on this port: stopped or starting", async () => {
@@ -264,4 +285,35 @@ test("resolvePort prefers the plugin override, then the config file", () => {
   const cfg = { strataDir: dir, configFile: "strata-demo.json" };
   assert.equal(resolvePort({ ...cfg, port: 9999 }), 9999);
   assert.equal(resolvePort({ ...cfg, port: 0 }), 12345);
+});
+
+// ── Source config editing (routes/settings.js path) ──────────────────────
+
+test("source applyConfigEdits edits main + shared files and backs them up", async () => {
+  const dir = makeStrataDir();
+  fs.writeFileSync(
+    path.join(dir, "strata-demo.json"),
+    JSON.stringify({ args: ["--max-context", "32768", "--kv", "int8"], port: 18083, sampling: { temperature: 0.7 } }, null, 2),
+  );
+  fs.writeFileSync(path.join(dir, "strata-demo.shared-settings.json"), JSON.stringify({ max_tokens: 4096 }, null, 2));
+
+  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" });
+  const result = await applyConfigEdits(ctx, { context: 65536, max_tokens: 8192 });
+  assert.equal(result.saved, true);
+  assert.equal(result.restartRequired, true);
+  assert.deepEqual(result.diff.map((d) => d.key).sort(), ["context", "max_tokens"]);
+  assert.equal(result.backups.length, 2);
+
+  const view = await getConfigView(ctx);
+  assert.equal(view.hasConfig, true);
+  assert.equal(view.values.context, 65536);
+  assert.equal(view.values.max_tokens, 8192);
+  assert.ok(fs.readdirSync(dir).some((f) => f.includes(".bak-")));
+});
+
+test("source applyConfigEdits rejects unknown fields", async () => {
+  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { args: [], port: 18084 } } });
+  fs.writeFileSync(path.join(dir, "strata-demo.shared-settings.json"), JSON.stringify({}, null, 2));
+  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" });
+  await assert.rejects(() => applyConfigEdits(ctx, { nope: 1 }), /未知字段: nope/);
 });

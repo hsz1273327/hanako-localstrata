@@ -66,6 +66,38 @@ body {
   color: #ffd98a;
 }
 
+.overlay .overlay-stages {
+  list-style: none;
+  margin: 2px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.overlay .overlay-stages li::before {
+  content: "○ ";
+}
+
+.overlay .overlay-stages li.active {
+  color: #ffd98a;
+  font-weight: 650;
+}
+
+.overlay .overlay-stages li.active::before {
+  content: "◔ ";
+}
+
+.overlay .overlay-stages li.done {
+  color: #9be49b;
+}
+
+.overlay .overlay-stages li.done::before {
+  content: "✔ ";
+}
+
 .overlay .hint {
   opacity: 0.8;
 }
@@ -950,4 +982,62 @@ body {
 
 .unsupported-link:hover {
   color: #0c8a60;
+}
+
+/* ── Deploy mode split (local / docker) ─────────────────────────────── */
+.deploy-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.deploy-mode-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text, #3b3d3f);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg, #f8f5ed);
+}
+
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-light, #6b6f73);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+}
+
+.seg-btn.active {
+  background: var(--accent, #10b981);
+  color: #fff;
+}
+
+.seg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deploy-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.deploy-switch-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #8a5a00;
 }

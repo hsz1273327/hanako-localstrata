@@ -2,7 +2,10 @@
 // GET  /update                     — 轮询更新进度 / 结果
 // GET  /update/log                 — 读取 {strataDir}/strata-update.log 的尾部
 //
-// 更新流程全部在插件后端执行（不依赖 shell 脚本交互）：
+// 部署方式分流：本机（local）走下面的源码管线；Docker 模式转给
+// DockerDeployer.update()（重建镜像 + 用采样参数重建容器）。
+//
+// 本机更新流程全部在插件后端执行（不依赖 shell 脚本交互）：
 //   1) 读插件配置（strataDir/pythonPath/configFile/port）
 //   2) 判断 CUDA 环境（python 环境自带 nvcc 则用它的，否则用系统 CUDA）
 //   3) 停止服务（复用 lib/strata.js 的精确匹配 + 排除自身）
@@ -17,7 +20,15 @@ import * as fs from "../lib/fsx.js";
 import os from "node:os";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import { readAllConfig, stopService, startService, getLatestVersion, resolvePort } from "../lib/strata.js";
+import {
+  readAllConfig,
+  stopService,
+  startService,
+  getLatestVersion,
+  resolvePort,
+  detect,
+  updateService,
+} from "../lib/strata.js";
 import { resolvePython } from "../lib/python.js";
 import { commandExists } from "../lib/process.js";
 
@@ -31,6 +42,14 @@ const STEPS = [
   { id: "checkout", label: "切换版本" },
   { id: "build", label: "编译引擎" },
   { id: "restart", label: "重启服务" },
+];
+
+// Docker mode has no source pipeline: the deployer rebuilds the image and
+// recreates the container from the sampled run parameters. Two coarse steps
+// keep the same progress UI contract.
+const DOCKER_STEPS = [
+  { id: "docker-build", label: "重建镜像" },
+  { id: "docker-recreate", label: "重建容器" },
 ];
 
 function ts() {
@@ -55,6 +74,7 @@ function idleState() {
     startedAt: null,
     finishedAt: null,
     result: null,
+    done: false,
   };
 }
 
@@ -141,6 +161,46 @@ function setStep(step) {
   state.stepId = s?.id || null;
   state.stepLabel = s?.label || null;
   log(`\n[${ts()}] === 步骤 ${step}/${STEPS.length}：${s?.label || ""} ===\n`);
+}
+
+function setDockerStep(step) {
+  const s = DOCKER_STEPS[step - 1];
+  state.step = step;
+  state.stepId = s?.id || null;
+  state.stepLabel = s?.label || null;
+  log(`\n[${ts()}] === Docker 步骤 ${step}/${DOCKER_STEPS.length}：${s?.label || ""} ===\n`);
+}
+
+// Docker update: the whole lifecycle lives in DockerDeployer.update() (build
+// image + recreate container from the sampled run params). The route keeps the
+// same async/polling shape as the source pipeline. Runs on Linux only.
+async function performDockerUpdate(ctx, tag) {
+  const cfg = await readAllConfig(ctx);
+  if (cfg.strataDir) {
+    try {
+      state.logFile = openLog(cfg);
+    } catch {
+      state.logFile = null;
+    }
+  }
+  log(`\n[${ts()}] ============ Strata Docker 更新开始 ============\n`);
+  log(`[${ts()}] 镜像=${cfg.imageName}, 容器=${cfg.containerName}, 卷=${cfg.volumeName}\n`);
+  setDockerStep(1);
+  const result = await updateService(ctx, tag);
+  setDockerStep(2);
+  state = {
+    ...state,
+    running: false,
+    step: DOCKER_STEPS.length,
+    stepId: "done",
+    stepLabel: "完成",
+    done: true,
+    finishedAt: Date.now(),
+    result,
+  };
+  log(`[${ts()}] Docker 更新结果: ${JSON.stringify(result)}\n`);
+  log(`[${ts()}] ============ Docker 更新完成 ============\n`);
+  closeLog();
 }
 
 // 判断 python 环境是否自带 CUDA（直接看同环境里有没有 nvcc，不用 sys.prefix）。
@@ -421,6 +481,25 @@ export default function registerUpdateRoutes(app, ctx) {
       if (process.platform === "darwin") {
         return c.json({ ...state, error: "Strata 不支持 macOS" }, 400);
       }
+      // Deploy-mode split: Docker runs its own build+recreate pipeline through
+      // the deployer; local keeps the untouched source pipeline below.
+      const mode = await detect(ctx);
+      if (mode === "docker") {
+        if (process.platform !== "linux") {
+          return c.json({ ...state, error: "Docker 模式仅支持 Linux" }, 400);
+        }
+        state = {
+          ...idleState(),
+          running: true,
+          startedAt: Date.now(),
+          tag: tag || null,
+          steps: DOCKER_STEPS.map((s) => s.label),
+          totalSteps: DOCKER_STEPS.length,
+        };
+        performDockerUpdate(ctx, tag).catch(handleUpdateError);
+        return c.json(state);
+      }
+
       const cfg = await readAllConfig(ctx);
       if (!fs.existsSync(cfg.strataDir)) {
         return c.json({ error: `Strata 目录不存在: ${cfg.strataDir}`, ...state }, 500);
