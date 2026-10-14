@@ -37,7 +37,7 @@
           "apiKey":     { "type": "string",  "title": "Strata API Key",   "default": "", "sensitive": true },
           "defaultGgufDir": { "type": "string",  "title": "Default GGUF model directory", "default": "", "description": "General fallback used when a profile leaves the model directory empty." },
           "defaultPort":    { "type": "integer", "title": "Default service port (0 = unset)", "default": 0, "description": "General fallback used when a profile leaves the port at 0." },
-          "profiles":   { "type": "string",  "title": "Profiles (internal)", "default": "", "description": "Internal: JSON array of environment profiles; edit from the panel, not here." },
+          "profiles":   { "type": "array",   "title": "Profiles (internal)", "default": [], "description": "Internal: array of environment profiles; edit from the panel, not here." },
           "activeProfileId": { "type": "string", "title": "Active profile (internal)", "default": "", "description": "Internal: id of the currently selected profile." }
         }
       }

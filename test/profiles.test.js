@@ -247,9 +247,71 @@ test("general defaults are applied to the effective profile, not the persisted l
   assert.equal(cfg.activeProfile.ggufDir, "/general/models");
   assert.equal(cfg.activeProfile.port, 9000);
   // …but the stored profile keeps its original empty/0 values.
-  const stored = JSON.parse(ctx._store.profiles);
+  assert.ok(Array.isArray(ctx._store.profiles), "profiles are stored as an array");
+  const stored = ctx._store.profiles;
   assert.equal(stored[0].ggufDir, "");
   assert.equal(stored[0].port, 0);
+});
+
+// ── Stored shape: array now, legacy JSON string still readable ────────────
+
+test("writeProfiles persists a real array, never a JSON string", async () => {
+  const ctx = makeCtx({});
+  await writeProfiles(
+    ctx,
+    [
+      localProfile({ id: "p1", name: "default", strataDir: "/one" }),
+      normalizeProfile({ id: "p2", name: "card", type: "container", image: "strata", containerName: "strata" }),
+    ],
+    "p2",
+  );
+  // The stored value is the array itself — a string would break `.length`,
+  // `.map`, `.filter` on any consumer that reads ctx.config directly.
+  assert.ok(Array.isArray(ctx._store.profiles));
+  assert.equal(typeof ctx._store.profiles, "object");
+  assert.equal(ctx._store.profiles.length, 2);
+  assert.equal(ctx._store.profiles[0].id, "p1");
+  assert.equal(ctx._store.profiles[1].type, "container");
+  assert.equal(ctx._store.activeProfileId, "p2");
+});
+
+test("a legacy JSON-string profile list is still read, and migrated once", async () => {
+  const legacy = serializeProfiles([
+    { id: "default", name: "default", type: "local", strataDir: "/legacy", pythonPath: "/py" },
+    { id: "p-6f1cb941", name: "dockertest", type: "container", image: "strata", containerName: "strata" },
+  ]);
+  const ctx = makeCtx({ profiles: legacy, activeProfileId: "p-6f1cb941" });
+  // Count writes so we can prove the migration fires exactly once.
+  const originalSetMany = ctx.config.setMany.bind(ctx.config);
+  let writes = 0;
+  ctx.config.setMany = async (patch) => {
+    writes += 1;
+    return originalSetMany(patch);
+  };
+
+  const cfg = await readAllConfig(ctx);
+  // Old shape reads correctly…
+  assert.equal(cfg.profiles.length, 2);
+  assert.equal(cfg.activeProfileId, "p-6f1cb941");
+  assert.equal(cfg.activeProfile.name, "dockertest");
+  // …and the stored value is rewritten as an array (migrated).
+  assert.ok(Array.isArray(ctx._store.profiles));
+  assert.equal(ctx._store.profiles.length, 2);
+  assert.equal(writes, 1);
+
+  // Later reads see an array and stay read-only: no further migration writes.
+  await readAllConfig(ctx);
+  await readAllConfig(ctx);
+  assert.equal(writes, 1);
+});
+
+test("a fresh install has nothing to migrate and stays write-free on read", async () => {
+  const ctx = makeCtx({});
+  const cfg = await readAllConfig(ctx);
+  assert.equal(cfg.profiles.length, 1);
+  assert.equal(cfg.activeProfile.name, DEFAULT_PROFILE_NAME);
+  // Nothing was ever stored, so the read path never wrote a legacy string.
+  assert.equal(ctx._store.profiles, undefined);
 });
 
 test("patchActiveProfile updates one field on the active profile", async () => {

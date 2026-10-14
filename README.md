@@ -133,7 +133,7 @@ Configured in Hana's settings page (app **Local Strata**):
 | `autoStart` | `false` | Try to start the active profile together with Hana |
 | `refreshSec` | `5` | Status polling interval, in seconds |
 | `apiKey` | — | Strata API key, if the service requires one |
-| `profiles` | `""` | Internal JSON array of environment profiles; manage them in this settings page, not by hand |
+| `profiles` | `[]` | Internal array of environment profiles; manage them in this settings page, not by hand |
 | `activeProfileId` | `""` | Internal: id of the currently selected profile |
 
 ### Tech notes
@@ -265,7 +265,7 @@ manifest 的 `id`。
 | `autoStart` | `false` | 随 Hana 启动时尝试拉起当前配置 |
 | `refreshSec` | `5` | 状态刷新间隔（秒）|
 | `apiKey` | — | 服务需要时的 Strata API Key |
-| `profiles` | `""` | 内部：环境配置的 JSON 数组；请在本设置页管理，不要手改 |
+| `profiles` | `[]` | 内部：环境配置数组；请在本设置页管理，不要手改 |
 | `activeProfileId` | `""` | 内部：当前选中配置的 id |
 
 ### 技术说明

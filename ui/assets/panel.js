@@ -808,9 +808,13 @@ async function act(verb, profileId) {
     }
     await waitForStable();
   } catch (e) {
-    showError(String(e?.message || e));
+    const message = String(e?.message || e);
     endWorking();
+    // Repaint the status *before* restoring the message: paint() owns #error
+    // and clears it on every refresh, so a message shown first would vanish on
+    // the next frame (a failed stop used to look like nothing happened).
     await refresh();
+    showError(message);
   }
 }
 
