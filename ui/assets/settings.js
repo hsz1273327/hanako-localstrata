@@ -683,6 +683,39 @@ function setProfileEditorType(type) {
   els.profileContainerFields.hidden = !isContainer;
 }
 
+// Fields that must hold a value before the profile can START — the readiness
+// rule (lib/profiles.js `profileReady`), which is not the same as the save-time
+// requirement (a local profile saves fine with an empty Strata directory but
+// cannot start then).
+const START_REQUIRED_FIELDS = {
+  local: ["profileStrataDir"],
+  container: ["profileImage", "profileContainerName"],
+};
+
+function clearStartHints() {
+  if (!els.profileEditor) return;
+  for (const span of els.profileEditor.querySelectorAll(".field-required-hint")) span.remove();
+}
+
+// Mark the empty start-required fields so a not-ready profile says *which* field
+// to fill, instead of the user hunting between the stop page and this form.
+// Skipped in the read-only "view" variant (nothing can be filled there).
+function renderStartHints() {
+  clearStartHints();
+  if (editorReadOnly) return;
+  const type = els.profileType.value === "container" ? "container" : "local";
+  for (const key of START_REQUIRED_FIELDS[type]) {
+    const input = els[key];
+    if (!input || input.value.trim()) continue;
+    const label = input.closest("label.field");
+    if (!label) continue;
+    const hint = document.createElement("span");
+    hint.className = "field-hint field-required-hint";
+    hint.textContent = t("field.neededToStart");
+    label.append(hint);
+  }
+}
+
 function updateEditorTitle() {
   if (els.profileEditor.hidden || editingProfileId === null) return;
   if (editorReadOnly) {
@@ -770,6 +803,7 @@ function openProfileEditor(profile, readOnly = false) {
     // Stopped: annotate empty ggufDir / port with the general default.
     applyDefaultAnnotations();
   }
+  renderStartHints();
   // Paint the image state (status line + whether the pull entry applies) from
   // the current value and the last known local list, then refresh that list
   // when this profile can even have an image.
@@ -784,6 +818,7 @@ function closeProfileEditor() {
   stopImagePoll();
   imagePullBusy = false;
   clearFieldSources();
+  clearStartHints();
   if (els.profileRuntimeNote) els.profileRuntimeNote.hidden = true;
   // Reset read-only state so the next open starts editable.
   setEditorReadOnly(false);
@@ -943,6 +978,7 @@ els.autoStart.addEventListener("change", () => setMessage(""));
 els.profileAddBtn.addEventListener("click", () => openProfileEditor(null));
 els.profileType.addEventListener("change", () => {
   setProfileEditorType(els.profileType.value);
+  renderStartHints();
   if (els.profileType.value === "container") loadImages();
 });
 els.profileImage.addEventListener("input", () => renderImageStatus());
@@ -968,7 +1004,10 @@ document.addEventListener("keydown", (e) => {
 });
 els.profileConfirmOk.addEventListener("click", confirmDeleteProfile);
 els.profileConfirmCancel.addEventListener("click", cancelDeleteProfile);
-els.profileEditor.addEventListener("input", () => setProfileMessage(""));
+els.profileEditor.addEventListener("input", () => {
+  setProfileMessage("");
+  renderStartHints();
+});
 
 applyI18n();
 initLangSelect();

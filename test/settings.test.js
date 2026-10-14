@@ -318,6 +318,23 @@ test("read-only editor disables every field and removes the save path", () => {
   assert.match(html, /data-i18n="profile\.readOnlyHint"/);
 });
 
+// The editor points at the fields a profile still needs before it can RUN, using
+// the readiness rule (lib/profiles.js profileReady: local → Strata dir;
+// container → image + container name). That is not the save-time requirement —
+// a local profile saves with an empty Strata dir but cannot start then.
+test("the editor marks empty start-required fields", () => {
+  const src = fs.readFileSync(path.join(ROOT, "ui/assets/settings.js"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "ui/assets/settings.css"), "utf8");
+  assert.match(src, /const START_REQUIRED_FIELDS = \{/);
+  assert.match(src, /local: \["profileStrataDir"\]/);
+  assert.match(src, /container: \["profileImage", "profileContainerName"\]/);
+  assert.match(src, /hint\.textContent = t\("field\.neededToStart"\)/);
+  // Never shown in the read-only "view" variant (nothing can be filled there).
+  assert.match(src, /function renderStartHints\(\) \{\s*clearStartHints\(\);\s*if \(editorReadOnly\) return;/);
+  assert.match(src, /renderStartHints\(\);/);
+  assert.match(css, /\.field-required-hint\s*\{/);
+});
+
 // Deleting is the same kind of config write as editing, so it follows the same
 // rule: the in-use profile is protected while the service runs, the others are
 // not. "At least one profile" still applies to every row.

@@ -4,7 +4,7 @@
 // - Clipboard / external links go through hana.clipboard / hana.external.
 // - Polls this App's GET /status route every refreshSec seconds.
 import { hana } from "./sdk.js";
-import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
+import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -1358,6 +1358,28 @@ function profileHasFields(profile) {
   return profile.type === "container" ? !!(profile.image && profile.containerName) : !!profile.strataDir;
 }
 
+// Which fields must hold a value before this profile can start (the readiness
+// rule in lib/profiles.js `profileReady`). Localized with the form's own field
+// copy so the hint and the editor name the same thing.
+function missingStartFields(profile) {
+  if (!profile) return [];
+  if (profile.type === "container") {
+    const missing = [];
+    if (!profile.image) missing.push(t("field.image"));
+    if (!profile.containerName) missing.push(t("field.containerName"));
+    return missing;
+  }
+  return profile.strataDir ? [] : [t("field.strataDir")];
+}
+
+// Why the selected profile cannot start yet: the concrete missing fields when
+// that is the reason, otherwise a generic line (the block can be environmental
+// — e.g. a missing Python interpreter — and is not a missing field).
+function startBlockedMessage(profile) {
+  const missing = missingStartFields(profile);
+  return missing.length ? tp("profile.missingFields", { fields: joinList(missing) }) : t("profile.notReady");
+}
+
 // Setup states (no usable profile yet) used to open the in-panel profile
 // manager. The panel no longer manages profiles; point at the Settings page.
 function paintSetupNotice(s) {
@@ -1428,7 +1450,7 @@ function paintStartOptions(s) {
   const selected = list.find((p) => p.id === state.startProfileId) || list[0];
   const ready = canStartSelected(s, selected);
   els.startOptionsHint.hidden = ready;
-  els.startOptionsHint.textContent = ready ? "" : t("profile.notReady");
+  els.startOptionsHint.textContent = ready ? "" : startBlockedMessage(selected);
 }
 
 function schedule() {
@@ -1468,7 +1490,7 @@ els.actionBtn.addEventListener("click", () => {
   } else if (s.state !== "starting") {
     const selected = selectedStartProfile(s);
     if (!canStartSelected(s, selected)) {
-      showError(t("profile.notReady"));
+      showError(startBlockedMessage(selected));
       return;
     }
     const profileId = selected?.id;

@@ -122,7 +122,7 @@ test("header layout guards keep the badge from crowding or clipping the right-si
 test("the new i18n copy exists and is non-empty in all six locales", async () => {
   const { STRINGS, LANGS } = await import(pathToFileURL(path.join(ROOT, "ui/assets/i18n.js")).href);
   assert.equal(LANGS.length, 6);
-  for (const key of ["profile.viewDetails", "version.stopToUpdate", "setup.configureInSettings"]) {
+  for (const key of ["profile.viewDetails", "version.stopToUpdate", "setup.configureInSettings", "profile.missingFields", "field.neededToStart"]) {
     for (const lang of LANGS) {
       assert.equal(typeof STRINGS[lang]?.[key], "string", `${lang} is missing ${key}`);
       assert.ok(STRINGS[lang][key].length > 0, `${lang}.${key} must not be empty`);
@@ -147,6 +147,20 @@ test("setup states show a plain-text pointer to the Settings page, not an editor
   assert.match(panelJs, /function paintSetupNotice\(s\) \{/);
   assert.match(panelJs, /const show = SETUP_STATES\.has\(s\.state\);/);
   assert.match(panelJs, /paintSetupNotice\(s\);/);
+});
+
+test("a start-blocked profile names the missing fields, not a vague prompt", () => {
+  assert.match(panelJs, /function missingStartFields\(profile\)/);
+  assert.match(panelJs, /function startBlockedMessage\(profile\)/);
+  assert.match(panelJs, /tp\("profile\.missingFields", \{ fields: joinList\(missing\) \}\)/);
+  // Mirrors the readiness rule (lib/profiles.js profileReady): local → Strata
+  // dir; container → image + container name. Nothing more, nothing less.
+  assert.match(panelJs, /if \(!profile\.image\) missing\.push\(t\("field\.image"\)\)/);
+  assert.match(panelJs, /if \(!profile\.containerName\) missing\.push\(t\("field\.containerName"\)\)/);
+  assert.match(panelJs, /return profile\.strataDir \? \[\] : \[t\("field\.strataDir"\)\]/);
+  // Both the stop-page hint and the start-button guard use the concrete message.
+  assert.match(panelJs, /els\.startOptionsHint\.textContent = ready \? "" : startBlockedMessage\(selected\)/);
+  assert.doesNotMatch(panelJs, /showError\(t\("profile\.notReady"\)\)/);
 });
 
 // ── Layer 2: behavioural layer (requires jsdom) ───────────────────────────
@@ -205,7 +219,7 @@ function stoppedStatus() {
   return {
     state: "stopped",
     profile: { id: "p1", name: "default", type: "local" },
-    profiles: [{ id: "p1", name: "default", type: "local" }],
+    profiles: [{ id: "p1", name: "default", type: "local" }, { id: "p2", name: "alt", type: "local" }],
     activeProfileId: "p1",
     version: { checkState: "checked", local: "0.1.40", latest: "0.1.44.1" },
     network: null,
@@ -325,6 +339,16 @@ test(
       await tick();
       assert.equal($("profileDrawer").hidden, true, "badge does not open the drawer when stopped");
       assert.equal($("actionBtn").hidden, false, "start button still present when stopped");
+
+      // A selected profile that cannot start names the missing field(s) instead
+      // of a vague "fill in the required fields".
+      const altRadio = [...$("startProfileList").querySelectorAll("input[type=radio]")].find((i) => i.value === "p2");
+      assert.ok(altRadio, "the second profile is offered on the stop page");
+      altRadio.checked = true;
+      altRadio.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await tick();
+      assert.equal($("startOptionsHint").hidden, false, "the not-ready hint is shown");
+      assert.match($("startOptionsHint").textContent, /Strata directory/, "the hint names the missing field");
 
       // The gear + the in-panel profile manager are gone; nothing shows while stopped.
       assert.equal($("configBtn"), null, "gear button removed from the panel");

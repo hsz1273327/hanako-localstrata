@@ -196,7 +196,8 @@ export const STRINGS = {
     "profile.deleting": "正在删除配置…",
     "profile.deleted": "配置已删除",
     "profile.chooseToStart": "选择要启动的配置",
-    "profile.notReady": "这套配置还不能启动，请补齐必填项",
+    "profile.notReady": "这套配置暂时还不能启动",
+    "profile.missingFields": "缺少：{fields}",
     "profile.active": "使用中",
     "profile.sourceRuntime": "运行实例",
     "profile.sourceRuntimeVolume": "运行实例（卷）",
@@ -233,6 +234,7 @@ export const STRINGS = {
     "field.ggufDir": "模型目录（GGUF）",
     "field.ggufDirPlaceholder": "包含全部分片 GGUF 的目录",
     "field.ggufDirHint": "留空则首次启动时下载模型",
+    "field.neededToStart": "启动前需填写",
     "field.pickPath": "选择…",
     "field.pickPython": "选择 Python…",
     "field.pickUnsupported": "当前宿主不支持路径选择，请手动输入。",
@@ -438,7 +440,8 @@ export const STRINGS = {
     "profile.deleting": "Deleting profile…",
     "profile.deleted": "Profile deleted",
     "profile.chooseToStart": "Choose a profile to start",
-    "profile.notReady": "This profile is not ready yet — fill in the required fields",
+    "profile.notReady": "This profile can't start yet",
+    "profile.missingFields": "Missing: {fields}",
     "profile.active": "Active",
     "profile.sourceRuntime": "running instance",
     "profile.sourceRuntimeVolume": "running instance (volume)",
@@ -475,6 +478,7 @@ export const STRINGS = {
     "field.ggufDir": "GGUF model directory",
     "field.ggufDirPlaceholder": "Folder with every GGUF shard",
     "field.ggufDirHint": "Leave empty to download on first start",
+    "field.neededToStart": "Required to start",
     "field.pickPath": "Choose…",
     "field.pickPython": "Choose Python…",
     "field.pickUnsupported": "This host does not support choosing a path; enter it manually.",
@@ -680,7 +684,8 @@ export const STRINGS = {
     "profile.deleting": "Suppression du profil…",
     "profile.deleted": "Profil supprimé",
     "profile.chooseToStart": "Choisissez un profil à démarrer",
-    "profile.notReady": "Ce profil n'est pas prêt — complétez les champs requis",
+    "profile.notReady": "Ce profil ne peut pas encore démarrer",
+    "profile.missingFields": "Manquant : {fields}",
     "profile.active": "Actif",
     "profile.sourceRuntime": "instance en cours",
     "profile.sourceRuntimeVolume": "instance en cours (volume)",
@@ -717,6 +722,7 @@ export const STRINGS = {
     "field.ggufDir": "Dossier du modèle GGUF",
     "field.ggufDirPlaceholder": "Dossier contenant tous les fragments GGUF",
     "field.ggufDirHint": "Vide pour télécharger au premier démarrage",
+    "field.neededToStart": "Requis pour démarrer",
     "field.pickPath": "Choisir…",
     "field.pickPython": "Choisir Python…",
     "field.pickUnsupported": "Cet hôte ne prend pas en charge la sélection de chemin ; saisissez-le manuellement.",
@@ -922,7 +928,8 @@ export const STRINGS = {
     "profile.deleting": "Удаление профиля…",
     "profile.deleted": "Профиль удалён",
     "profile.chooseToStart": "Выберите профиль для запуска",
-    "profile.notReady": "Этот профиль ещё не готов — заполните обязательные поля",
+    "profile.notReady": "Этот профиль ещё не может запуститься",
+    "profile.missingFields": "Отсутствует: {fields}",
     "profile.active": "Активный",
     "profile.sourceRuntime": "работающий экземпляр",
     "profile.sourceRuntimeVolume": "работающий экземпляр (том)",
@@ -959,6 +966,7 @@ export const STRINGS = {
     "field.ggufDir": "Каталог модели GGUF",
     "field.ggufDirPlaceholder": "Папка со всеми шардами GGUF",
     "field.ggufDirHint": "Пусто — загрузка при первом запуске",
+    "field.neededToStart": "Требуется для запуска",
     "field.pickPath": "Выбрать…",
     "field.pickPython": "Выбрать Python…",
     "field.pickUnsupported": "Этот хост не поддерживает выбор пути; введите его вручную.",
@@ -1164,7 +1172,8 @@ export const STRINGS = {
     "profile.deleting": "プロファイルを削除中…",
     "profile.deleted": "削除しました",
     "profile.chooseToStart": "起動するプロファイルを選択",
-    "profile.notReady": "このプロファイルはまだ起動できません。必須項目を入力してください",
+    "profile.notReady": "このプロファイルはまだ起動できません",
+    "profile.missingFields": "不足：{fields}",
     "profile.active": "使用中",
     "profile.sourceRuntime": "実行中インスタンス",
     "profile.sourceRuntimeVolume": "実行中インスタンス（ボリューム）",
@@ -1201,6 +1210,7 @@ export const STRINGS = {
     "field.ggufDir": "GGUF モデルディレクトリ",
     "field.ggufDirPlaceholder": "全シャードの GGUF があるフォルダ",
     "field.ggufDirHint": "空欄なら初回起動時にダウンロード",
+    "field.neededToStart": "起動前に必要",
     "field.pickPath": "選択…",
     "field.pickPython": "Python を選択…",
     "field.pickUnsupported": "このホストはパス選択に対応していません。手入力してください。",
@@ -1406,7 +1416,8 @@ export const STRINGS = {
     "profile.deleting": "프로필 삭제 중…",
     "profile.deleted": "삭제됨",
     "profile.chooseToStart": "시작할 프로필 선택",
-    "profile.notReady": "이 프로필은 아직 시작할 수 없습니다. 필수 항목을 입력하세요",
+    "profile.notReady": "이 프로필은 아직 시작할 수 없습니다",
+    "profile.missingFields": "누락: {fields}",
     "profile.active": "사용 중",
     "profile.sourceRuntime": "실행 중 인스턴스",
     "profile.sourceRuntimeVolume": "실행 중 인스턴스(볼륨)",
@@ -1443,6 +1454,7 @@ export const STRINGS = {
     "field.ggufDir": "GGUF 모델 디렉터리",
     "field.ggufDirPlaceholder": "모든 GGUF 샤드가 있는 폴더",
     "field.ggufDirHint": "비워 두면 첫 시작 시 다운로드",
+    "field.neededToStart": "시작하려면 필요",
     "field.pickPath": "선택…",
     "field.pickPython": "Python 선택…",
     "field.pickUnsupported": "이 호스트는 경로 선택을 지원하지 않습니다. 직접 입력하세요.",
@@ -1541,6 +1553,19 @@ export function tp(key, params = {}, lang) {
     out = out.split(`{${name}}`).join(value === undefined || value === null ? "" : String(value));
   }
   return out;
+}
+
+/**
+ * Join already-localized strings the way the language enumerates a list: the
+ * ideographic comma in zh/ja, a Latin comma elsewhere. (Not Intl.ListFormat —
+ * its "unit"/"short" styles drop the separator entirely in several locales.)
+ */
+const LIST_SEPARATOR = { zh: "、", ja: "、" };
+
+export function joinList(items) {
+  const list = (items || []).filter((x) => x !== undefined && x !== null && String(x) !== "");
+  if (list.length <= 1) return list[0] ? String(list[0]) : "";
+  return list.join(LIST_SEPARATOR[getLang()] || ", ");
 }
 
 /**

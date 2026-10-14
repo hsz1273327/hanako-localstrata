@@ -125,6 +125,13 @@ body {
   display: none;
 }
 
+/* A start-required field that is still empty — fill it before the profile can
+ * run. Distinct from a save error, which uses .message.error. */
+.field-required-hint {
+  font-size: 11px;
+  color: #c14b39;
+}
+
 /* A hint + its action button on one row (image pull). */
 .field-inline {
   display: flex;
