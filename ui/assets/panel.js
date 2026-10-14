@@ -30,6 +30,10 @@ const els = {
   model: document.getElementById("model"),
   uptime: document.getElementById("uptime"),
   port: document.getElementById("port"),
+  statusBody: document.getElementById("statusBody"),
+  modelRow: document.getElementById("modelRow"),
+  uptimeRow: document.getElementById("uptimeRow"),
+  portRow: document.getElementById("portRow"),
   versionRows: document.getElementById("versionRows"),
   configRows: document.getElementById("configRows"),
   speedRows: document.getElementById("speedRows"),
@@ -623,14 +627,25 @@ function paint(s) {
   paintBar(els.gpuBar, els.gpuText, s.resources?.gpu);
   paintBar(els.memBar, els.memText, s.resources?.mem);
 
+  // No content → hide the section rather than leave a "—" placeholder: a dash
+  // reads as "could not read it" when the truth is "there is nothing yet".
   els.versionBox.hidden = isSetup;
-  els.configBox.hidden = isSetup;
-  els.speedBox.hidden = isSetup;
-  els.resourceBox.hidden = isSetup;
-  els.logsBox.hidden = isSetup;
+  els.configBox.hidden = isSetup || !els.configRows.children.length;
+  els.speedBox.hidden = isSetup || !els.speedRows.children.length;
+  // Resources are whole-machine figures (nvidia-smi / os.freemem), not this
+  // service's; while it is not running they are not this page's job, so hide.
+  els.resourceBox.hidden = isSetup || !isRunning;
+  els.logsBox.hidden = isSetup || !(s.log?.lines?.length);
   els.settingsBox.hidden = isSetup || running;
 
+  // The status card's runtime rows show "—" while stopped; hide the empty ones.
+  els.modelRow.hidden = !s.model;
+  els.uptimeRow.hidden = !Number.isFinite(s?.uptime_s);
+  els.portRow.hidden = !Number.isFinite(s?.port);
+
   paintAccessInfo(s);
+  els.statusBody.hidden =
+    els.modelRow.hidden && els.uptimeRow.hidden && els.portRow.hidden && els.accessRows.hidden;
   paintStartOptions(s);
   paintActions(s);
   paintSetupNotice(s);

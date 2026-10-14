@@ -210,8 +210,9 @@ function runningStatus() {
     port: 8080,
     uptime_s: 100,
     configCandidates: [],
-    log: { lines: [] },
-    resources: {},
+    metrics: { tg: 12, pp: 345, expertCacheHit: 80, kvHit: 90 },
+    log: { lines: ["[strata] ready"] },
+    resources: { gpu: { usedGiB: 2, totalGiB: 8 }, mem: { usedGiB: 4, totalGiB: 16 } },
   };
 }
 
@@ -223,6 +224,7 @@ function stoppedStatus() {
     activeProfileId: "p1",
     version: { checkState: "checked", local: "0.1.40", latest: "0.1.44.1" },
     network: null,
+    port: 8080,
     configCandidates: [],
     log: { lines: [] },
     resources: {},
@@ -301,6 +303,13 @@ test(
       assert.equal($("profileBadge").disabled, false, "badge clickable while running");
       assert.equal($("actionBtn").hidden, false, "start/stop button still present");
 
+      // Sections with content while running stay visible (unchanged behaviour).
+      assert.equal($("speedBox").hidden, false, "performance shown while running");
+      assert.equal($("resourceBox").hidden, false, "resources shown while running");
+      assert.equal($("logsBox").hidden, false, "logs shown while running");
+      assert.equal($("modelRow").hidden, false, "model row shown while running");
+      assert.equal($("uptimeRow").hidden, false, "uptime row shown while running");
+
       // Badge -> read-only drawer.
       click($("profileBadge"));
       await waitFor(() => $("profileDrawer").hidden === false);
@@ -333,6 +342,16 @@ test(
       click($("refreshBtn"));
       await waitFor(() => $("settingsBox").hidden === false);
       assert.equal($("settingsBox").hidden, false, "parameter editor reappears when stopped");
+
+      // No content → the section is hidden, not parked as a "—" placeholder.
+      assert.equal($("speedBox").hidden, true, "no performance section while stopped");
+      assert.equal($("resourceBox").hidden, true, "no whole-machine resources while stopped");
+      assert.equal($("logsBox").hidden, true, "no logs section while stopped");
+      assert.equal($("modelRow").hidden, true, "no model row while stopped");
+      assert.equal($("uptimeRow").hidden, true, "no uptime row while stopped");
+      assert.equal($("portRow").hidden, false, "the configured port still shows while stopped");
+      assert.equal($("configBox").hidden, false, "service config still shows while stopped");
+      assert.equal($("versionBox").hidden, false, "version still shows while stopped");
       assert.ok($("versionRows").querySelector(".update-btn"), "update button reappears when stopped");
       assert.equal($("profileBadge").disabled, true, "badge non-interactive when stopped");
       click($("profileBadge"));
