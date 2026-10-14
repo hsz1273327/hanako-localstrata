@@ -65,8 +65,16 @@ test("the header control mirrors the running state: badge while running, picker 
   assert.match(panelJs, /els\.profileBadge\.hidden = true;\s*els\.envSelect\.hidden = true;/);
 });
 
-test("the detail drawer auto-closes when the service leaves the running states", () => {
-  assert.match(panelJs, /if \(!running && els\.profileDrawer && !els\.profileDrawer\.hidden\) closeProfileDetail\(\);/);
+test("the drawer never auto-closes on a repaint — only the user (or a successful save)", () => {
+  // The retired rule: paint() used to close the drawer whenever the state was
+  // not running, so the ~5s poll closed a stopped edit drawer on its own.
+  assert.doesNotMatch(panelJs, /if \(!running && els\.profileDrawer/);
+  // paint() must not touch the drawer at all.
+  const paintBody = panelJs.slice(panelJs.indexOf("function paint(s) {"), panelJs.indexOf("function overlayContent("));
+  assert.ok(paintBody.length > 0, "paint() body not found");
+  assert.doesNotMatch(paintBody, /closeProfileDetail|profileDrawer/);
+  // The one automatic close is the natural end of a successful save.
+  assert.match(panelJs, /if \(ok\) \{\s*closeProfileDetail\(\);\s*await refresh\(\);/);
 });
 
 test("the read-only detail reuses the panel's existing editor, not a third form", () => {
@@ -218,7 +226,10 @@ export const hana = {
   api: {
     fetch: async (p, init) => {
       const s = globalThis.__API__ || {};
-      if (p === "status") return res(s.status || { state: "stopped" });
+      if (p === "status") {
+        globalThis.__API__.statusCalls = (globalThis.__API__.statusCalls || 0) + 1;
+        return res(s.status || { state: "stopped" });
+      }
       if (p === "settings") return res(s.settings || { hasConfig: true, values: {}, configFile: "" });
       if (p === "profiles") return res(s.profiles || { profiles: [], activeProfileId: "" });
       if (p === "profiles/running") return res({ running: false });
@@ -383,6 +394,12 @@ test(
       assert.equal($("psEditor").querySelector(".edit-actions"), null, "no save/cancel row exists in the read-only editor");
       assert.equal($("profileDrawerActions").hidden, true, "the read-only view has no save action");
 
+      // The ~5s poll must not close the drawer on its own.
+      const runsBefore = globalThis.__API__.statusCalls || 0;
+      click($("refreshBtn"));
+      await waitFor(() => (globalThis.__API__.statusCalls || 0) > runsBefore);
+      assert.equal($("profileDrawer").hidden, false, "a poll refresh must not close the read-only drawer");
+
       // Three dismissal paths.
       click($("profileDrawerClose"));
       await waitFor(() => $("profileDrawer").hidden === true);
@@ -460,6 +477,24 @@ test(
         [...$("psEditor").querySelectorAll("input, select")].every((f) => !f.disabled),
         "the fields are editable",
       );
+
+      // A poll must neither close the editing drawer nor disturb the fields.
+      $("ps-name").focus();
+      const activeBefore = window.document.activeElement;
+      const fieldState = [...$("psEditor").querySelectorAll("input, select")].map((f) => f.disabled);
+      const stoppedBefore = globalThis.__API__.statusCalls || 0;
+      click($("refreshBtn"));
+      await waitFor(() => (globalThis.__API__.statusCalls || 0) > stoppedBefore);
+      assert.equal($("profileDrawer").hidden, false, "a poll refresh must not close the editing drawer");
+      assert.equal($("profileDrawerActions").hidden, false, "the editing view stays editable across a poll");
+      assert.ok($("profileDrawerBody").contains($("psEditor")), "#psEditor stays in the drawer across a poll");
+      assert.equal(window.document.activeElement, activeBefore, "focus survives a poll");
+      assert.deepEqual(
+        [...$("psEditor").querySelectorAll("input, select")].map((f) => f.disabled),
+        fieldState,
+        "field state is unchanged across a poll",
+      );
+
       click($("profileDrawerSave"));
       await waitFor(() => $("profileDrawer").hidden === true);
       assert.equal(globalThis.__API__.saveCalls.length, 1, "save went through POST /profiles/save");

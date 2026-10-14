@@ -597,7 +597,6 @@ function paintUnsupported(s) {
 function paint(s) {
   state.status = s;
   const running = RUNNING_STATES.has(s.state);
-  if (!running && els.profileDrawer && !els.profileDrawer.hidden) closeProfileDetail();
   if (s.state === "unsupported") {
     paintUnsupported(s);
     return;
