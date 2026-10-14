@@ -317,16 +317,13 @@ function imageRefOf(profile) {
 function paintVersion(s) {
   const rows = [];
   if (isDockerMethod(s)) {
-    // A container deployment is versioned by its IMAGE, not by the source repo:
-    // the source "latest version" (and its update path) does not apply here.
-    // Show the same "name:tag" the service card shows, so the two agree.
-    const ref = imageRefOf(s.profile);
-    if (ref) rows.push([t("label.image"), ref]);
-    const iv = s?.imageVersion;
-    if (iv?.created) {
-      const d = new Date(iv.created);
-      if (!Number.isNaN(d.getTime())) rows.push([t("label.imageBuilt"), d.toLocaleString()]);
-    }
+    // A container is versioned by its IMAGE, pulled from a registry — show the
+    // two image fields (name + tag), the same ones the editor and the service
+    // card use, and nothing build-related: a locally built image's timestamp
+    // says nothing about a pulled image.
+    const prof = s.profile;
+    if (prof?.imageName) rows.push([t("field.imageName"), prof.imageName]);
+    if (prof?.imageTag) rows.push([t("field.imageTag"), prof.imageTag]);
     renderKvRows(els.versionRows, rows);
     return;
   }
@@ -475,8 +472,9 @@ function paintConfig(s) {
   }
   if (isDockerMethod(s) && s.docker) {
     rows.push([t("label.container"), s.docker.containerName || "—"]);
-    const ref = imageRefOf(s.profile) || s.docker.image;
-    if (ref) rows.push([t("label.image"), ref]);
+    const prof = s.profile;
+    if (prof?.imageName) rows.push([t("field.imageName"), prof.imageName]);
+    if (prof?.imageTag) rows.push([t("field.imageTag"), prof.imageTag]);
     rows.push([t("label.containerState"), dockerStateLabel(s.docker.state)]);
   }
   if (Number.isFinite(cs?.context)) rows.push([t("label.context"), fmtK(cs.context)]);
@@ -1657,7 +1655,9 @@ function renderEnvOptions(profiles) {
   for (const p of list) {
     const opt = document.createElement("option");
     opt.value = p.id;
-    opt.textContent = `${p.name || p.id} · ${profileTypeLabel(p.type)}`;
+    // The picker names the environment only; the " · type" suffix belongs to the
+    // running badge (with it, the stopped picker read exactly like the badge).
+    opt.textContent = p.name || p.id;
     els.envSelect.append(opt);
   }
   els.envSelect.value = "";

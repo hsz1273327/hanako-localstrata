@@ -54,15 +54,17 @@ test("running state drops the update action button but keeps the version row", (
   assert.match(panelJs, /label: t\("common\.update"\), onClick: \(btn\) => promptUpdate\(latest, btn\)/);
 });
 
-test("a container version box shows the image, never the source repo version", () => {
+test("a container version box shows the image fields, never build/source info", () => {
   // paintVersion branches on the deployment method first...
   assert.match(panelJs, /function paintVersion\(s\) \{\s*const rows = \[\];\s*if \(isDockerMethod\(s\)\) \{/);
   const body = panelJs.slice(panelJs.indexOf("function paintVersion(s) {"), panelJs.indexOf("function paintConfig(s) {"));
   assert.ok(body.length > 0, "paintVersion body not found");
-  // ...the docker branch renders the image and returns BEFORE any source-version row.
-  assert.match(body, /if \(ref\) rows\.push\(\[t\("label\.image"\), ref\]\)/);
+  // ...the docker branch renders the two image FIELDS and returns BEFORE any
+  // source-version row, and shows nothing build-related.
+  assert.match(body, /if \(prof\?\.imageName\) rows\.push\(\[t\("field\.imageName"\), prof\.imageName\]\)/);
+  assert.match(body, /if \(prof\?\.imageTag\) rows\.push\(\[t\("field\.imageTag"\), prof\.imageTag\]\)/);
   assert.match(body, /if \(isDockerMethod\(s\)\) \{[\s\S]*?renderKvRows\(els\.versionRows, rows\);\s*return;/);
-  assert.doesNotMatch(body, /container\.updateHint/);
+  assert.doesNotMatch(body, /label\.imageBuilt|imageVersion|label\.image/);
 });
 
 test("the header control mirrors the running state: badge while running, picker while stopped", () => {
@@ -408,6 +410,8 @@ test(
       assert.equal($("logsBox").hidden, false, "logs shown while running");
       assert.equal($("modelRow").hidden, false, "model row shown while running");
       assert.equal($("profileEditBtn").hidden, true, "no edit entry while running");
+      assert.equal($("envSelect").hidden, true, "the picker is hidden while running (read-only badge instead)");
+      assert.equal($("profileBadge").hidden, false, "the badge is shown while running");
       assert.equal($("uptimeRow").hidden, false, "uptime row shown while running");
 
       // Badge -> read-only drawer.
@@ -466,6 +470,7 @@ test(
       assert.equal($("envSelect").hidden, false, "the picker is shown while stopped");
       assert.equal($("envSelect").value, "p1", "the picker reflects the current environment");
       assert.equal($("envSelect").options.length, 3, "every environment is offered");
+      assert.equal($("envSelect").options[0].textContent, "default", "the picker names the environment only (no · type suffix)");
 
       // "Cannot start" is about the CURRENT environment, and the hint hangs on
       // the status card next to the start button, naming the missing field.
@@ -492,10 +497,15 @@ test(
       assert.equal($("actionBtn").disabled, false, "a ready environment enables start");
       assert.equal($("startOptionsHint").hidden, true, "no 'cannot start' hint for a ready environment");
 
-      // The version box names the CURRENT image and never shows the source repo's
-      // version (a container is versioned by its image).
-      assert.match($("versionRows").textContent || "", /strata:latest/, "the version box names the current image");
-      assert.doesNotMatch($("versionRows").textContent || "", /Latest version/i, "no source-repo version row for a container");
+      // The version box splits the image into two rows and carries no
+      // build-time / source-repo information.
+      const vrows = [...$("versionRows").querySelectorAll(".kv-row")];
+      assert.equal(vrows.length, 2, "the version box splits into two rows");
+      assert.equal(vrows[0].querySelector(".kv-k").textContent, "Image name");
+      assert.equal(vrows[0].querySelector(".kv-v").textContent, "strata");
+      assert.equal(vrows[1].querySelector(".kv-k").textContent, "Tag");
+      assert.equal(vrows[1].querySelector(".kv-v").textContent, "latest");
+      assert.doesNotMatch($("versionRows").textContent || "", /Latest version|built/i, "no source/build rows for a container");
 
       // The header pencil opens the SAME drawer, editable, for the current
       // environment; saving goes through the existing route and refreshes.
