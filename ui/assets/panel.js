@@ -305,31 +305,27 @@ async function openExternal(url) {
 }
 
 function paintVersion(s) {
-  const version = s?.version;
-  const local = typeof version?.local === "string" ? version.local : null;
-  const latest = typeof version?.latest === "string" ? version.latest : null;
-  const rows = [[t("label.version"), local || "—"]];
-  // A container profile anchors the deployed version on its image.
-  if (isDockerMethod(s) && s?.imageVersion) {
-    const iv = s.imageVersion;
-    if (iv.tag) rows.push([t("label.image"), iv.tag]);
-    if (iv.created) {
+  const rows = [];
+  if (isDockerMethod(s)) {
+    // A container deployment is versioned by its IMAGE, not by the source repo:
+    // the source "latest version" (and its update path) does not apply here.
+    const iv = s?.imageVersion;
+    if (iv?.tag) rows.push([t("label.image"), iv.tag]);
+    if (iv?.created) {
       const d = new Date(iv.created);
       if (!Number.isNaN(d.getTime())) rows.push([t("label.imageBuilt"), d.toLocaleString()]);
     }
+    renderKvRows(els.versionRows, rows);
+    return;
   }
+
+  const version = s?.version;
+  const local = typeof version?.local === "string" ? version.local : null;
+  const latest = typeof version?.latest === "string" ? version.latest : null;
+  rows.push([t("label.version"), local || "—"]);
   if (version?.checkState === "checked" && latest) {
     if (local && compareVersions(latest, local) > 0) {
-      if (isDockerMethod(s)) {
-        // A container profile has no in-app build/rebuild pipeline.
-        rows.push([
-          t("label.latestVersion"),
-          tp("version.available", { version: latest }),
-          "update",
-          undefined,
-          t("container.updateHint"),
-        ]);
-      } else if (RUNNING_STATES.has(s.state)) {
+      if (RUNNING_STATES.has(s.state)) {
         rows.push([
           t("label.latestVersion"),
           tp("version.available", { version: latest }),
@@ -639,7 +635,7 @@ function paint(s) {
 
   // No content → hide the section rather than leave a "—" placeholder: a dash
   // reads as "could not read it" when the truth is "there is nothing yet".
-  els.versionBox.hidden = isSetup;
+  els.versionBox.hidden = isSetup || !els.versionRows.children.length;
   els.configBox.hidden = isSetup || !els.configRows.children.length;
   els.speedBox.hidden = isSetup || !els.speedRows.children.length;
   // Resources are whole-machine figures (nvidia-smi / os.freemem), not this

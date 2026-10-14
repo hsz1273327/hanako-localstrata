@@ -48,10 +48,21 @@ test("running state drops the update action button but keeps the version row", (
   // the 6th (action) element.
   assert.match(
     panelJs,
-    /else if \(RUNNING_STATES\.has\(s\.state\)\) \{\s*rows\.push\(\[\s*t\("label\.latestVersion"\),\s*tp\("version\.available", \{ version: latest \}\),\s*"update",\s*undefined,\s*t\("version\.stopToUpdate"\),\s*\]\);/,
+    /if \(RUNNING_STATES\.has\(s\.state\)\) \{\s*rows\.push\(\[\s*t\("label\.latestVersion"\),\s*tp\("version\.available", \{ version: latest \}\),\s*"update",\s*undefined,\s*t\("version\.stopToUpdate"\),\s*\]\);/,
   );
   // The stopped path still renders the real update button.
   assert.match(panelJs, /label: t\("common\.update"\), onClick: \(btn\) => promptUpdate\(latest, btn\)/);
+});
+
+test("a container version box shows the image, never the source repo version", () => {
+  // paintVersion branches on the deployment method first...
+  assert.match(panelJs, /function paintVersion\(s\) \{\s*const rows = \[\];\s*if \(isDockerMethod\(s\)\) \{/);
+  const body = panelJs.slice(panelJs.indexOf("function paintVersion(s) {"), panelJs.indexOf("function paintConfig(s) {"));
+  assert.ok(body.length > 0, "paintVersion body not found");
+  // ...the docker branch renders the image and returns BEFORE any source-version row.
+  assert.match(body, /if \(iv\?\.tag\) rows\.push\(\[t\("label\.image"\), iv\.tag\]\)/);
+  assert.match(body, /if \(isDockerMethod\(s\)\) \{[\s\S]*?renderKvRows\(els\.versionRows, rows\);\s*return;/);
+  assert.doesNotMatch(body, /container\.updateHint/);
 });
 
 test("the header control mirrors the running state: badge while running, picker while stopped", () => {
