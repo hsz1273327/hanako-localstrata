@@ -103,9 +103,6 @@ const state = {
   configFileFilled: null,
   // The profile open in the drawer for EDITING (null in the read-only view).
   editingProfileId: null,
-  // An existing local profile's configFile, carried through an edit so a value
-  // missing from the candidates list is never silently dropped.
-  originalConfigFile: "",
 };
 
 // States where setup still needs input; the inline status form / config picker
@@ -1255,7 +1252,6 @@ async function save(restart) {
 // running the backend refuses edits/deletes and the buttons are disabled.
 
 let pluginFormEls = null;
-let deployConfigFilesKey = "";
 let editorType = "local";
 
 function ensurePluginForm() {
@@ -1276,7 +1272,6 @@ function ensurePluginForm() {
     strataDir: root.querySelector("#ps-strataDir"),
     pythonPath: root.querySelector("#ps-pythonPath"),
     gpu: root.querySelector("#ps-gpu"),
-    configFile: root.querySelector("#ps-configFile"),
     imageName: root.querySelector("#ps-imageName"),
     imageTag: root.querySelector("#ps-imageTag"),
     imagePull: root.querySelector("#ps-imagePull"),
@@ -1315,8 +1310,6 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.dataDir.value = profile?.dataDir || "";
   pluginFormEls.ggufDir.value = profile?.ggufDir || "";
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
-  deployConfigFilesKey = "";
-  populateProfileConfigFiles(currentCandidates(), profile?.configFile || "");
   setEditorType(pluginFormEls.type.value);
 }
 
@@ -1346,7 +1339,6 @@ async function openDrawer(readOnly) {
   }
   if (!profile) return;
   state.editingProfileId = readOnly ? null : profile.id;
-  state.originalConfigFile = profile.type === "local" ? profile.configFile || "" : "";
   fillProfileEditorFields(profile);
   setProfileEditorReadOnly(readOnly);
   setPsMessage("");
@@ -1386,7 +1378,6 @@ function closeProfileDetail() {
   pluginFormEls.editor.hidden = true;
   setPsMessage("");
   state.editingProfileId = null;
-  state.originalConfigFile = "";
   stopPanelPull();
   panelImagesLoaded = false;
   if (pluginFormEls?.imageStatus) {
@@ -1419,8 +1410,6 @@ function collectProfileEdits() {
     body.strataDir = pluginFormEls.strataDir.value.trim();
     body.pythonPath = pluginFormEls.pythonPath.value.trim();
     body.gpu = pluginFormEls.gpu.value.trim();
-    // Never drop a stored configFile just because it is not in the options.
-    body.configFile = pluginFormEls.configFile.value || state.originalConfigFile || "";
   }
   return body;
 }
@@ -1576,32 +1565,6 @@ function setPsMessage(text, kind = "info") {
   if (!pluginFormEls) return;
   pluginFormEls.message.textContent = text || "";
   pluginFormEls.message.className = `message ${kind}`;
-}
-
-function currentCandidates() {
-  return state.status?.configCandidates || [];
-}
-
-function populateProfileConfigFiles(candidates, selected) {
-  const key = (candidates || []).map((c) => `${c.file}:${c.context ?? ""}`).join("|") + `#${selected || ""}`;
-  if (key === deployConfigFilesKey) return;
-  deployConfigFilesKey = key;
-  const sel = pluginFormEls.configFile;
-  sel.replaceChildren();
-  const auto = document.createElement("option");
-  auto.value = "";
-  auto.textContent = t("setup.chooseConfigShort");
-  sel.append(auto);
-  for (const c of candidates || []) {
-    const opt = document.createElement("option");
-    opt.value = c.file;
-    const parts = [];
-    if (c.quant) parts.push(c.quant);
-    if (Number.isFinite(c.context)) parts.push(tp("setup.candidateContext", { context: c.context }));
-    opt.textContent = parts.length ? `${c.file} · ${parts.join(" · ")}` : c.file;
-    sel.append(opt);
-  }
-  sel.value = selected || "";
 }
 
 // The backend also reports which readiness fields are still empty, as stable

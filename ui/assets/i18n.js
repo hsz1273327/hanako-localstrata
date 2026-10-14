@@ -84,8 +84,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker 默认 HOST=0.0.0.0，端口已发布到所有网卡",
     "label.container": "容器",
     "label.containerState": "容器状态",
-    "field.configFile": "配置文件（可选覆盖）",
-    "setup.chooseConfigShort": "自动 / 未选择",
     "dockerState.running": "运行中",
     "dockerState.stopped": "已停止",
     "dockerState.exited": "已退出",
@@ -144,8 +142,6 @@ export const STRINGS = {
     "unsupported.message": "Strata 目前只支持 Windows 和 Linux，不支持 macOS。",
     "unsupported.reason": "Strata 目前只支持 Windows 和 Linux。",
     "unsupported.projectUrl": "项目地址：",
-
-    "setup.candidateContext": "上下文 {context}",
 
     "confirm.stopTitle": "确认停止服务？",
     "confirm.stopAction": "停止",
@@ -327,8 +323,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker defaults to HOST=0.0.0.0; the port is published on every interface",
     "label.container": "Container",
     "label.containerState": "Container state",
-    "field.configFile": "Config file (optional override)",
-    "setup.chooseConfigShort": "Auto / none",
     "dockerState.running": "Running",
     "dockerState.stopped": "Stopped",
     "dockerState.exited": "Exited",
@@ -387,8 +381,6 @@ export const STRINGS = {
     "unsupported.message": "Strata currently supports Windows and Linux only, not macOS.",
     "unsupported.reason": "Strata currently supports Windows and Linux only.",
     "unsupported.projectUrl": "Project:",
-
-    "setup.candidateContext": "Context {context}",
 
     "confirm.stopTitle": "Stop the service?",
     "confirm.stopAction": "Stop",
@@ -570,8 +562,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker utilise HOST=0.0.0.0 par défaut ; le port est publié sur toutes les interfaces",
     "label.container": "Conteneur",
     "label.containerState": "État du conteneur",
-    "field.configFile": "Fichier de configuration (override optionnel)",
-    "setup.chooseConfigShort": "Auto / aucun",
     "dockerState.running": "En cours",
     "dockerState.stopped": "Arrêté",
     "dockerState.exited": "Quitté",
@@ -630,8 +620,6 @@ export const STRINGS = {
     "unsupported.message": "Strata ne prend en charge que Windows et Linux, pas macOS.",
     "unsupported.reason": "Strata ne prend en charge que Windows et Linux.",
     "unsupported.projectUrl": "Projet :",
-
-    "setup.candidateContext": "Contexte {context}",
 
     "confirm.stopTitle": "Arrêter le service ?",
     "confirm.stopAction": "Arrêter",
@@ -813,8 +801,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker по умолчанию использует HOST=0.0.0.0; порт опубликован на всех интерфейсах",
     "label.container": "Контейнер",
     "label.containerState": "Состояние контейнера",
-    "field.configFile": "Файл конфигурации (необязательное переопределение)",
-    "setup.chooseConfigShort": "Авто / нет",
     "dockerState.running": "Работает",
     "dockerState.stopped": "Остановлен",
     "dockerState.exited": "Завершён",
@@ -873,8 +859,6 @@ export const STRINGS = {
     "unsupported.message": "Strata поддерживает только Windows и Linux, но не macOS.",
     "unsupported.reason": "Strata поддерживает только Windows и Linux.",
     "unsupported.projectUrl": "Проект:",
-
-    "setup.candidateContext": "Контекст {context}",
 
     "confirm.stopTitle": "Остановить сервис?",
     "confirm.stopAction": "Остановить",
@@ -1056,8 +1040,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker は既定で HOST=0.0.0.0 を使用し、ポートは全インターフェースに公開されます",
     "label.container": "コンテナ",
     "label.containerState": "コンテナ状態",
-    "field.configFile": "設定ファイル（任意の上書き）",
-    "setup.chooseConfigShort": "自動 / 未選択",
     "dockerState.running": "実行中",
     "dockerState.stopped": "停止",
     "dockerState.exited": "終了",
@@ -1116,8 +1098,6 @@ export const STRINGS = {
     "unsupported.message": "Strata は Windows と Linux のみ対応で、macOS は非対応です。",
     "unsupported.reason": "Strata は Windows と Linux のみ対応です。",
     "unsupported.projectUrl": "プロジェクト：",
-
-    "setup.candidateContext": "コンテキスト {context}",
 
     "confirm.stopTitle": "サービスを停止しますか？",
     "confirm.stopAction": "停止",
@@ -1299,8 +1279,6 @@ export const STRINGS = {
     "netMode.containerTitle": "Docker는 기본적으로 HOST=0.0.0.0을 사용하며 포트가 모든 인터페이스에 게시됩니다",
     "label.container": "컨테이너",
     "label.containerState": "컨테이너 상태",
-    "field.configFile": "설정 파일 (선택적 재정의)",
-    "setup.chooseConfigShort": "자동 / 없음",
     "dockerState.running": "실행 중",
     "dockerState.stopped": "중지됨",
     "dockerState.exited": "종료됨",
@@ -1359,8 +1337,6 @@ export const STRINGS = {
     "unsupported.message": "Strata는 Windows와 Linux만 지원하며 macOS는 지원하지 않습니다.",
     "unsupported.reason": "Strata는 Windows와 Linux만 지원합니다.",
     "unsupported.projectUrl": "프로젝트:",
-
-    "setup.candidateContext": "컨텍스트 {context}",
 
     "confirm.stopTitle": "서비스를 중지할까요?",
     "confirm.stopAction": "중지",

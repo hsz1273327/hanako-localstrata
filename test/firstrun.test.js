@@ -136,8 +136,8 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
         : { state: "running", launch: { method: "local" } };
     },
     readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: gguf, configFile: "" }),
-    patchActiveProfile: async (_ctx, patch) => {
-      saved = patch;
+    saveSelectedConfig: async (_ctx, file) => {
+      saved = file;
     },
     startService: async (_ctx, opts) => {
       startMethod = opts?.launchMethod;
@@ -177,7 +177,7 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
   assert.ok(spawnedArgs.includes("--no-start"));
   assert.ok(spawnedArgs.includes("--gguf-dir"));
   assert.ok(spawnedArgs.includes(gguf));
-  assert.equal(saved?.configFile, "strata-iq2_xs.json");
+  assert.equal(saved, "strata-iq2_xs.json");
   assert.equal(startMethod, "local");
 });
 
@@ -210,8 +210,8 @@ test("local first run drives a real setup.py process and discovers the config (P
         : { state: "running", launch: { method: "local" } };
     },
     startService: async () => ({ started: true, state: "starting" }),
-    patchActiveProfile: async (_ctx, patch) => {
-      saved = patch;
+    saveSelectedConfig: async (_ctx, file) => {
+      saved = file;
     },
     sleep: async () => {},
   };
@@ -223,7 +223,7 @@ test("local first run drives a real setup.py process and discovers the config (P
   assert.equal(state.done, true);
   assert.ok(fs.existsSync(path.join(dir, "strata-iq2_xs.json")));
   assert.ok(fs.existsSync(path.join(dir, "strata-setup.log")));
-  assert.equal(saved?.configFile, "strata-iq2_xs.json");
+  assert.equal(saved, "strata-iq2_xs.json");
 });
 
 // ── Regression: existing config never enters setup ────────────────────────
@@ -266,7 +266,7 @@ test("beginFirstRun does not start a second job while one is running", async () 
         ? { state: "running", launch: { method: "local" } }
         : { state: "no-config", launch: { method: "local" }, settings: {} },
     readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/m", configFile: "" }),
-    patchActiveProfile: async () => {},
+    saveSelectedConfig: async () => {},
     startService: async () => ({ started: true, state: "starting" }),
     sleep: async () => gate,
     spawn: () => {

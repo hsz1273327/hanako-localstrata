@@ -181,9 +181,6 @@ let editingProfileId = null;
 // When true the editor is the read-only "view" variant: every field is
 // disabled, the save button is hidden and only a close action remains.
 let editorReadOnly = false;
-// The role of profile.configFile is still backend-only; carry an existing
-// local profile's value through an edit so it is never dropped.
-let originalConfigFile = "";
 let pendingDeleteId = "";
 
 // ── Runtime values (read-only "view" drawer) ─────────────────────────────
@@ -784,7 +781,6 @@ function setDrawerOpen(open) {
 
 function openProfileEditor(profile, readOnly = false) {
   editingProfileId = profile ? profile.id : "";
-  originalConfigFile = profile?.type === "local" ? profile?.configFile || "" : "";
   // Drop any provenance tag / runtime-filled value from the previous profile.
   clearFieldSources();
   captureProfileValues(profile);
@@ -876,9 +872,6 @@ async function saveProfile() {
     body.strataDir = els.profileStrataDir.value.trim();
     body.pythonPath = els.profilePythonPath.value.trim();
     body.gpu = els.profileGpu.value.trim();
-    // The editor does not render configFile, but an existing override must
-    // survive an edit (zero-regression on the flat/profile config values).
-    body.configFile = originalConfigFile;
   }
 
   working = true;

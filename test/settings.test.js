@@ -161,10 +161,10 @@ test("settings page manages environment profiles in place", () => {
   // The panel entry is gone, and so is its host call.
   assert.doesNotMatch(src, /hana\.cards\.open/);
   assert.doesNotMatch(src, /settings\.openPanel/);
-  // An existing local profile's configFile must be carried through an edit even
-  // though the in-place editor does not render that field.
-  assert.match(src, /originalConfigFile/);
-  assert.match(src, /body\.configFile\s*=\s*originalConfigFile/);
+  // The selected config is no longer a profile field, so the in-place editor
+  // neither renders nor carries a configFile through an edit.
+  assert.doesNotMatch(src, /originalConfigFile/);
+  assert.doesNotMatch(src, /body\.configFile\s*=/);
 });
 
 // The settings page describes configurations; it never picks which one runs.

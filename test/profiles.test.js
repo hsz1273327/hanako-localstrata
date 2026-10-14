@@ -209,15 +209,17 @@ test("emptyLocalProfile / emptyContainerProfile / makeDefaultProfile shapes", ()
   assert.equal(findProfile([localProfile()], "nope"), null);
 });
 
-test("profileFromFlat carries the legacy flat settings", () => {
+test("profileFromFlat carries the legacy flat settings (but not the config file)", () => {
   const p = profileFromFlat({ strataDir: "/s", pythonPath: "/p", gpu: "0", ggufDir: "/g", configFile: "c.json", port: 9090 });
   assert.equal(p.type, "local");
   assert.equal(p.strataDir, "/s");
   assert.equal(p.pythonPath, "/p");
   assert.equal(p.gpu, "0");
   assert.equal(p.ggufDir, "/g");
-  assert.equal(p.configFile, "c.json");
   assert.equal(p.port, 9090);
+  // The chosen config is the top-level key, never a profile field: the profile
+  // only says where Strata runs.
+  assert.equal(p.configFile, undefined);
 });
 
 // ── Persistence via readAllConfig / writeProfiles ────────────────────────
@@ -255,8 +257,8 @@ test("general defaults fill empty profile fields; the profile's own values win",
   await writeProfiles(
     ctx,
     [
-      localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0, configFile: "strata-a.json" }),
-      localProfile({ id: "p2", name: "own", strataDir: "/two", ggufDir: "/own/models", port: 1234, configFile: "strata-b.json" }),
+      localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0 }),
+      localProfile({ id: "p2", name: "own", strataDir: "/two", ggufDir: "/own/models", port: 1234 }),
     ],
     "p1",
   );
@@ -267,9 +269,10 @@ test("general defaults fill empty profile fields; the profile's own values win",
   assert.equal(cfg.activeProfile.port, 9000);
   assert.equal(cfg.ggufDir, "/general/models");
   assert.equal(cfg.port, 9000);
-  // The configFile fallback/auto path is untouched.
-  assert.equal(cfg.activeProfile.configFile, "strata-a.json");
-  assert.equal(cfg.configFile, "strata-a.json");
+  // The config file is not a profile field: an untouched top-level key stays
+  // empty and no profile carries a configFile to fall back on.
+  assert.equal(cfg.activeProfile.configFile, undefined);
+  assert.equal(cfg.configFile, "");
 
   // Switch to p2: its own values win over the general defaults.
   await selectProfile(ctx, "p2");
@@ -368,20 +371,66 @@ test("a fresh install has nothing to migrate and stays write-free on read", asyn
   assert.equal(ctx._store.profiles, undefined);
 });
 
-test("patchActiveProfile updates one field on the active profile", async () => {
+// Legacy installs kept the chosen config ON the profile. normalizeProfile no
+// longer emits that field, so readAllConfig must lift it off the raw stored list
+// into the top-level key — otherwise an empty top-level key auto-picks the
+// newest file and silently changes which config runs.
+test("a legacy per-profile configFile is lifted into the top-level selection once", async () => {
+  const ctx = makeCtx({
+    profiles: [
+      { id: "p1", name: "default", type: "local", strataDir: "/one", configFile: "strata-chosen.json" },
+      { id: "p2", name: "two", type: "local", strataDir: "/two", configFile: "strata-other.json" },
+    ],
+    activeProfileId: "p1",
+  });
+  const originalSetMany = ctx.config.setMany.bind(ctx.config);
+  let writes = 0;
+  ctx.config.setMany = async (patch) => {
+    writes += 1;
+    return originalSetMany(patch);
+  };
+
+  const cfg = await readAllConfig(ctx);
+  // The ACTIVE profile's value wins, and lands on the top-level key.
+  assert.equal(cfg.configFile, "strata-chosen.json");
+  assert.equal(ctx._store.configFile, "strata-chosen.json");
+  // …and the field is stripped from every persisted profile.
+  assert.ok(Array.isArray(ctx._store.profiles));
+  assert.equal(ctx._store.profiles[0].configFile, undefined);
+  assert.equal(ctx._store.profiles[1].configFile, undefined);
+  assert.equal(writes, 1);
+
+  // Later reads find nothing left to migrate and stay write-free.
+  await readAllConfig(ctx);
+  assert.equal(writes, 1);
+});
+
+test("an existing top-level selection wins over a legacy profile configFile", async () => {
+  const ctx = makeCtx({
+    configFile: "strata-toplevel.json",
+    profiles: [
+      { id: "p1", name: "default", type: "local", strataDir: "/one", configFile: "strata-legacy.json" },
+    ],
+    activeProfileId: "p1",
+  });
+  const cfg = await readAllConfig(ctx);
+  assert.equal(cfg.configFile, "strata-toplevel.json");
+});
+
+test("patchActiveProfile updates one field on the active profile only", async () => {
   const ctx = makeCtx({});
   await writeProfiles(
     ctx,
     [
-      localProfile({ id: "p1", name: "default", strataDir: "/one", configFile: "" }),
+      localProfile({ id: "p1", name: "default", strataDir: "/one" }),
       localProfile({ id: "p2", name: "two", strataDir: "/two" }),
     ],
     "p1",
   );
-  await patchActiveProfile(ctx, { configFile: "strata-x.json" });
+  await patchActiveProfile(ctx, { ggufDir: "/models/x" });
   const cfg = await readAllConfig(ctx);
-  assert.equal(cfg.activeProfile.configFile, "strata-x.json");
-  assert.equal(findProfile(cfg.profiles, "p2").configFile, "");
+  assert.equal(cfg.activeProfile.ggufDir, "/models/x");
+  assert.equal(findProfile(cfg.profiles, "p2").ggufDir, "");
 });
 
 // ── CRUD handlers ─────────────────────────────────────────────────────────
@@ -466,7 +515,7 @@ test("running service locks the in-use profile only", async () => {
   const port = server.address().port;
 
   try {
-    const profile = localProfile({ id: "run", name: "default", strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json", port });
+    const profile = localProfile({ id: "run", name: "default", strataDir: dir, pythonPath: "/usr/bin/python3", port });
     const spare = localProfile({ id: "spare", name: "spare", strataDir: "/elsewhere" });
     fs.writeFileSync(path.join(dir, "strata-demo.json"), JSON.stringify({ port }));
 

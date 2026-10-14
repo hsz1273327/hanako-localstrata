@@ -165,7 +165,6 @@ test("localRuntimeValues reads the live local process and config", () => {
         pythonPath: "",
         gpu: "",
         ggufDir: "",
-        configFile: "",
         port: 0,
       },
     ],
@@ -201,7 +200,6 @@ test("localRuntimeValues falls back to status / profile / default per field", ()
         pythonPath: "/stored/python",
         gpu: "1",
         ggufDir: "",
-        configFile: "stored.json",
         port: 0,
       },
     ],
@@ -228,6 +226,23 @@ test("localRuntimeValues falls back to status / profile / default per field", ()
   assert.equal(sources.ggufDir, "default");
   assert.equal(values.port, 9000);
   assert.equal(sources.port, "default");
+});
+
+// The selected config is a top-level key, so configFile has no profile fallback:
+// with no live signal the drawer leaves it unset rather than inventing one.
+test("localRuntimeValues never falls back to a profile for configFile", () => {
+  const cfg = {
+    profiles: [{ id: "p1", name: "default", type: "local", strataDir: "/s", configFile: "stored.json" }],
+    activeProfileId: "p1",
+  };
+  const { values, sources } = localRuntimeValues({
+    cmdline: "",
+    configJson: null,
+    cfg,
+    status: { state: "running", settings: {} },
+  });
+  assert.equal(values.configFile, undefined);
+  assert.equal(sources.configFile, undefined);
 });
 
 // ── containerRuntimeValues ────────────────────────────────────────────────
@@ -394,7 +409,6 @@ test("buildRunningReport surfaces a live value missing from the profile", async 
       pythonPath: "",
       gpu: "",
       ggufDir: "",
-      configFile: "",
       port: 0,
     },
   ]);
