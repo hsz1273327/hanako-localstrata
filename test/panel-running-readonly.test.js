@@ -54,12 +54,15 @@ test("running state drops the update action button but keeps the version row", (
   assert.match(panelJs, /label: t\("common\.update"\), onClick: \(btn\) => promptUpdate\(latest, btn\)/);
 });
 
-test("the profile badge is guarded to the running state and mirrors it (title/aria/disabled)", () => {
-  assert.match(panelJs, /const canView = RUNNING_STATES\.has\(s\.state\)/);
-  assert.match(panelJs, /el\.disabled = !canView/);
+test("the header control mirrors the running state: badge while running, picker while stopped", () => {
+  // The read-only badge is shown only in a running state; the picker only while stopped.
+  assert.match(panelJs, /els\.profileBadge\.hidden = !show \|\| !running;/);
+  assert.match(panelJs, /els\.envSelect\.hidden = !show \|\| running;/);
+  assert.match(panelJs, /els\.profileBadge\.title = t\("profile\.viewDetails"\);/);
+  // The detail drawer stays running-only.
   assert.match(panelJs, /if \(!RUNNING_STATES\.has\(state\.status\?\.state\)\) return;/);
-  // The badge now lives in the header, so the unsupported branch must hide it explicitly.
-  assert.match(panelJs, /els\.profileBadge\.hidden = true;/);
+  // Unsupported (macOS) hides both header controls explicitly.
+  assert.match(panelJs, /els\.profileBadge\.hidden = true;\s*els\.envSelect\.hidden = true;/);
 });
 
 test("the detail drawer auto-closes when the service leaves the running states", () => {
@@ -149,20 +152,32 @@ test("setup states show a plain-text pointer to the Settings page, not an editor
   assert.match(panelJs, /paintSetupNotice\(s\);/);
 });
 
-test("a start-blocked profile names the missing fields, not a vague prompt", () => {
+test("a start-blocked environment names the missing fields, not a vague prompt", () => {
   assert.match(panelJs, /function missingStartFields\(profile\)/);
   assert.match(panelJs, /function startBlockedMessage\(profile\)/);
   assert.match(panelJs, /tp\("profile\.missingFields", \{ fields: joinList\(missing\) \}\)/);
-  // The panel trusts the backend's verdict — each /status profile carries
-  // `ready` + `missing` (lib/profiles.js) — and must NOT re-derive readiness
-  // from fields it never receives: that re-derivation marked every profile
-  // "not ready", fully filled ones included.
-  assert.match(panelJs, /return !!profile\?\.ready/);
+  // Readiness is the backend's verdict (`launch.canStart`) plus the per-profile
+  // `missing` keys — never re-derived from a summary that carries no fields.
+  assert.match(panelJs, /function canStartCurrent\(s\) \{\s*return s\?\.launch\?\.canStart !== false;/);
   assert.match(panelJs, /\(profile\?\.missing \|\| \[\]\)\.map/);
   assert.doesNotMatch(panelJs, /if \(!profile\.image\) missing\.push/);
-  // Both the stop-page hint and the start-button guard use the concrete message.
-  assert.match(panelJs, /els\.startOptionsHint\.textContent = ready \? "" : startBlockedMessage\(selected\)/);
+  // The retired radio picker is gone.
+  assert.doesNotMatch(panelJs, /profileHasFields|profileIsReady|selectedStartProfile|canStartSelected|paintStartOptions|startProfileId|startProfileList/);
+  // The hint hangs on the status card (next to the start button), not the picker.
+  assert.match(panelJs, /els\.startOptionsHint\.textContent = blocked \? startBlockedMessage\(s\.profile\) : ""/);
   assert.doesNotMatch(panelJs, /showError\(t\("profile\.notReady"\)\)/);
+});
+
+test("the header picker switches the current environment and refreshes every card", () => {
+  assert.match(panelHtml, /id="envSelect"[^>]*data-i18n-aria-label="profile\.selectEnv"/);
+  assert.match(panelJs, /function paintEnv\(s\)/);
+  // Running stays read-only: the picker hides, the badge shows.
+  assert.match(panelJs, /els\.profileBadge\.hidden = !show \|\| !running;/);
+  assert.match(panelJs, /els\.envSelect\.hidden = !show \|\| running;/);
+  assert.match(panelJs, /els\.envSelect\.addEventListener\("change", \(\) => selectEnv\(els\.envSelect\.value\)\)/);
+  // Selecting persists the choice via the still-present route, then refreshes.
+  assert.match(panelJs, /await api\("profiles\/select", \{ method: "POST", body: JSON\.stringify\(\{ id \}\) \}\)/);
+  assert.match(panelJs, /state\.working = false;\s*await refresh\(\);/);
 });
 
 // ── Layer 2: behavioural layer (requires jsdom) ───────────────────────────
@@ -185,12 +200,18 @@ function res(data) {
 export const hana = {
   ready: async () => {},
   api: {
-    fetch: async (p) => {
+    fetch: async (p, init) => {
       const s = globalThis.__API__ || {};
       if (p === "status") return res(s.status || { state: "stopped" });
       if (p === "settings") return res(s.settings || { hasConfig: true, values: {}, configFile: "" });
       if (p === "profiles") return res(s.profiles || { profiles: [], activeProfileId: "" });
       if (p === "profiles/running") return res({ running: false });
+      if (p === "profiles/select") {
+        const id = init && init.body ? JSON.parse(init.body).id : null;
+        (globalThis.__API__.selectCalls = globalThis.__API__.selectCalls || []).push(id);
+        if (s.select && s.select.status) globalThis.__API__.status = s.select.status;
+        return res({ saved: true, activeProfileId: id });
+      }
       return res({});
     },
   },
@@ -221,19 +242,32 @@ function runningStatus() {
 function stoppedStatus() {
   return {
     state: "stopped",
-    profile: { id: "p1", name: "default", type: "local" },
+    // The current environment is not startable (its Strata directory is empty).
+    profile: { id: "p1", name: "default", type: "local", ready: false, missing: ["strataDir"] },
     profiles: [
-      { id: "p1", name: "default", type: "local", ready: true, missing: [] },
-      { id: "p2", name: "alt", type: "local", ready: false, missing: ["strataDir"] },
+      { id: "p1", name: "default", type: "local", ready: false, missing: ["strataDir"] },
+      { id: "p2", name: "alt", type: "local", ready: true, missing: [] },
       { id: "p3", name: "dockertest", type: "container", ready: true, missing: [] },
     ],
     activeProfileId: "p1",
     version: { checkState: "checked", local: "0.1.40", latest: "0.1.44.1" },
     network: null,
     port: 8080,
+    launch: { method: "local", canStart: false, canChoose: false, allowed: ["local"], localReady: false, reason: "unconfigured" },
     configCandidates: [],
     log: { lines: [] },
     resources: {},
+  };
+}
+
+// After switching the current environment to the container profile "dockertest"
+// (the reported, fully filled case): the env AND the cards must follow.
+function switchedStatus() {
+  return {
+    ...stoppedStatus(),
+    profile: { id: "p3", name: "dockertest", type: "container", ready: true, missing: [] },
+    activeProfileId: "p3",
+    launch: { method: "docker", canStart: true, canChoose: false, allowed: ["docker"], localReady: false, reason: null },
   };
 }
 
@@ -359,31 +393,31 @@ test(
       assert.equal($("configBox").hidden, false, "service config still shows while stopped");
       assert.equal($("versionBox").hidden, false, "version still shows while stopped");
       assert.ok($("versionRows").querySelector(".update-btn"), "update button reappears when stopped");
-      assert.equal($("profileBadge").disabled, true, "badge non-interactive when stopped");
-      click($("profileBadge"));
-      await tick();
-      assert.equal($("profileDrawer").hidden, true, "badge does not open the drawer when stopped");
-      assert.equal($("actionBtn").hidden, false, "start button still present when stopped");
+      // While stopped the header shows the PICKER, not the badge, and the
+      // picker reflects the current environment.
+      assert.equal($("profileBadge").hidden, true, "the badge is hidden while stopped");
+      assert.equal($("envSelect").hidden, false, "the picker is shown while stopped");
+      assert.equal($("envSelect").value, "p1", "the picker reflects the current environment");
+      assert.equal($("envSelect").options.length, 3, "every environment is offered");
 
-      // A selected profile that cannot start names the missing field(s) instead
-      // of a vague "fill in the required fields".
-      const altRadio = [...$("startProfileList").querySelectorAll("input[type=radio]")].find((i) => i.value === "p2");
-      assert.ok(altRadio, "the second profile is offered on the stop page");
-      altRadio.checked = true;
-      altRadio.dispatchEvent(new window.Event("change", { bubbles: true }));
-      await tick();
+      // "Cannot start" is about the CURRENT environment, and the hint hangs on
+      // the status card next to the start button, naming the missing field.
+      assert.equal($("actionBtn").hidden, false, "start button still present when stopped");
+      assert.equal($("actionBtn").disabled, true, "a not-ready environment disables start");
       assert.equal($("startOptionsHint").hidden, false, "the not-ready hint is shown");
       assert.match($("startOptionsHint").textContent, /Strata directory/, "the hint names the missing field");
 
-      // The reported case: a FULLY FILLED container profile (dockertest) must be
-      // startable — no "cannot start" hint, and the start button stays enabled.
-      const ctRadio = [...$("startProfileList").querySelectorAll("input[type=radio]")].find((i) => i.value === "p3");
-      assert.ok(ctRadio, "the container profile is offered on the stop page");
-      ctRadio.checked = true;
-      ctRadio.dispatchEvent(new window.Event("change", { bubbles: true }));
-      await tick();
-      assert.equal($("startOptionsHint").hidden, true, "a ready container profile shows no 'cannot start' hint");
-      assert.equal($("actionBtn").disabled, false, "the start button is enabled for a ready profile");
+      // Switching the environment persists the choice AND refreshes every card.
+      globalThis.__API__.select = { status: switchedStatus() };
+      const sel = $("envSelect");
+      sel.value = "p3";
+      sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await waitFor(() => /dockertest/.test($("configRows").textContent || ""));
+      assert.deepEqual(globalThis.__API__.selectCalls, ["p3"], "the choice was persisted via POST /profiles/select");
+      assert.equal($("envSelect").value, "p3", "the picker follows the new environment");
+      assert.match($("configRows").textContent || "", /dockertest/, "the service-config card followed the new environment");
+      assert.equal($("actionBtn").disabled, false, "a ready environment enables start");
+      assert.equal($("startOptionsHint").hidden, true, "no 'cannot start' hint for a ready environment");
 
       // The gear + the in-panel profile manager are gone; nothing shows while stopped.
       assert.equal($("configBtn"), null, "gear button removed from the panel");
@@ -396,6 +430,7 @@ test(
       assert.equal($("statusConfigBox").hidden, false, "setup notice shown in a setup state");
       assert.ok(($("setupNotice").textContent || "").trim().length > 0, "setup notice carries copy");
       assert.equal($("profileBadge").hidden, true, "profile badge hidden in a setup state");
+      assert.equal($("envSelect").hidden, false, "the picker is shown in a setup state too");
       assert.equal($("profileDrawerBody").children.length, 0, "no editor is mounted in the panel");
     } finally {
       // The panel schedules a poll timer; fire its beforeunload cleanup so the

@@ -52,9 +52,8 @@ const els = {
   confirmCancel: document.getElementById("confirmCancel"),
   accessRows: document.getElementById("accessRows"),
   statusConfigBox: document.getElementById("statusConfigBox"),
-  startOptionsBox: document.getElementById("startOptionsBox"),
-  startProfileList: document.getElementById("startProfileList"),
   startOptionsHint: document.getElementById("startOptionsHint"),
+  envSelect: document.getElementById("envSelect"),
   profileBadge: document.getElementById("profileBadge"),
   profileDrawerScrim: document.getElementById("profileDrawerScrim"),
   profileDrawer: document.getElementById("profileDrawer"),
@@ -93,8 +92,6 @@ const state = {
   working: false,
   formFilled: false,
   configFileFilled: null,
-  // Profile picked on the stop page for this start.
-  startProfileId: "",
 };
 
 // States where setup still needs input; the inline status form / config picker
@@ -427,25 +424,24 @@ function profileTypeLabel(type) {
 }
 
 // Current profile name + type marker (shown while a service is running).
-function paintProfileBadge(s) {
-  const el = els.profileBadge;
-  if (!el) return;
+// The "current environment" control in the header. While running it is the
+// read-only name·type badge (clicking it opens the read-only detail drawer);
+// while stopped it is a picker that switches the current environment.
+function paintEnv(s) {
   const prof = s?.profile;
-  if (!prof || SETUP_STATES.has(s.state) || s.state === "unsupported") {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-  el.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
-  el.className = `profile-badge ${prof.type}`;
-  const canView = RUNNING_STATES.has(s.state);
-  el.disabled = !canView;
-  if (canView) {
-    el.title = t("profile.viewDetails");
-    el.setAttribute("aria-label", t("profile.viewDetails"));
-  } else {
-    el.title = prof.name;
-    el.setAttribute("aria-label", prof.name);
+  const running = RUNNING_STATES.has(s.state);
+  const show = !!prof && s.state !== "unsupported";
+  els.profileBadge.hidden = !show || !running;
+  els.envSelect.hidden = !show || running;
+  if (show && running) {
+    els.profileBadge.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
+    els.profileBadge.className = `profile-badge ${prof.type}`;
+    els.profileBadge.title = t("profile.viewDetails");
+    els.profileBadge.setAttribute("aria-label", t("profile.viewDetails"));
+  } else if (show) {
+    renderEnvOptions(s.profiles);
+    els.envSelect.value = s.activeProfileId || "";
+    els.envSelect.disabled = state.working;
   }
 }
 
@@ -559,8 +555,8 @@ function paintActions(s) {
     els.actionBtn.className = "icon-btn status-action";
     els.actionBtn.title = t("action.start");
     els.actionBtn.setAttribute("aria-label", t("action.start"));
-    // Disable when the selected profile cannot start.
-    els.actionBtn.disabled = state.working || !canStartSelected(s, selectedStartProfile(s));
+    // Disable when the current environment cannot start.
+    els.actionBtn.disabled = state.working || !canStartCurrent(s);
   }
 }
 
@@ -576,6 +572,7 @@ function paintUnsupported(s) {
 
   els.statusCard.hidden = true;
   els.profileBadge.hidden = true;
+  els.envSelect.hidden = true;
   for (const box of [els.versionBox, els.configBox, els.speedBox, els.resourceBox, els.logsBox, els.settingsBox]) {
     box.hidden = true;
   }
@@ -614,7 +611,7 @@ function paint(s) {
   els.stateText.title = stateLabel;
 
   paintNetMode(s);
-  paintProfileBadge(s);
+  paintEnv(s);
   els.model.textContent = s.model || "—";
   els.model.title = s.model || "—";
   paintUptime(s);
@@ -646,8 +643,8 @@ function paint(s) {
   paintAccessInfo(s);
   els.statusBody.hidden =
     els.modelRow.hidden && els.uptimeRow.hidden && els.portRow.hidden && els.accessRows.hidden;
-  paintStartOptions(s);
   paintActions(s);
+  paintStartHint(s);
   paintSetupNotice(s);
 
   showError(s.authFailed ? t("error.authFailed") : (s.error || ""));
@@ -1368,14 +1365,6 @@ function populateProfileConfigFiles(candidates, selected) {
   sel.value = selected || "";
 }
 
-// Readiness is decided by the backend (lib/profiles.js `profileReady`) and
-// carried on each /status profile as `ready`. The panel must NOT re-derive it:
-// the status list carries only {id,name,type}, so re-deriving used to mark every
-// profile "not ready" even when it was fully filled.
-function profileIsReady(profile) {
-  return !!profile?.ready;
-}
-
 // The backend also reports which readiness fields are still empty, as stable
 // keys (lib/profiles.js `missingProfileFields`); name them with the form's own
 // field copy so the hint and the editor say the same thing.
@@ -1404,70 +1393,61 @@ function paintSetupNotice(s) {
   els.statusConfigBox.hidden = !show;
 }
 
-// ── Start page: choose a profile ───────────────────────────────────────
+// ── Current environment: switching + startability ──────────────────────
 //
-// Shown when the service is stopped. The radio list is the profile picker;
-// the header action button starts the selected one.
+// "Which environment" and "can it start" are two different questions. The
+// header picker owns the first; the start button owns the second.
 
-function selectedStartProfile(s) {
-  const list = Array.isArray(s?.profiles) ? s.profiles : [];
-  const id = state.startProfileId || s?.activeProfileId;
-  return list.find((p) => p.id === id) || list[0] || s?.profile || null;
+// The start button starts the CURRENT environment. Its readiness is the
+// backend's verdict, which layers the environment checks (docker present,
+// server.py, Python) on top of the readiness fields.
+function canStartCurrent(s) {
+  return s?.launch?.canStart !== false;
 }
 
-function canStartSelected(s, profile) {
-  if (!profile) return s?.launch?.canStart !== false;
-  if (profile.id === s.activeProfileId) return s?.launch?.canStart !== false;
-  return profileIsReady(profile);
-}
+// Rebuild the picker's options only when the set of profiles changes, so a poll
+// never resets an open dropdown.
+let envOptionsKey = "";
 
-function renderStartProfileList(list, selectedId) {
-  const box = els.startProfileList;
-  box.replaceChildren();
+function renderEnvOptions(profiles) {
+  const list = Array.isArray(profiles) ? profiles : [];
+  const key = list.map((p) => `${p.id}:${p.name}:${p.type}`).join("|");
+  if (key === envOptionsKey) return;
+  envOptionsKey = key;
+  els.envSelect.replaceChildren();
   for (const p of list) {
-    const label = document.createElement("label");
-    label.className = "profile-option";
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "startProfile";
-    input.value = p.id;
-    input.checked = p.id === selectedId;
-    input.addEventListener("change", () => {
-      state.startProfileId = p.id;
-      if (state.status) paint(state.status);
-    });
-    const name = document.createElement("span");
-    name.className = "profile-option-name";
-    name.textContent = p.name || p.id;
-    const badge = document.createElement("span");
-    badge.className = `profile-type-badge ${p.type}`;
-    badge.textContent = profileTypeLabel(p.type);
-    label.append(input, name, badge);
-    box.append(label);
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = `${p.name || p.id} · ${profileTypeLabel(p.type)}`;
+    els.envSelect.append(opt);
   }
+  els.envSelect.value = "";
 }
 
-function paintStartOptions(s) {
-  const box = els.startOptionsBox;
-  if (!box) return;
-  if (s.state === "unsupported" || RUNNING_STATES.has(s.state)) {
-    box.hidden = true;
-    return;
+// "Cannot start" is a property of the current environment, so the hint hangs on
+// the status card next to the start button — not on the picker.
+function paintStartHint(s) {
+  const blocked = !els.actionBtn.hidden && s?.state !== "unsupported" && !canStartCurrent(s);
+  els.startOptionsHint.hidden = !blocked;
+  els.startOptionsHint.textContent = blocked ? startBlockedMessage(s.profile) : "";
+}
+
+// Switching the current environment persists the choice (POST /profiles/select —
+// the same route the start flow uses) and then refreshes everything, so the
+// status / version / service-config cards follow the new environment.
+async function selectEnv(id) {
+  if (state.working || !id || id === state.status?.activeProfileId) return;
+  state.working = true;
+  els.envSelect.disabled = true;
+  showError("");
+  try {
+    await api("profiles/select", { method: "POST", body: JSON.stringify({ id }) });
+  } catch (e) {
+    showError(String(e?.message || e));
+  } finally {
+    state.working = false;
+    await refresh();
   }
-  const list = Array.isArray(s.profiles) ? s.profiles : [];
-  if (!list.length) {
-    box.hidden = true;
-    return;
-  }
-  box.hidden = false;
-  if (!list.some((p) => p.id === state.startProfileId)) {
-    state.startProfileId = s.activeProfileId || list[0].id;
-  }
-  renderStartProfileList(list, state.startProfileId);
-  const selected = list.find((p) => p.id === state.startProfileId) || list[0];
-  const ready = canStartSelected(s, selected);
-  els.startOptionsHint.hidden = ready;
-  els.startOptionsHint.textContent = ready ? "" : startBlockedMessage(selected);
 }
 
 function schedule() {
@@ -1480,6 +1460,7 @@ function schedule() {
 
 els.refreshBtn.addEventListener("click", () => refresh());
 els.profileBadge.addEventListener("click", openProfileDetail);
+els.envSelect.addEventListener("change", () => selectEnv(els.envSelect.value));
 els.profileDrawerClose.addEventListener("click", closeProfileDetail);
 els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
 document.addEventListener("keydown", (e) => {
@@ -1505,17 +1486,16 @@ els.actionBtn.addEventListener("click", () => {
       onConfirm: doStop,
     });
   } else if (s.state !== "starting") {
-    const selected = selectedStartProfile(s);
-    if (!canStartSelected(s, selected)) {
-      showError(startBlockedMessage(selected));
+    if (!canStartCurrent(s)) {
+      showError(startBlockedMessage(s.profile));
       return;
     }
-    const profileId = selected?.id;
-    if (needsFirstRun(s) && selected && selected.type === "local") {
+    const profileId = s.profile?.id;
+    if (needsFirstRun(s) && s.profile?.type === "local") {
       showConfirm({
         title: t("firstRun.confirmTitle"),
         sub: tp("firstRun.confirmSub", {
-          dir: selected.ggufDir || t("firstRun.noGgufDir"),
+          dir: s.profile?.ggufDir || t("firstRun.noGgufDir"),
         }),
         confirmText: t("firstRun.confirmAction"),
         trigger: els.actionBtn,
@@ -1579,6 +1559,7 @@ function initLangSelect() {
 function relocalize() {
   applyI18n();
   for (const tpl of document.querySelectorAll("template")) applyI18n(tpl.content);
+  envOptionsKey = "";
   if (state.status) paint(state.status);
   if (!els.profileDrawer.hidden && pluginFormEls) {
     pluginFormEls.editorTitle.textContent = t("profile.viewTitle");

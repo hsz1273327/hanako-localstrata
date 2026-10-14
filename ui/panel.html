@@ -21,6 +21,7 @@
         </span>
         <span class="title">Strata</span>
         <button type="button" id="profileBadge" class="profile-badge" hidden title="View profile details" aria-label="View profile details"></button>
+        <select id="envSelect" class="env-select" hidden aria-label="Select environment" data-i18n-aria-label="profile.selectEnv" title="Select environment" data-i18n-title="profile.selectEnv"></select>
       </div>
       <div class="header-actions">
         <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
@@ -54,6 +55,7 @@
           <button id="actionBtn" class="icon-btn status-action" type="button" title="Start service" data-i18n-title="action.start" aria-label="Start service" data-i18n-aria-label="action.start"></button>
         </div>
       </div>
+      <p id="startOptionsHint" class="field-hint" hidden></p>
       <div id="statusBody" class="status-body">
         <div class="stat-group">
           <div id="modelRow" class="stat-row">
@@ -73,12 +75,6 @@
       </div>
       <div id="statusConfigBox" class="status-config" hidden>
         <p id="setupNotice" class="setup-notice" data-i18n="setup.configureInSettings">Configure environment profiles in Hana Settings → Local Strata.</p>
-      </div>
-      <!-- 停机页：选一套配置启动 -->
-      <div id="startOptionsBox" class="start-options" hidden>
-        <div class="start-options-title" data-i18n="profile.chooseToStart">Choose a profile to start</div>
-        <div id="startProfileList" class="profile-options"></div>
-        <p id="startOptionsHint" class="field-hint" hidden></p>
       </div>
     </section>
 
