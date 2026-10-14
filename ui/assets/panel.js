@@ -48,6 +48,10 @@ const els = {
   confirmCancel: document.getElementById("confirmCancel"),
   accessRows: document.getElementById("accessRows"),
   statusConfigBox: document.getElementById("statusConfigBox"),
+  startOptionsBox: document.getElementById("startOptionsBox"),
+  startProfileList: document.getElementById("startProfileList"),
+  startOptionsHint: document.getElementById("startOptionsHint"),
+  profileBadge: document.getElementById("profileBadge"),
   versionBox: document.getElementById("versionBox"),
   configBox: document.getElementById("configBox"),
   speedBox: document.getElementById("speedBox"),
@@ -80,28 +84,28 @@ const state = {
   working: false,
   formFilled: false,
   configFileFilled: null,
-  pluginFormFilled: false,
-  pluginFormDirty: false,
   showConfig: false,
-  deployModeDraft: null,
+  // Profile picked on the stop page for this start.
+  startProfileId: "",
+  // Profile being edited in the configuration page (null = none; "" = new).
+  editingProfileId: null,
 };
 
 // States where setup still needs input; the inline status form / config picker
 // replaces the normal info panels.
 const SETUP_STATES = new Set(["unconfigured", "not-installed", "python-missing", "no-config", "needs-config"]);
+const RUNNING_STATES = new Set(["running", "starting", "stopping", "restarting"]);
 
-// First launch = no usable config. Local: no strata-*.json found. Docker:
-// container not created yet, or created but with no config generated on the
-// /data volume. A missing image / missing CLI cannot be fixed by first-run
-// setup, so `not-installed` is excluded.
+// First launch = the local source has no usable config (no strata-*.json).
+// A container profile performs its own setup, so it is never a first run here.
 function needsFirstRun(s) {
   if (!s || s.state === "unsupported") return false;
-  if (s.deployMode === "docker") {
-    if (s.state === "not-installed") return false;
-    if (s.docker && s.docker.state === "missing") return true;
-    return s.state === "stopped" && s.hasConfig === false;
-  }
+  if (isDockerMethod(s)) return false;
   return s.state === "no-config";
+}
+
+function isDockerMethod(s) {
+  return s?.profile?.type === "container" || s?.launch?.method === "docker";
 }
 
 let pollMs = 5000;
@@ -290,8 +294,8 @@ function paintVersion(s) {
   const local = typeof version?.local === "string" ? version.local : null;
   const latest = typeof version?.latest === "string" ? version.latest : null;
   const rows = [[t("label.version"), local || "—"]];
-  // Docker mode anchors the deployed version on the image (tag + build time).
-  if (s?.deployMode === "docker" && s?.imageVersion) {
+  // A container profile anchors the deployed version on its image.
+  if (isDockerMethod(s) && s?.imageVersion) {
     const iv = s.imageVersion;
     if (iv.tag) rows.push([t("label.image"), iv.tag]);
     if (iv.created) {
@@ -301,15 +305,14 @@ function paintVersion(s) {
   }
   if (version?.checkState === "checked" && latest) {
     if (local && compareVersions(latest, local) > 0) {
-      if (s?.deployMode === "docker") {
-        // No image tag tracking in Docker: the "latest release" is the source
-        // tree, not the running image, and the /update route is source-only.
+      if (isDockerMethod(s)) {
+        // A container profile has no in-app build/rebuild pipeline.
         rows.push([
           t("label.latestVersion"),
           tp("version.available", { version: latest }),
           "update",
           undefined,
-          t("version.dockerRebuildHint"),
+          t("container.updateHint"),
         ]);
       } else {
         rows.push([
@@ -334,12 +337,6 @@ function paintVersion(s) {
   renderKvRows(els.versionRows, rows);
 }
 
-function deployModeLabel(mode) {
-  const key = `deployMode.${mode}`;
-  const label = t(key);
-  return label === key ? String(mode || "—") : label;
-}
-
 function dockerStateLabel(state) {
   const key = `dockerState.${String(state || "").toLowerCase()}`;
   const label = t(key);
@@ -353,9 +350,9 @@ function paintNetMode(s) {
   }
   els.netMode.hidden = false;
   const lan = !!(s?.network?.lanExposed);
-  if (s?.deployMode === "docker") {
-    // Docker publishes the port on all host interfaces by default; distinguish
-    // "published to the LAN" from source mode's loopback-only default.
+  if (isDockerMethod(s)) {
+    // The container publishes the port on all host interfaces by default;
+    // distinguish "published to the LAN" from local mode's loopback default.
     els.netMode.textContent = lan ? t("netMode.containerLan") : t("netMode.containerLocal");
     els.netMode.className = `net-mode ${lan ? "lan" : "local"}`;
     els.netMode.title = t("netMode.containerTitle");
@@ -411,11 +408,33 @@ function paintAccessInfo(s) {
   }
 }
 
+function profileTypeLabel(type) {
+  return type === "container" ? t("profile.typeContainer") : t("profile.typeLocal");
+}
+
+// Current profile name + type marker (shown while a service is running).
+function paintProfileBadge(s) {
+  const el = els.profileBadge;
+  if (!el) return;
+  const prof = s?.profile;
+  if (!prof || SETUP_STATES.has(s.state) || s.state === "unsupported") {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
+  el.className = `profile-badge ${prof.type}`;
+  el.title = prof.name;
+}
+
 function paintConfig(s) {
   const cs = s?.configSummary;
   const rows = [];
-  if (s?.deployMode) rows.push([t("label.deployMode"), deployModeLabel(s.deployMode)]);
-  if (s?.deployMode === "docker" && s.docker) {
+  const prof = s?.profile;
+  if (prof && !SETUP_STATES.has(s.state)) {
+    rows.push([t("label.profile"), `${prof.name} (${profileTypeLabel(prof.type)})`]);
+  }
+  if (isDockerMethod(s) && s.docker) {
     rows.push([t("label.container"), s.docker.containerName || "—"]);
     if (s.docker.image) rows.push([t("label.image"), s.docker.image]);
     rows.push([t("label.containerState"), dockerStateLabel(s.docker.state)]);
@@ -481,7 +500,10 @@ function paintModeBtn(s) {
 }
 
 function paintActions(s) {
-  if (SETUP_STATES.has(s.state) && !needsFirstRun(s)) {
+  // A local profile in a setup state (no server.py, no config) has nothing to
+  // start and no config to edit; a container profile can still be started
+  // (the app pulls/creates the container), so keep its action button.
+  if (SETUP_STATES.has(s.state) && !needsFirstRun(s) && !isDockerMethod(s)) {
     els.modeBtn.hidden = true;
     els.actionBtn.hidden = true;
     return;
@@ -492,10 +514,10 @@ function paintActions(s) {
 
   paintModeBtn(s);
 
-  // host / api_key are read-only in docker mode: changing them needs a
-  // container recreate with REINSTALL=1, which is out of scope for 1.1.0.
-  // First-run setup also has no config to edit yet, so hide it there too.
-  els.modeBtn.hidden = needsFirstRun(s) || s?.deployMode === "docker";
+  // host / api_key are read-only for a container profile: changing them needs
+  // a container recreate, which is out of scope. First-run setup also has no
+  // config to edit yet, so hide it there too.
+  els.modeBtn.hidden = needsFirstRun(s) || isDockerMethod(s);
   els.actionBtn.hidden = false;
 
   if (isRunning) {
@@ -515,7 +537,8 @@ function paintActions(s) {
     els.actionBtn.className = "icon-btn status-action";
     els.actionBtn.title = t("action.start");
     els.actionBtn.setAttribute("aria-label", t("action.start"));
-    els.actionBtn.disabled = state.working;
+    // Disable when the selected profile cannot start.
+    els.actionBtn.disabled = state.working || !canStartSelected(s, selectedStartProfile(s));
   }
 }
 
@@ -568,6 +591,7 @@ function paint(s) {
   els.stateText.title = stateLabel;
 
   paintNetMode(s);
+  paintProfileBadge(s);
   els.model.textContent = s.model || "—";
   els.model.title = s.model || "—";
   paintUptime(s);
@@ -588,6 +612,7 @@ function paint(s) {
   els.settingsBox.hidden = isSetup;
 
   paintAccessInfo(s);
+  paintStartOptions(s);
   paintActions(s);
   paintSetup(s);
 
@@ -745,24 +770,15 @@ async function refresh() {
   if (s.state !== "unsupported") await refreshConfig();
 }
 
-async function act(verb) {
+async function act(verb, profileId) {
   if (state.working) return;
-  // A first run uses the persisted model directory / data directory. If the
-  // user typed the config form but did not save it, save first so setup sees
-  // the right GGUF_DIR / volume.
-  if (verb === "start" && needsFirstRun(state.status)) {
-    try {
-      await flushDeployDraft();
-    } catch (e) {
-      showError(String(e?.message || e));
-      return;
-    }
-  }
   const op = verb === "start" ? "start" : verb === "stop" ? "stop" : "restart";
   setWorking(op);
   showError("");
   try {
-    const res = await api(verb, { method: "POST" });
+    const init = { method: "POST" };
+    if (verb === "start" && profileId) init.body = JSON.stringify({ profileId });
+    const res = await api(verb, init);
     // First launch: the backend returns a background setup job and the staged
     // overlay; poll GET /start until it is done. Existing installs keep the
     // original synchronous behaviour.
@@ -1175,21 +1191,17 @@ async function save(restart) {
   }
 }
 
-// ── Deploy config: top-level local / docker choice + mode fields ──────
+// ── Configuration page: manage environment profiles ─────────────────────
 //
-// The two modes are mutually exclusive. The form only ever shows the fields
-// of the selected mode; switching away from a running deployment asks for
-// confirmation first and stops it before the new mode is saved.
+// A profile is one way to run Strata (local source or container). The list
+// shows every profile; the inline editor creates/edits one. While a service is
+// running the backend refuses edits/deletes and the buttons are disabled.
 
 let pluginForm = null;
 let pluginFormEls = null;
 let setupView = null;
 let deployConfigFilesKey = "";
-
-function dockerOffered() {
-  const modes = state.status?.supportedDeployModes;
-  return Array.isArray(modes) && modes.includes("docker");
-}
+let editorType = "local";
 
 function ensurePluginForm() {
   if (pluginForm) return pluginForm;
@@ -1198,34 +1210,66 @@ function ensurePluginForm() {
   pluginForm = tpl.content.cloneNode(true).querySelector("form");
   pluginFormEls = {
     form: pluginForm,
-    modeLocal: pluginForm.querySelector("#psModeLocal"),
-    modeDocker: pluginForm.querySelector("#psModeDocker"),
-    switchHint: pluginForm.querySelector("#psSwitchHint"),
+    list: pluginForm.querySelector("#psProfileList"),
+    addBtn: pluginForm.querySelector("#psAddBtn"),
+    editor: pluginForm.querySelector("#psEditor"),
+    editorTitle: pluginForm.querySelector("#psEditorTitle"),
+    name: pluginForm.querySelector("#ps-name"),
+    type: pluginForm.querySelector("#ps-type"),
     localFields: pluginForm.querySelector("#psLocalFields"),
-    dockerFields: pluginForm.querySelector("#psDockerFields"),
-    strataDir: pluginForm.querySelector('[data-key="strataDir"]'),
-    pythonPath: pluginForm.querySelector('[data-key="pythonPath"]'),
-    configFile: pluginForm.querySelector('[data-key="configFile"]'),
-    configHint: pluginForm.querySelector("#ps-configHint"),
+    containerFields: pluginForm.querySelector("#psContainerFields"),
+    strataDir: pluginForm.querySelector("#ps-strataDir"),
+    pythonPath: pluginForm.querySelector("#ps-pythonPath"),
+    gpu: pluginForm.querySelector("#ps-gpu"),
+    configFile: pluginForm.querySelector("#ps-configFile"),
+    image: pluginForm.querySelector("#ps-image"),
+    containerName: pluginForm.querySelector("#ps-containerName"),
+    dataDir: pluginForm.querySelector("#ps-dataDir"),
     ggufDir: pluginForm.querySelector("#ps-ggufDir"),
-    dockerGgufDir: pluginForm.querySelector("#ps-dockerGgufDir"),
-    imageName: pluginForm.querySelector('[data-key="imageName"]'),
-    containerName: pluginForm.querySelector('[data-key="containerName"]'),
-    volumeName: pluginForm.querySelector('[data-key="volumeName"]'),
-    pythonPathHint: pluginForm.querySelector("#ps-pythonPath-hint"),
-    notInstalledBox: pluginForm.querySelector("#psNotInstalledBox"),
-    serverScript: pluginForm.querySelector("#psServerScript"),
-    message: pluginForm.querySelector("#psMessage"),
+    port: pluginForm.querySelector("#ps-port"),
     saveBtn: pluginForm.querySelector("#psSaveBtn"),
+    cancelBtn: pluginForm.querySelector("#psCancelBtn"),
+    message: pluginForm.querySelector("#psMessage"),
   };
-  pluginFormEls.modeLocal.addEventListener("click", () => setDeployModeDraft("local"));
-  pluginFormEls.modeDocker.addEventListener("click", () => setDeployModeDraft("docker"));
-  pluginFormEls.saveBtn.addEventListener("click", saveDeploySettings);
-  pluginFormEls.form.addEventListener("input", () => {
-    state.pluginFormDirty = true;
-    setPsMessage("");
-  });
+  pluginFormEls.addBtn.addEventListener("click", () => openProfileEditor(null));
+  pluginFormEls.saveBtn.addEventListener("click", saveProfile);
+  pluginFormEls.cancelBtn.addEventListener("click", closeProfileEditor);
+  pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
+  pluginFormEls.form.addEventListener("input", () => setPsMessage(""));
   return pluginForm;
+}
+
+function setEditorType(type) {
+  editorType = type === "container" ? "container" : "local";
+  pluginFormEls.localFields.hidden = editorType !== "local";
+  pluginFormEls.containerFields.hidden = editorType !== "container";
+}
+
+function openProfileEditor(profile) {
+  state.editingProfileId = profile ? profile.id : "";
+  pluginFormEls.editorTitle.textContent = profile ? t("profile.editTitle") : t("profile.newTitle");
+  pluginFormEls.name.value = profile?.name || "";
+  pluginFormEls.type.value = profile?.type || "local";
+  pluginFormEls.strataDir.value = profile?.strataDir || "";
+  pluginFormEls.pythonPath.value = profile?.pythonPath || "";
+  pluginFormEls.gpu.value = profile?.gpu || "";
+  pluginFormEls.image.value = profile?.image || "";
+  pluginFormEls.containerName.value = profile?.containerName || "";
+  pluginFormEls.dataDir.value = profile?.dataDir || "";
+  pluginFormEls.ggufDir.value = profile?.ggufDir || "";
+  pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
+  deployConfigFilesKey = "";
+  populateProfileConfigFiles(currentCandidates(), profile?.configFile || "");
+  setEditorType(pluginFormEls.type.value);
+  setPsMessage("");
+  pluginFormEls.editor.hidden = false;
+  pluginFormEls.name.focus();
+}
+
+function closeProfileEditor() {
+  state.editingProfileId = null;
+  pluginFormEls.editor.hidden = true;
+  setPsMessage("");
 }
 
 function setPsMessage(text, kind = "info") {
@@ -1234,49 +1278,20 @@ function setPsMessage(text, kind = "info") {
   pluginFormEls.message.className = `message ${kind}`;
 }
 
-function setDeployModeDraft(mode) {
-  if (mode === "docker" && !dockerOffered()) return;
-  state.deployModeDraft = mode;
-  state.pluginFormDirty = true;
-  renderDeployFields();
-  updateSwitchHint();
-  setPsMessage("");
+function currentCandidates() {
+  return state.status?.configCandidates || [];
 }
 
-function renderDeployFields() {
-  if (!pluginFormEls) return;
-  const mode = state.deployModeDraft || "local";
-  const docker = dockerOffered();
-  pluginFormEls.modeLocal.classList.toggle("active", mode === "local");
-  pluginFormEls.modeDocker.classList.toggle("active", mode === "docker");
-  pluginFormEls.modeDocker.hidden = !docker;
-  pluginFormEls.localFields.hidden = mode !== "local";
-  pluginFormEls.dockerFields.hidden = mode !== "docker";
-}
-
-function updateSwitchHint() {
-  if (!pluginFormEls) return;
-  const current = state.status?.deployMode || null;
-  const draft = state.deployModeDraft || "local";
-  const switching = !!current && current !== draft;
-  pluginFormEls.switchHint.hidden = !switching;
-  if (switching) {
-    pluginFormEls.switchHint.textContent = tp("deploy.switchHint", {
-      from: deployModeLabel(current),
-      to: deployModeLabel(draft),
-    });
-  }
-}
-
-function populateDeployConfigFiles(candidates, selected) {
+function populateProfileConfigFiles(candidates, selected) {
   const key = (candidates || []).map((c) => `${c.file}:${c.context ?? ""}`).join("|") + `#${selected || ""}`;
   if (key === deployConfigFilesKey) return;
   deployConfigFilesKey = key;
-  pluginFormEls.configFile.replaceChildren();
+  const sel = pluginFormEls.configFile;
+  sel.replaceChildren();
   const auto = document.createElement("option");
   auto.value = "";
   auto.textContent = t("setup.chooseConfigShort");
-  pluginFormEls.configFile.append(auto);
+  sel.append(auto);
   for (const c of candidates || []) {
     const opt = document.createElement("option");
     opt.value = c.file;
@@ -1284,44 +1299,134 @@ function populateDeployConfigFiles(candidates, selected) {
     if (c.quant) parts.push(c.quant);
     if (Number.isFinite(c.context)) parts.push(tp("setup.candidateContext", { context: c.context }));
     opt.textContent = parts.length ? `${c.file} · ${parts.join(" · ")}` : c.file;
-    pluginFormEls.configFile.append(opt);
+    sel.append(opt);
   }
-  pluginFormEls.configFile.value = selected || "";
+  sel.value = selected || "";
 }
 
-function fillDeployForm(s) {
-  const st = s.settings || {};
-  state.deployModeDraft = s.deployMode === "docker" ? "docker" : "local";
-  pluginFormEls.strataDir.value = st.strataDir ?? "";
-  pluginFormEls.pythonPath.value = st.pythonPath ?? "";
-  pluginFormEls.ggufDir.value = st.ggufDir ?? "";
-  pluginFormEls.dockerGgufDir.value = st.ggufDir ?? "";
-  pluginFormEls.imageName.value = st.imageName ?? "strata";
-  pluginFormEls.containerName.value = st.containerName ?? "strata";
-  pluginFormEls.volumeName.value = st.volumeName ?? "strata-data";
-  populateDeployConfigFiles(s.configCandidates || [], st.configFile || "");
-  renderDeployFields();
-  updateSwitchHint();
+function profileHasFields(profile) {
+  if (!profile) return false;
+  return profile.type === "container" ? !!(profile.image && profile.containerName) : !!profile.strataDir;
 }
 
-function collectDeploySettings() {
-  const mode = state.deployModeDraft || "local";
-  const values = { deployMode: mode };
-  if (mode === "local") {
-    values.strataDir = pluginFormEls.strataDir.value.trim();
-    values.pythonPath = pluginFormEls.pythonPath.value.trim();
-    values.ggufDir = pluginFormEls.ggufDir.value.trim();
-    values.configFile = pluginFormEls.configFile.value || "";
+// The list row markup is rebuilt only when something the row shows changes.
+let profileListKey = "";
+
+function renderProfileList(s) {
+  const list = Array.isArray(s.profiles) ? s.profiles : [];
+  const running = RUNNING_STATES.has(s.state);
+  const key = list.map((p) => `${p.id}:${p.name}:${p.type}`).join("|") + `#${s.activeProfileId}#${running}`;
+  if (key === profileListKey) return;
+  profileListKey = key;
+  const box = pluginFormEls.list;
+  box.replaceChildren();
+  for (const p of list) {
+    const row = document.createElement("div");
+    row.className = "profile-row";
+    if (p.id === s.activeProfileId) row.classList.add("active");
+
+    const main = document.createElement("div");
+    main.className = "profile-row-main";
+    const dot = document.createElement("span");
+    dot.className = "profile-row-dot";
+    dot.textContent = p.id === s.activeProfileId ? "●" : "○";
+    const name = document.createElement("span");
+    name.className = "profile-row-name";
+    name.textContent = p.name || p.id;
+    const badge = document.createElement("span");
+    badge.className = `profile-type-badge ${p.type}`;
+    badge.textContent = profileTypeLabel(p.type);
+    main.append(dot, name, badge);
+
+    const actions = document.createElement("div");
+    actions.className = "profile-row-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "btn small";
+    edit.textContent = t("profile.edit");
+    edit.disabled = state.working || running;
+    edit.addEventListener("click", () => openProfileEditor(list.find((x) => x.id === p.id)));
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn small danger";
+    del.textContent = t("profile.delete");
+    del.disabled = state.working || running || list.length <= 1;
+    del.addEventListener("click", () => confirmDeleteProfile(p));
+    actions.append(edit, del);
+
+    row.append(main, actions);
+    box.append(row);
+  }
+}
+
+function confirmDeleteProfile(profile) {
+  showConfirm({
+    title: tp("profile.deleteConfirm", { name: profile.name || profile.id }),
+    sub: t("profile.deleteConfirmSub"),
+    confirmText: t("profile.delete"),
+    trigger: pluginFormEls.list,
+    onConfirm: () => removeProfile(profile.id),
+  });
+}
+
+async function removeProfile(id) {
+  if (state.editingProfileId === id) closeProfileEditor();
+  state.working = true;
+  setPsMessage(t("profile.deleting"), "info");
+  showError("");
+  try {
+    await api("profiles/delete", { method: "POST", body: JSON.stringify({ id }) });
+    profileListKey = "";
+    setPsMessage(t("profile.deleted"), "ok");
+  } catch (e) {
+    setPsMessage(String(e?.message || e), "error");
+  } finally {
+    state.working = false;
+    await refresh();
+  }
+}
+
+async function saveProfile() {
+  if (state.working) return;
+  const type = pluginFormEls.type.value === "container" ? "container" : "local";
+  const body = {
+    name: pluginFormEls.name.value.trim(),
+    type,
+    ggufDir: pluginFormEls.ggufDir.value.trim(),
+    port: Number(pluginFormEls.port.value) || 0,
+  };
+  if (state.editingProfileId) body.id = state.editingProfileId;
+  if (type === "container") {
+    body.image = pluginFormEls.image.value.trim();
+    body.containerName = pluginFormEls.containerName.value.trim();
+    body.dataDir = pluginFormEls.dataDir.value.trim();
   } else {
-    values.imageName = pluginFormEls.imageName.value.trim();
-    values.containerName = pluginFormEls.containerName.value.trim();
-    values.volumeName = pluginFormEls.volumeName.value.trim();
-    values.ggufDir = pluginFormEls.dockerGgufDir.value.trim();
+    body.strataDir = pluginFormEls.strataDir.value.trim();
+    body.pythonPath = pluginFormEls.pythonPath.value.trim();
+    body.gpu = pluginFormEls.gpu.value.trim();
+    body.configFile = pluginFormEls.configFile.value || "";
   }
-  return values;
+  state.working = true;
+  setPsMessage(t("profile.saving"), "info");
+  showError("");
+  try {
+    await api("profiles/save", { method: "POST", body: JSON.stringify(body) });
+    state.editingProfileId = null;
+    pluginFormEls.editor.hidden = true;
+    profileListKey = "";
+    deployConfigFilesKey = "";
+    state.configFileFilled = null;
+    state.formFilled = false;
+    setPsMessage(t("profile.saved"), "ok");
+  } catch (e) {
+    setPsMessage(String(e?.message || e), "error");
+  } finally {
+    state.working = false;
+    await refresh();
+  }
 }
 
-// Renders the deployment config form when the user opened it or while setup is
+// Renders the configuration form when the user opened it or while setup is
 // still incomplete.
 function paintSetup(s) {
   const show = state.showConfig || SETUP_STATES.has(s.state) || needsFirstRun(s);
@@ -1332,106 +1437,79 @@ function paintSetup(s) {
   }
   const form = ensurePluginForm();
   if (!form) return;
-  if (setupView !== "deploy") {
+  if (setupView !== "profiles") {
     els.statusConfigBox.replaceChildren(form);
-    setupView = "deploy";
+    setupView = "profiles";
   }
-  paintPluginForm(s);
-}
-
-function paintPluginForm(s) {
-  const effective = s.deployMode === "docker" ? "docker" : "local";
-  if (!state.pluginFormDirty) {
-    state.deployModeDraft = effective;
-    if (!state.pluginFormFilled && s.settings) {
-      fillDeployForm(s);
-      state.pluginFormFilled = true;
-    }
-  }
-  renderDeployFields();
-  updateSwitchHint();
-
-  pluginFormEls.notInstalledBox.hidden = s.state !== "not-installed";
-  if (s.state === "not-installed" && s.serverScript) {
-    pluginFormEls.serverScript.textContent = s.serverScript;
-  }
-  // Show the resolver's error verbatim (bad configured path, or no system
-  // python3 when the field is left empty).
-  const pythonError = s.settings?.pythonError || "";
-  pluginFormEls.pythonPathHint.hidden = !pythonError;
-  if (pythonError) pluginFormEls.pythonPathHint.textContent = pythonError;
-  const noConfig = s.deployMode !== "docker" && s.state === "no-config";
-  if (noConfig) {
-    pluginFormEls.configHint.hidden = false;
-    pluginFormEls.configHint.textContent = tp("setup.noConfigSub", { dir: s.settings?.strataDir || "" });
-  } else if (s.autoSelected && s.configFile) {
-    pluginFormEls.configHint.hidden = false;
-    pluginFormEls.configHint.textContent = tp("setup.autoConfigHint", { file: s.configFile });
-  } else {
-    pluginFormEls.configHint.hidden = true;
-  }
+  renderProfileList(s);
+  pluginFormEls.addBtn.disabled = state.working;
   pluginFormEls.saveBtn.disabled = state.working;
 }
 
-async function saveDeploySettings() {
-  if (state.working) return;
-  const values = collectDeploySettings();
-  if (values.deployMode === "local" && !values.strataDir) {
-    setPsMessage(t("setup.needDir"), "error");
-    return;
-  }
-  if (values.deployMode === "docker" && !values.imageName) {
-    setPsMessage(t("deploy.needImage"), "error");
-    return;
-  }
+// ── Start page: choose a profile ───────────────────────────────────────
+//
+// Shown when the service is stopped. The radio list is the profile picker;
+// the header action button starts the selected one.
 
-  const current = state.status?.deployMode;
-  const running = state.status?.state === "running" || state.status?.state === "starting";
-  if (current && current !== values.deployMode && running) {
-    showConfirm({
-      title: tp("deploy.confirmSwitchTitle", {
-        from: deployModeLabel(current),
-        to: deployModeLabel(values.deployMode),
-      }),
-      sub: tp("deploy.confirmSwitchSub", { from: deployModeLabel(current) }),
-      confirmText: t("deploy.confirmSwitchAction"),
-      trigger: pluginFormEls.saveBtn,
-      onConfirm: () => submitDeploySettings(values),
+function selectedStartProfile(s) {
+  const list = Array.isArray(s?.profiles) ? s.profiles : [];
+  const id = state.startProfileId || s?.activeProfileId;
+  return list.find((p) => p.id === id) || list[0] || s?.profile || null;
+}
+
+function canStartSelected(s, profile) {
+  if (!profile) return s?.launch?.canStart !== false;
+  if (profile.id === s.activeProfileId) return s?.launch?.canStart !== false;
+  return profileHasFields(profile);
+}
+
+function renderStartProfileList(list, selectedId) {
+  const box = els.startProfileList;
+  box.replaceChildren();
+  for (const p of list) {
+    const label = document.createElement("label");
+    label.className = "profile-option";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "startProfile";
+    input.value = p.id;
+    input.checked = p.id === selectedId;
+    input.addEventListener("change", () => {
+      state.startProfileId = p.id;
+      if (state.status) paint(state.status);
     });
+    const name = document.createElement("span");
+    name.className = "profile-option-name";
+    name.textContent = p.name || p.id;
+    const badge = document.createElement("span");
+    badge.className = `profile-type-badge ${p.type}`;
+    badge.textContent = profileTypeLabel(p.type);
+    label.append(input, name, badge);
+    box.append(label);
+  }
+}
+
+function paintStartOptions(s) {
+  const box = els.startOptionsBox;
+  if (!box) return;
+  if (s.state === "unsupported" || RUNNING_STATES.has(s.state)) {
+    box.hidden = true;
     return;
   }
-  await submitDeploySettings(values);
-}
-
-async function submitDeploySettings(values) {
-  if (state.working) return;
-  state.working = true;
-  setPsMessage(t("setup.savingDetect"), "info");
-  showError("");
-  try {
-    const result = await api("settings/deploy", { method: "POST", body: JSON.stringify(values) });
-    state.pluginFormDirty = false;
-    state.pluginFormFilled = false;
-    state.configFileFilled = null;
-    state.formFilled = false;
-    setPsMessage(t("setup.saved"), "ok");
-    if (result.stopped && result.stopped.stopped) showError(t("deploy.stoppedOld"));
-  } catch (e) {
-    setPsMessage(String(e?.message || e), "error");
-  } finally {
-    state.working = false;
-    await refresh();
+  const list = Array.isArray(s.profiles) ? s.profiles : [];
+  if (!list.length) {
+    box.hidden = true;
+    return;
   }
-}
-
-// Persist the deploy form without touching the working overlay; used just
-// before a first run so the just-typed directories are the ones setup sees.
-async function flushDeployDraft() {
-  if (!state.pluginFormDirty || !pluginFormEls) return;
-  const values = collectDeploySettings();
-  await api("settings/deploy", { method: "POST", body: JSON.stringify(values) });
-  state.pluginFormDirty = false;
-  state.pluginFormFilled = false;
+  box.hidden = false;
+  if (!list.some((p) => p.id === state.startProfileId)) {
+    state.startProfileId = s.activeProfileId || list[0].id;
+  }
+  renderStartProfileList(list, state.startProfileId);
+  const selected = list.find((p) => p.id === state.startProfileId) || list[0];
+  const ready = canStartSelected(s, selected);
+  els.startOptionsHint.hidden = ready;
+  els.startOptionsHint.textContent = ready ? "" : t("profile.notReady");
 }
 
 function schedule() {
@@ -1464,18 +1542,24 @@ els.actionBtn.addEventListener("click", () => {
       onConfirm: doStop,
     });
   } else if (s.state !== "starting") {
-    if (needsFirstRun(s)) {
+    const selected = selectedStartProfile(s);
+    if (!canStartSelected(s, selected)) {
+      showError(t("profile.notReady"));
+      return;
+    }
+    const profileId = selected?.id;
+    if (needsFirstRun(s) && selected && selected.type === "local") {
       showConfirm({
         title: t("firstRun.confirmTitle"),
         sub: tp("firstRun.confirmSub", {
-          dir: s.settings?.ggufDir || t("firstRun.noGgufDir"),
+          dir: selected.ggufDir || t("firstRun.noGgufDir"),
         }),
         confirmText: t("firstRun.confirmAction"),
         trigger: els.actionBtn,
-        onConfirm: () => act("start"),
+        onConfirm: () => act("start", profileId),
       });
     } else {
-      act("start");
+      act("start", profileId);
     }
   }
 });
@@ -1532,6 +1616,7 @@ function initLangSelect() {
 function relocalize() {
   applyI18n();
   for (const tpl of document.querySelectorAll("template")) applyI18n(tpl.content);
+  profileListKey = "";
   if (state.status) paint(state.status);
   renderDiff();
 }

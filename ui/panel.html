@@ -48,6 +48,7 @@
           <span id="dot" class="dot stopped"></span>
           <span id="stateText" class="state-text" data-i18n="state.checking">Checking…</span>
           <span id="netMode" class="net-mode local" data-i18n="netMode.local">Local</span>
+          <span id="profileBadge" class="profile-badge" hidden></span>
         </div>
         <div class="status-actions">
           <button id="modeBtn" class="icon-btn status-action" type="button" title="Local mode (click to switch to LAN)" data-i18n-title="modeBtn.local" aria-label="Local mode (click to switch to LAN)" data-i18n-aria-label="modeBtn.local"></button>
@@ -72,6 +73,12 @@
         <div id="accessRows" class="stat-blocks" hidden></div>
       </div>
       <div id="statusConfigBox" class="status-config" hidden></div>
+      <!-- 停机页：选一套配置启动 -->
+      <div id="startOptionsBox" class="start-options" hidden>
+        <div class="start-options-title" data-i18n="profile.chooseToStart">Choose a profile to start</div>
+        <div id="startProfileList" class="profile-options"></div>
+        <p id="startOptionsHint" class="field-hint" hidden></p>
+      </div>
     </section>
 
     <!-- ① 版本区 -->
@@ -195,70 +202,67 @@
 
     <p id="error" class="error" role="status" hidden></p>
 
-    <!-- 部署配置：顶部本机 / Docker 二选一，下面只显示对应字段 -->
+    <!-- 配置页：管理多套环境配置（profiles） -->
     <template id="pluginSettingsTemplate">
       <form id="pluginSettingsForm" class="plugin-settings-form">
-        <div class="deploy-mode-row">
-          <span class="deploy-mode-label" data-i18n="deploy.modeLabel">Deploy mode</span>
-          <div class="segmented" role="radiogroup" aria-label="Deploy mode" data-i18n-aria-label="deploy.modeLabel">
-            <button id="psModeLocal" type="button" class="seg-btn" data-mode="local" data-i18n="deploy.modeLocal">Local</button>
-            <button id="psModeDocker" type="button" class="seg-btn" data-mode="docker" data-i18n="deploy.modeDocker">Docker</button>
-          </div>
-        </div>
-        <p id="psSwitchHint" class="deploy-switch-hint" hidden data-i18n="deploy.switchHint"></p>
+        <div class="section-title" data-i18n="profile.manage">Environment profiles</div>
+        <p class="field-hint muted" data-i18n="profile.manageHint">Each profile is one way to run Strata (local source or a container).</p>
+        <div id="psProfileList" class="profile-list"></div>
+        <button id="psAddBtn" class="btn" type="button" data-i18n="profile.add">+ New profile</button>
 
-        <div id="psLocalFields" class="deploy-fields">
-          <div id="psNotInstalledBox" class="not-installed-box" hidden>
-            <div class="not-installed-title" data-i18n="setup.notInstalledTitle">Strata not found at:</div>
-            <div id="psServerScript" class="not-installed-path"></div>
-            <div class="not-installed-sub" data-i18n="setup.notInstalledSub">Check the path, or install Strata first</div>
+        <div id="psEditor" class="profile-editor" hidden>
+          <div id="psEditorTitle" class="profile-editor-head"></div>
+          <label class="field"><span data-i18n="profile.name">Name</span>
+            <input id="ps-name" data-key="name" type="text" autocomplete="off" spellcheck="false" placeholder="default" data-i18n-placeholder="profile.namePlaceholder">
+          </label>
+          <label class="field"><span data-i18n="profile.type">Type</span>
+            <select id="ps-type" data-key="type">
+              <option value="local" data-i18n="profile.typeLocal">Local (source)</option>
+              <option value="container" data-i18n="profile.typeContainer">Container (Docker)</option>
+            </select>
+          </label>
+
+          <div id="psLocalFields" class="profile-type-fields">
+            <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
+              <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
+            </label>
+            <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
+              <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="python3" data-i18n-placeholder="field.pythonPathPlaceholder">
+            </label>
+            <label class="field"><span data-i18n="field.gpu">GPU selector (optional)</span>
+              <input id="ps-gpu" data-key="gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
+            </label>
+            <label class="field"><span data-i18n="field.configFile">Config file (optional override)</span>
+              <select id="ps-configFile" data-key="configFile"></select>
+            </label>
           </div>
-          <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
-            <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
-          </label>
-          <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
-            <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="Leave empty to use system Python (python3)" data-i18n-placeholder="field.pythonPathPlaceholder">
-            <span id="ps-pythonPath-hint" class="field-hint" hidden data-i18n="setup.pythonMissingHint">Python interpreter not found</span>
-          </label>
+
+          <div id="psContainerFields" class="profile-type-fields" hidden>
+            <label class="field"><span data-i18n="field.image">Image</span>
+              <input id="ps-image" data-key="image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest">
+            </label>
+            <label class="field"><span data-i18n="field.containerName">Container name</span>
+              <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+            </label>
+            <label class="field"><span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
+              <input id="ps-dataDir" data-key="dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
+            </label>
+          </div>
+
           <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
             <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-            <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+            <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
           </label>
-          <label class="field"><span data-i18n="field.configFile">Config file (optional override)</span>
-            <select id="ps-configFile" data-key="configFile"></select>
-            <span id="ps-configHint" class="field-hint" hidden></span>
+          <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
+            <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
           </label>
+
+          <div class="edit-actions">
+            <button id="psSaveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
+            <button id="psCancelBtn" class="btn cancel" type="button" data-i18n="common.cancel">Cancel</button>
+          </div>
+          <p id="psMessage" class="message" role="status"></p>
         </div>
-
-        <div id="psDockerFields" class="deploy-fields" hidden>
-          <label class="field"><span data-i18n="field.volumeName">Data directory (STRATA_DATA)</span>
-            <input id="ps-volumeName" data-key="volumeName" type="text" autocomplete="off" spellcheck="false" placeholder="strata-data">
-            <span class="field-hint" data-i18n="field.dataDirHint">Volume or bind mounted at /data; the generated config lives here</span>
-          </label>
-          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
-            <input id="ps-dockerGgufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-            <span class="field-hint" data-i18n="field.dockerGgufHint">Mounted at /gguf and passed as GGUF_DIR; empty downloads in the container</span>
-          </label>
-          <label class="field"><span data-i18n="field.imageName">Image name</span>
-            <input id="ps-imageName" data-key="imageName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
-          </label>
-          <label class="field"><span data-i18n="field.containerName">Container name</span>
-            <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
-          </label>
-          <p class="field-hint" data-i18n="deploy.dockerHint">The container is created and updated from parameters sampled from the real container; run flags are not hand-edited.</p>
-        </div>
-
-        <p id="psMessage" class="message" role="status"></p>
-        <button id="psSaveBtn" class="btn primary" type="button" data-i18n="setup.saveAndDetect">Save &amp; detect</button>
-      </form>
-    </template>
-
-    <template id="configSelectTemplate">
-      <form id="configSelectForm" class="config-select-form">
-        <div id="csTitle" class="config-select-title" data-i18n="setup.chooseConfig">Found the following config files, pick one:</div>
-        <div id="csList" class="config-candidates"></div>
-        <p id="csMessage" class="message" role="status"></p>
-        <button id="csUseBtn" class="btn primary" type="button" data-i18n="setup.useSelected">Use selected config</button>
       </form>
     </template>
 

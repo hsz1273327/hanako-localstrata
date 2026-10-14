@@ -2,61 +2,40 @@
 
 版本规划：
 - **1.0.0**：v2 App 首发，本地源码部署
-- **1.1.0**（当前）：本机 / Docker 双模式，用户显式二选一
-- **1.1.1**（下一版）：AMD / 社区镜像支持
+- **1.1.0**（当前）：多环境配置（profiles）——本机与容器统一管理
+- **1.1.1**（下一版）：待定（AMD / 社区镜像通过自定义配置已可表达）
 
-## 1.1.0：本机 / Docker 双模式
+## 1.1.0：多环境配置（profiles）
 
-> **状态：已定稿实现（1.1.0）。** 实现记录见
-> [`v1.1-docker-notes.md`](./v1.1-docker-notes.md)。`lib/deployer/` 抽出
-> local + docker 两个实现与统一门面。
+> **状态：已定稿实现（第四批，`v1.1-TASK-4.md`）。** 实现记录见
+> [`v1.1-profiles-notes.md`](./v1.1-profiles-notes.md)。
 >
-> 定稿语义（覆盖早期 `auto` 设计）：`deployMode ∈ {local, docker}`，**无
-> auto、无自动切换**；首次只看镜像给默认并持久化；两模式互斥，切换先停旧并
-> 弹确认；Docker 以镜像为锚，App 用采样的 run 参数创建/重建容器；
-> `routes/update.js` 在 docker 模式转发到 `DockerDeployer.update()`；
-> **Docker 模式仅 Linux**。
+> 最终语义：docker 与本地统一抽象为「环境配置」`profiles`（`type: local |
+> container`，各有独立字段），`activeProfileId` 记录当前/上次使用的配置。
+> 配置页管理配置（列表 / 新建 / 编辑 / 删除；运行中禁改删；至少留一套；
+> 第一套默认名 `default`）；停机页选一套启动；运行中显示当前配置名。
+> 不再有 `deployMode` / `useMi50` / 入口分流 / 互斥切换 / 以镜像为锚的
+> build/重建 / `routes/update.js` 的 docker 转发，也没有 MI50 特例。
 >
-> **第二批（首次启动）已实现**：配置页从「选已有配置文件」改成「指定
-> GGUF 模型目录」；没有可用配置时，同一个启动按钮先跑 setup 生成配置再
-> 起服务（本机 `setup.py --setup --gguf-dir … --no-start`；Docker 用
-> `GGUF_DIR` + `STRATA_DATA` 首启）；首次启动进度分四段
-> （下载 → 转换 → 生成配置 → 加载）。实现记录见
-> [`v1.1-firstrun-notes.md`](./v1.1-firstrun-notes.md)。已有配置路径零回归。
+> **首次启动保留**（本机：无配置时 `setup.py --setup --gguf-dir` 生成配置
+> 再起服务；容器：`GGUF_DIR` + `STRATA_DATA` 首启由 entrypoint setup）。本机
+> 扁平字段仍可作为第一套 `default` 配置的兜底，保证本机模式零回归。
 
-**背景**：Strata 官方支持 Docker 部署（仓库根有 `Dockerfile` + `docker-entrypoint.sh`，
-文档在 `docs/INSTALL.md`）。当前版本（1.0.0）**只支持本地源码部署**。
+**背景**：Strata 官方支持 Docker 部署（仓库根有 `Dockerfile` +
+`docker-entrypoint.sh`，文档在 `docs/INSTALL.md`），也支持本机源码运行。
+用「多套环境配置」而不是「互斥模式」来表达，这样 MI50、双卡、未来的官方
+镜像、CUDA12 vs CUDA13 都只是不同的配置，不需要任何特例。
 
-**Docker 部署的差异**（插件需要适配的点）：
+**实现方式**：`lib/profiles.js` 定义配置模型；`lib/deployer/index.js` 按
+`activeProfile.type` 选用本机 / 容器部署器；`lib/deployer/docker.js` 是通用
+容器部署器（不再有 MI50 配方）。启动/停止/配置读写/日志接口不变，状态查询
+仍走 `/v1/status`，只是状态里多了当前配置信息。
 
-| 维度 | 本地源码部署（当前支持）| Docker 部署（待支持）|
-|---|---|---|
-| 服务进程 | 本机 `python serve/server.py` | 容器内 |
-| 启停 | `pgrep` / `kill` | `docker start` / `docker stop` |
-| 配置 | `strata-iq3_s.json` | 容器环境变量（`MODEL`/`CONTEXT`/`HOST`/`PORT`/`API_KEY`/`KV`/`GPUS`…）|
-| 监控 | `nvidia-smi` | `docker stats`（或宿主 nvidia-smi）|
-| 数据 | `<strataDir>/Strata-data` | 容器 volume（如 `/data`）|
+## 1.1.1：待定
 
-**要做的**：
-1. 检测部署方式（有容器在跑 = Docker；有本地进程 = 源码）
-2. Docker 模式下：
-   - 启停走 `docker`
-   - 配置读取改为读容器环境变量（`docker inspect`）
-   - 版本检查改看容器镜像 tag
-   - 更新改为拉新镜像 + 重建容器
-3. manifest 可能需要加 `docker` 相关配置项（容器名、compose 文件路径）
-
-**接口不变的部分**：状态查询仍走 `/v1/status`（HTTP API 一致）。
-
-## 1.1.1：AMD / 社区镜像
-
-1.1.0 只做**官方路径**（官方 Dockerfile，CUDA/NVIDIA）。以下整体留给 1.1.1：
-
-- 按 AMD 型号自适应社区镜像：MI50 有现成 `xxdoman/strata-mi50:latest`；
-  RX 7900 XTX / 9060 XT / 9070 XT 只有 ROCm 基座，需自建。
-- 「使用社区镜像」勾选 + 免责声明 + 拉取选项（**仅手动选 Docker 时出现**）。
-- 检测到**整机所有卡都不被 Strata 支持**（如纯 MI50）时置灰「本机」模式。
-- 内置「Strata 支持的 GPU 型号」列表（源：`Strata/docs/INSTALL.md:16`）。
+1.1.0 的 profiles 已经能表达 AMD / 社区镜像（直接建一套 `container` 配置，
+填社区镜像与容器名）。后续若要做的，是让 App **自动发现/推荐**这类镜像和
+内置「Strata 支持的 GPU 型号」列表等锦上添花的能力，而非新的部署模式。
 
 ## 其他待办
 

@@ -46,10 +46,7 @@ after(() => {
 // Fake plugin ctx: config comes from a plain object, and network.fetch rejects
 // immediately so getStatus never touches the real GitHub API.
 function makeCtx(values) {
-  // Pin the deploy mode to local so the source-mode regression tests never
-  // touch the machine's real docker/image state. 1.1.0 has no auto switching;
-  // an unset deployMode would run the first-run image detection once.
-  const pinned = { deployMode: "local", ...values };
+  const pinned = { ...values };
   return {
     config: {
       async get(key) {

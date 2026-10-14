@@ -984,60 +984,163 @@ body {
   color: #0c8a60;
 }
 
-/* ── Deploy mode split (local / docker) ─────────────────────────────── */
-.deploy-mode-row {
+/* ── Profiles: configuration page + start page ─────────────────────── */
+.section-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text, #3b3d3f);
+  padding-top: 2px;
+}
+
+.field-hint.muted {
+  color: var(--text-muted, #8e9196);
+}
+
+/* Header badge: current profile name + type */
+.profile-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  color: var(--text-light, #6b6f73);
+  white-space: nowrap;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profile-badge.container {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #0c8a60;
+}
+
+.profile-list {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 8px;
+  background: var(--bg, #f8f5ed);
+}
+.profile-row.active {
+  border-color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.08);
 }
 
-.deploy-mode-label {
+.profile-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.profile-row-dot {
+  color: var(--accent, #10b981);
+  font-size: 11px;
+}
+.profile-row-name {
+  font-size: 13px;
+  color: var(--text, #3b3d3f);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-row-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.profile-type-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  color: var(--text-light, #6b6f73);
+  white-space: nowrap;
+}
+.profile-type-badge.container {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #0c8a60;
+}
+
+.profile-editor {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 8px;
+  background: var(--bg-card, #fcfaf5);
+}
+.profile-editor-head {
   font-size: 12px;
   font-weight: 650;
   color: var(--text, #3b3d3f);
 }
-
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg, #f8f5ed);
-}
-
-.seg-btn {
-  border: none;
-  background: transparent;
-  color: var(--text-light, #6b6f73);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 14px;
-  cursor: pointer;
-}
-
-.seg-btn + .seg-btn {
-  border-left: 1px solid var(--border, rgba(83, 125, 150, 0.22));
-}
-
-.seg-btn.active {
-  background: var(--accent, #10b981);
-  color: #fff;
-}
-
-.seg-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.deploy-fields {
+.profile-type-fields {
   display: grid;
   gap: 10px;
 }
 
-.deploy-switch-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #8a5a00;
+.btn.small {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.btn.danger {
+  background: rgba(193, 75, 57, 0.1);
+  color: #c14b39;
+  border-color: rgba(193, 75, 57, 0.3);
+}
+.btn.cancel {
+  background: transparent;
+  color: var(--text-light, #6b6f73);
+  border-color: var(--border, rgba(83, 125, 150, 0.28));
+}
+
+/* Start page: profile picker */
+.start-options {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, rgba(83, 125, 150, 0.14));
+  display: grid;
+  gap: 6px;
+}
+.start-options-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text, #3b3d3f);
+}
+.profile-options {
+  display: grid;
+  gap: 6px;
+}
+.profile-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.profile-option:has(input:checked) {
+  border-color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.08);
+}
+.profile-option input {
+  accent-color: var(--accent, #10b981);
+  flex: none;
+}
+.profile-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

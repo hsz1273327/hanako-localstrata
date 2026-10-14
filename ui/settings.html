@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local Strata</title>
+  <link rel="stylesheet" href="./assets/app-ui.css">
+  <link rel="stylesheet" href="./assets/settings.css">
+</head>
+<body>
+  <main class="settings-page" data-hana-app-ui>
+    <header class="settings-header">
+      <h1 class="settings-title" data-i18n="appName">Strata</h1>
+      <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
+    </header>
+
+    <!-- 常规：随 Hana 启动 / 刷新间隔 / Strata API Key -->
+    <section class="group-box">
+      <h2 class="group-title" data-i18n="settings.general">General</h2>
+
+      <label class="field field-row" for="autoStart">
+        <span class="field-label" data-i18n="settings.autoStart">Start with Hana</span>
+        <input id="autoStart" type="checkbox">
+      </label>
+
+      <label class="field" for="refreshSec">
+        <span data-i18n="settings.refreshSec">Refresh interval (seconds)</span>
+        <input id="refreshSec" type="number" min="1" step="1" inputmode="numeric">
+      </label>
+
+      <label class="field" for="apiKey">
+        <span data-i18n="settings.apiKey">Strata API Key</span>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false">
+        <span class="field-hint" data-i18n="settings.apiKeyHint">Stored by Hana.</span>
+      </label>
+
+      <div class="settings-actions">
+        <button id="saveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
+      </div>
+      <p id="message" class="message" role="status"></p>
+    </section>
+
+    <!-- 环境配置入口：目录/Python/GPU/GGUF/Config/端口都归 profile，在面板里 -->
+    <section class="group-box env-box">
+      <div class="env-text">
+        <span class="env-title" data-i18n="settings.environment">Environment profiles</span>
+        <span class="env-hint" data-i18n="settings.envHint"></span>
+      </div>
+      <button id="openPanelBtn" class="btn" type="button" data-i18n="settings.openPanel">Manage in the panel</button>
+    </section>
+  </main>
+
+  <script>
+    window.addEventListener('error', () => {
+      const box = document.getElementById('message');
+      if (!box) return;
+      const lang = (navigator.language || 'en').toLowerCase().split('-')[0];
+      const messages = {
+        zh: '设置页启动失败，请检查 App 资源并运行校验器。',
+        en: 'Settings page failed to start. Check the App resources and run the validator.',
+        fr: "Échec du démarrage de la page de paramètres. Vérifiez les ressources de l'App et lancez le validateur.",
+        ru: 'Не удалось запустить страницу настроек. Проверьте ресурсы App и запустите валидатор.',
+        ja: '設定ページの起動に失敗しました。App リソースを確認し、バリデータを実行してください。',
+        ko: '설정 페이지 시작에 실패했습니다. App 리소스를 확인하고 검증기를 실행하세요.'
+      };
+      box.textContent = messages[lang] || messages.en;
+      box.className = 'message error';
+    }, true);
+  </script>
+  <script type="module" src="./assets/settings.js"></script>
+</body>
+</html>

@@ -1,19 +1,26 @@
-// POST /start — start the service.
+// POST /start — start the service with the chosen profile.
 // GET  /start — first-run setup progress (polling contract, same shape as
 //               routes/update.js).
 //
-// Normal (existing config) starts are unchanged: `startService()` is called
-// directly and its result is returned synchronously. Only when there is no
-// usable config does the first-run job kick in: local runs `setup.py --setup`
-// and then starts the server; docker creates the container with GGUF_DIR and
-// follows the entrypoint's setup pass. That job is backgrounded so the UI can
-// show staged progress (download → convert → config → load).
-import { startService, getStatus } from "../lib/strata.js";
+// The body may carry `{ profileId }`, the profile picked on the stop page. It
+// is persisted as the active profile and then started. Only a local profile
+// with no usable config enters the first-run job (setup.py → config → serve);
+// a container profile performs its own setup through the entrypoint.
+import { startService, getStatus, selectProfile } from "../lib/strata.js";
 import { beginFirstRun, getFirstRunState, needsInitialSetup } from "../lib/firstrun.js";
 
 export default function registerStartRoutes(app, ctx) {
   app.post("/start", async (c) => {
+    let body = {};
     try {
+      body = await c.req.json();
+    } catch {
+      /* body is optional */
+    }
+    const profileId = typeof body?.profileId === "string" ? body.profileId : undefined;
+
+    try {
+      if (profileId) await selectProfile(ctx, profileId);
       const status = await getStatus(ctx);
       if (status.state === "unsupported") {
         return c.json({ started: false, state: "unsupported", error: status.reason });
@@ -26,7 +33,7 @@ export default function registerStartRoutes(app, ctx) {
       }
       return c.json(await startService(ctx));
     } catch (e) {
-      return c.json({ started: false, error: String(e?.message || e) }, 500);
+      return c.json({ started: false, error: String(e?.message || e), validation: e?.validation }, 500);
     }
   });
 
