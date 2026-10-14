@@ -27,6 +27,7 @@ export const LANG_NAMES = {
 export const STRINGS = {
   zh: {
     appName: "Strata 控制台",
+    "setup.configureInSettings": "面板不再管理环境配置。请在 Hana 设置页的「Local Strata」中配置。",
 
     "common.refresh": "刷新",
     "common.copy": "复制",
@@ -85,7 +86,6 @@ export const STRINGS = {
     "label.image": "镜像",
     "label.containerState": "容器状态",
     "label.imageBuilt": "镜像构建",
-    "deploy.openConfig": "配置部署方式",
     "field.configFile": "配置文件（可选覆盖）",
     "setup.chooseConfigShort": "自动 / 未选择",
     "dockerState.running": "运行中",
@@ -146,20 +146,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata 目前只支持 Windows 和 Linux。",
     "unsupported.projectUrl": "项目地址：",
 
-    "setup.notInstalledTitle": "在以下路径没有找到 Strata：",
-    "setup.notInstalledSub": "请确认路径，或先安装 Strata",
-    "setup.pythonMissingHint": "Python 解释器不存在",
-    "setup.saveAndDetect": "保存并检测",
-    "setup.savingDetect": "正在保存并检测…",
-    "setup.saved": "已保存",
-    "setup.needDir": "请填写 Strata 目录",
-    "setup.chooseConfig": "找到以下配置文件，请选择一个：",
-    "setup.autoSelected": "已自动选择：{file}",
-    "setup.useThis": "使用此配置",
-    "setup.useSelected": "使用选中的配置",
-    "setup.selected": "已选择",
-    "setup.noConfigTitle": "目录下未找到配置文件",
-    "setup.noConfigSub": "已扫描 {dir}，未发现 strata-*.json。请先用 setup.py 生成配置，或到 Hana 设置页修正目录。",
     "setup.candidateContext": "上下文 {context}",
 
     "confirm.stopTitle": "确认停止服务？",
@@ -185,7 +171,6 @@ export const STRINGS = {
 
     "lang.label": "语言",
     "field.strataDir": "Strata 目录",
-    "deploy.localSection": "本机（源码）",
     "label.profile": "配置",
     "profile.manage": "环境配置",
     "profile.manageHint": "每套配置是一种运行 Strata 的方式（本机源码或容器）。",
@@ -252,7 +237,6 @@ export const STRINGS = {
     "field.pickPython": "选择 Python…",
     "field.pickUnsupported": "当前宿主不支持路径选择，请手动输入。",
     "field.pickFailed": "无法选择目录：{error}；请手动输入路径。",
-    "setup.autoConfigHint": "已自动使用最新配置：{file}",
     "firstRun.confirmTitle": "首次启动？",
     "firstRun.confirmSub": "尚无可用配置。首次启动会先运行 setup 生成配置，可能需要下载 / 转换大模型（数十 GB），耗时可能很长。模型目录：{dir}",
     "firstRun.confirmAction": "开始首次启动",
@@ -285,6 +269,7 @@ export const STRINGS = {
 
   en: {
     appName: "Strata Console",
+    "setup.configureInSettings": "The panel no longer manages environment profiles. Configure them in Hana Settings → Local Strata.",
 
     "common.refresh": "Refresh",
     "common.copy": "Copy",
@@ -343,7 +328,6 @@ export const STRINGS = {
     "label.image": "Image",
     "label.containerState": "Container state",
     "label.imageBuilt": "Image built",
-    "deploy.openConfig": "Configure deployment",
     "field.configFile": "Config file (optional override)",
     "setup.chooseConfigShort": "Auto / none",
     "dockerState.running": "Running",
@@ -404,20 +388,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata currently supports Windows and Linux only.",
     "unsupported.projectUrl": "Project:",
 
-    "setup.notInstalledTitle": "Strata not found at:",
-    "setup.notInstalledSub": "Check the path, or install Strata first",
-    "setup.pythonMissingHint": "Python interpreter not found",
-    "setup.saveAndDetect": "Save & detect",
-    "setup.savingDetect": "Saving and detecting…",
-    "setup.saved": "Saved",
-    "setup.needDir": "Enter the Strata directory",
-    "setup.chooseConfig": "Found the following config files, pick one:",
-    "setup.autoSelected": "Auto-selected: {file}",
-    "setup.useThis": "Use this config",
-    "setup.useSelected": "Use selected config",
-    "setup.selected": "Selected",
-    "setup.noConfigTitle": "No config file in this directory",
-    "setup.noConfigSub": "Scanned {dir}, no strata-*.json found. Generate one with setup.py, or fix the directory in Hana settings.",
     "setup.candidateContext": "Context {context}",
 
     "confirm.stopTitle": "Stop the service?",
@@ -443,7 +413,6 @@ export const STRINGS = {
 
     "lang.label": "Language",
     "field.strataDir": "Strata directory",
-    "deploy.localSection": "Local (source)",
     "label.profile": "Profile",
     "profile.manage": "Environment profiles",
     "profile.manageHint": "Each profile is one way to run Strata (local source or a container).",
@@ -510,7 +479,6 @@ export const STRINGS = {
     "field.pickPython": "Choose Python…",
     "field.pickUnsupported": "This host does not support choosing a path; enter it manually.",
     "field.pickFailed": "Could not choose a directory: {error}. Enter the path manually.",
-    "setup.autoConfigHint": "Using the newest config automatically: {file}",
     "firstRun.confirmTitle": "First start?",
     "firstRun.confirmSub": "No usable config yet. The first start runs setup to generate one and may download/convert a large model (tens of GB), which can take a long time. Model directory: {dir}",
     "firstRun.confirmAction": "Start first run",
@@ -543,6 +511,7 @@ export const STRINGS = {
 
   fr: {
     appName: "Console Strata",
+    "setup.configureInSettings": "Le panneau ne gère plus les profils d'environnement. Configurez-les dans les paramètres Hana → Local Strata.",
 
     "common.refresh": "Actualiser",
     "common.copy": "Copier",
@@ -601,7 +570,6 @@ export const STRINGS = {
     "label.image": "Image",
     "label.containerState": "État du conteneur",
     "label.imageBuilt": "Image construite",
-    "deploy.openConfig": "Configurer le déploiement",
     "field.configFile": "Fichier de configuration (override optionnel)",
     "setup.chooseConfigShort": "Auto / aucun",
     "dockerState.running": "En cours",
@@ -662,20 +630,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata ne prend en charge que Windows et Linux.",
     "unsupported.projectUrl": "Projet :",
 
-    "setup.notInstalledTitle": "Strata introuvable à l'emplacement :",
-    "setup.notInstalledSub": "Vérifiez le chemin ou installez Strata d'abord",
-    "setup.pythonMissingHint": "Interpréteur Python introuvable",
-    "setup.saveAndDetect": "Enregistrer et détecter",
-    "setup.savingDetect": "Enregistrement et détection…",
-    "setup.saved": "Enregistré",
-    "setup.needDir": "Saisissez le dossier Strata",
-    "setup.chooseConfig": "Fichiers de configuration trouvés, choisissez-en un :",
-    "setup.autoSelected": "Sélectionné automatiquement : {file}",
-    "setup.useThis": "Utiliser cette config",
-    "setup.useSelected": "Utiliser la config sélectionnée",
-    "setup.selected": "Sélectionné",
-    "setup.noConfigTitle": "Aucun fichier de configuration dans ce dossier",
-    "setup.noConfigSub": "{dir} analysé, aucun strata-*.json trouvé. Générez-en un avec setup.py ou corrigez le dossier dans les réglages Hana.",
     "setup.candidateContext": "Contexte {context}",
 
     "confirm.stopTitle": "Arrêter le service ?",
@@ -701,7 +655,6 @@ export const STRINGS = {
 
     "lang.label": "Langue",
     "field.strataDir": "Dossier Strata",
-    "deploy.localSection": "Local (source)",
     "label.profile": "Profil",
     "profile.manage": "Profils d'environnement",
     "profile.manageHint": "Chaque profil est une façon d'exécuter Strata (source locale ou conteneur).",
@@ -768,7 +721,6 @@ export const STRINGS = {
     "field.pickPython": "Choisir Python…",
     "field.pickUnsupported": "Cet hôte ne prend pas en charge la sélection de chemin ; saisissez-le manuellement.",
     "field.pickFailed": "Impossible de choisir un dossier : {error}. Saisissez le chemin manuellement.",
-    "setup.autoConfigHint": "Utilisation automatique de la config la plus récente : {file}",
     "firstRun.confirmTitle": "Premier démarrage ?",
     "firstRun.confirmSub": "Aucune config utilisable. Le premier démarrage exécute setup pour en générer une et peut télécharger/convertir un grand modèle (des dizaines de Go), ce qui peut être long. Dossier du modèle : {dir}",
     "firstRun.confirmAction": "Démarrer le premier lancement",
@@ -801,6 +753,7 @@ export const STRINGS = {
 
   ru: {
     appName: "Консоль Strata",
+    "setup.configureInSettings": "Панель больше не управляет профилями среды. Настройте их в настройках Hana → Local Strata.",
 
     "common.refresh": "Обновить",
     "common.copy": "Копировать",
@@ -859,7 +812,6 @@ export const STRINGS = {
     "label.image": "Образ",
     "label.containerState": "Состояние контейнера",
     "label.imageBuilt": "Образ собран",
-    "deploy.openConfig": "Настроить развёртывание",
     "field.configFile": "Файл конфигурации (необязательное переопределение)",
     "setup.chooseConfigShort": "Авто / нет",
     "dockerState.running": "Работает",
@@ -920,20 +872,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata поддерживает только Windows и Linux.",
     "unsupported.projectUrl": "Проект:",
 
-    "setup.notInstalledTitle": "Strata не найдена по пути:",
-    "setup.notInstalledSub": "Проверьте путь или сначала установите Strata",
-    "setup.pythonMissingHint": "Интерпретатор Python не найден",
-    "setup.saveAndDetect": "Сохранить и проверить",
-    "setup.savingDetect": "Сохранение и проверка…",
-    "setup.saved": "Сохранено",
-    "setup.needDir": "Укажите каталог Strata",
-    "setup.chooseConfig": "Найдены файлы конфигурации, выберите один:",
-    "setup.autoSelected": "Выбран автоматически: {file}",
-    "setup.useThis": "Использовать этот конфиг",
-    "setup.useSelected": "Использовать выбранный конфиг",
-    "setup.selected": "Выбрано",
-    "setup.noConfigTitle": "В каталоге нет файла конфигурации",
-    "setup.noConfigSub": "Просканирован {dir}, strata-*.json не найден. Создайте его через setup.py или исправьте каталог в настройках Hana.",
     "setup.candidateContext": "Контекст {context}",
 
     "confirm.stopTitle": "Остановить сервис?",
@@ -959,7 +897,6 @@ export const STRINGS = {
 
     "lang.label": "Язык",
     "field.strataDir": "Каталог Strata",
-    "deploy.localSection": "Локальный (исходники)",
     "label.profile": "Профиль",
     "profile.manage": "Профили окружения",
     "profile.manageHint": "Каждый профиль — это способ запуска Strata (локальный исходник или контейнер).",
@@ -1026,7 +963,6 @@ export const STRINGS = {
     "field.pickPython": "Выбрать Python…",
     "field.pickUnsupported": "Этот хост не поддерживает выбор пути; введите его вручную.",
     "field.pickFailed": "Не удалось выбрать каталог: {error}. Введите путь вручную.",
-    "setup.autoConfigHint": "Автоматически используется самый новый конфиг: {file}",
     "firstRun.confirmTitle": "Первый запуск?",
     "firstRun.confirmSub": "Нет доступного конфига. При первом запуске будет выполнен setup для его создания; возможна загрузка/конвертация большой модели (десятки ГБ), это может занять много времени. Каталог модели: {dir}",
     "firstRun.confirmAction": "Запустить первый запуск",
@@ -1059,6 +995,7 @@ export const STRINGS = {
 
   ja: {
     appName: "Strata コンソール",
+    "setup.configureInSettings": "パネルは環境プロファイルを管理しなくなりました。Hana 設定の「Local Strata」で設定してください。",
 
     "common.refresh": "更新",
     "common.copy": "コピー",
@@ -1117,7 +1054,6 @@ export const STRINGS = {
     "label.image": "イメージ",
     "label.containerState": "コンテナ状態",
     "label.imageBuilt": "イメージ作成",
-    "deploy.openConfig": "デプロイ方式を設定",
     "field.configFile": "設定ファイル（任意の上書き）",
     "setup.chooseConfigShort": "自動 / 未選択",
     "dockerState.running": "実行中",
@@ -1178,20 +1114,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata は Windows と Linux のみ対応です。",
     "unsupported.projectUrl": "プロジェクト：",
 
-    "setup.notInstalledTitle": "次の場所に Strata が見つかりません：",
-    "setup.notInstalledSub": "パスを確認するか、先に Strata をインストールしてください",
-    "setup.pythonMissingHint": "Python インタプリタが見つかりません",
-    "setup.saveAndDetect": "保存して検出",
-    "setup.savingDetect": "保存して検出中…",
-    "setup.saved": "保存しました",
-    "setup.needDir": "Strata ディレクトリを入力してください",
-    "setup.chooseConfig": "設定ファイルが見つかりました。1つ選択してください：",
-    "setup.autoSelected": "自動選択：{file}",
-    "setup.useThis": "この設定を使用",
-    "setup.useSelected": "選択した設定を使用",
-    "setup.selected": "選択しました",
-    "setup.noConfigTitle": "ディレクトリに設定ファイルがありません",
-    "setup.noConfigSub": "{dir} をスキャンしましたが strata-*.json が見つかりません。setup.py で生成するか、Hana 設定でディレクトリを修正してください。",
     "setup.candidateContext": "コンテキスト {context}",
 
     "confirm.stopTitle": "サービスを停止しますか？",
@@ -1217,7 +1139,6 @@ export const STRINGS = {
 
     "lang.label": "言語",
     "field.strataDir": "Strata ディレクトリ",
-    "deploy.localSection": "ローカル（ソース）",
     "label.profile": "プロファイル",
     "profile.manage": "環境プロファイル",
     "profile.manageHint": "各プロファイルは Strata の実行方法（ローカルソースまたはコンテナ）です。",
@@ -1284,7 +1205,6 @@ export const STRINGS = {
     "field.pickPython": "Python を選択…",
     "field.pickUnsupported": "このホストはパス選択に対応していません。手入力してください。",
     "field.pickFailed": "ディレクトリを選択できませんでした: {error}。パスを手入力してください。",
-    "setup.autoConfigHint": "最新の設定を自動使用中：{file}",
     "firstRun.confirmTitle": "初回起動ですか？",
     "firstRun.confirmSub": "利用できる設定がありません。初回起動では setup を実行して設定を生成します。大きなモデルのダウンロード/変換（数十 GB）が発生し、長時間かかる場合があります。モデルディレクトリ：{dir}",
     "firstRun.confirmAction": "初回起動を開始",
@@ -1317,6 +1237,7 @@ export const STRINGS = {
 
   ko: {
     appName: "Strata 콘솔",
+    "setup.configureInSettings": "패널은 더 이상 환경 프로필을 관리하지 않습니다. Hana 설정 → Local Strata에서 구성하세요.",
 
     "common.refresh": "새로 고침",
     "common.copy": "복사",
@@ -1375,7 +1296,6 @@ export const STRINGS = {
     "label.image": "이미지",
     "label.containerState": "컨테이너 상태",
     "label.imageBuilt": "이미지 빌드",
-    "deploy.openConfig": "배포 방식 설정",
     "field.configFile": "설정 파일 (선택적 재정의)",
     "setup.chooseConfigShort": "자동 / 없음",
     "dockerState.running": "실행 중",
@@ -1436,20 +1356,6 @@ export const STRINGS = {
     "unsupported.reason": "Strata는 Windows와 Linux만 지원합니다.",
     "unsupported.projectUrl": "프로젝트:",
 
-    "setup.notInstalledTitle": "다음 경로에서 Strata를 찾을 수 없습니다:",
-    "setup.notInstalledSub": "경로를 확인하거나 먼저 Strata를 설치하세요",
-    "setup.pythonMissingHint": "Python 인터프리터를 찾을 수 없습니다",
-    "setup.saveAndDetect": "저장 후 감지",
-    "setup.savingDetect": "저장하고 감지 중…",
-    "setup.saved": "저장됨",
-    "setup.needDir": "Strata 디렉터리를 입력하세요",
-    "setup.chooseConfig": "설정 파일을 찾았습니다. 하나를 선택하세요:",
-    "setup.autoSelected": "자동 선택됨: {file}",
-    "setup.useThis": "이 설정 사용",
-    "setup.useSelected": "선택한 설정 사용",
-    "setup.selected": "선택됨",
-    "setup.noConfigTitle": "디렉터리에 설정 파일이 없습니다",
-    "setup.noConfigSub": "{dir}을(를) 검사했지만 strata-*.json이 없습니다. setup.py로 생성하거나 Hana 설정에서 디렉터리를 수정하세요.",
     "setup.candidateContext": "컨텍스트 {context}",
 
     "confirm.stopTitle": "서비스를 중지할까요?",
@@ -1475,7 +1381,6 @@ export const STRINGS = {
 
     "lang.label": "언어",
     "field.strataDir": "Strata 디렉터리",
-    "deploy.localSection": "로컬(소스)",
     "label.profile": "프로필",
     "profile.manage": "환경 프로필",
     "profile.manageHint": "각 프로필은 Strata를 실행하는 한 가지 방식입니다(로컬 소스 또는 컨테이너).",
@@ -1542,7 +1447,6 @@ export const STRINGS = {
     "field.pickPython": "Python 선택…",
     "field.pickUnsupported": "이 호스트는 경로 선택을 지원하지 않습니다. 직접 입력하세요.",
     "field.pickFailed": "디렉터리를 선택할 수 없습니다: {error}. 경로를 직접 입력하세요.",
-    "setup.autoConfigHint": "가장 최신 설정을 자동으로 사용 중: {file}",
     "firstRun.confirmTitle": "첫 시작인가요?",
     "firstRun.confirmSub": "사용할 수 있는 설정이 없습니다. 첫 시작은 setup을 실행해 설정을 생성하며, 큰 모델(수십 GB)을 다운로드/변환할 수 있어 오래 걸릴 수 있습니다. 모델 디렉터리: {dir}",
     "firstRun.confirmAction": "첫 시작 시작",

@@ -16,8 +16,8 @@
 //   Layer 2 — behavioural layer, gated on jsdom.
 //     It loads the real ui/panel.html + ui/assets/panel.js in jsdom with a
 //     stubbed SDK and drives the whole running-state flow (badge -> read-only
-//     drawer -> x / scrim / Escape, the stopped state, the editable profile
-//     manager). jsdom is NOT a dependency of this repo, so this layer is
+//     drawer -> x / scrim / Escape, the stopped state, the setup notice).
+//     jsdom is NOT a dependency of this repo, so this layer is
 //     reported as skipped by default. To enable it, add jsdom as a
 //     devDependency (create package.json, `npm install`) — nothing else in this
 //     file needs to change.
@@ -34,6 +34,7 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const panelHtml = read("ui/panel.html");
 const panelJs = read("ui/assets/panel.js");
 const panelCss = read("ui/assets/panel.css");
+const i18nSrc = read("ui/assets/i18n.js");
 
 // ── Layer 1: zero-dependency source guards ────────────────────────────────
 
@@ -70,7 +71,7 @@ test("the read-only detail reuses the panel's existing editor, not a third form"
   assert.equal((panelHtml.match(/id="pluginSettingsTemplate"/g) || []).length, 1);
   // The very same #psEditor node is moved into the drawer and moved back.
   assert.match(panelJs, /els\.profileDrawerBody\.replaceChildren\(pluginFormEls\.editor\)/);
-  assert.match(panelJs, /pluginFormEls\.form\.append\(pluginFormEls\.editor\)/);
+  assert.match(panelJs, /pluginFormEls\.root\.append\(pluginFormEls\.editor\)/);
   // Read-only = disable every field and hide the write actions.
   assert.match(panelJs, /function setProfileEditorReadOnly\(readOnly\)/);
   assert.match(panelJs, /pluginFormEls\.editor\.querySelectorAll\("input, select"\)/);
@@ -121,12 +122,31 @@ test("header layout guards keep the badge from crowding or clipping the right-si
 test("the new i18n copy exists and is non-empty in all six locales", async () => {
   const { STRINGS, LANGS } = await import(pathToFileURL(path.join(ROOT, "ui/assets/i18n.js")).href);
   assert.equal(LANGS.length, 6);
-  for (const key of ["profile.viewDetails", "version.stopToUpdate"]) {
+  for (const key of ["profile.viewDetails", "version.stopToUpdate", "setup.configureInSettings"]) {
     for (const lang of LANGS) {
       assert.equal(typeof STRINGS[lang]?.[key], "string", `${lang} is missing ${key}`);
       assert.ok(STRINGS[lang][key].length > 0, `${lang}.${key} must not be empty`);
     }
   }
+});
+
+test("the profile-management gear and its manager block are gone from the panel", () => {
+  assert.doesNotMatch(panelHtml, /id="configBtn"/);
+  assert.doesNotMatch(panelHtml, /id="psProfileList"|id="psAddBtn"|id="psSaveBtn"|id="psCancelBtn"|class="section-title"/);
+  for (const gone of ["function paintSetup\\(", "renderProfileList", "profileListKey", "openProfileEditor", "closeProfileEditor", "saveProfile", "removeProfile", "confirmDeleteProfile", "showConfig"]) {
+    assert.doesNotMatch(panelJs, new RegExp(gone), `panel.js must no longer reference ${gone}`);
+  }
+  // No "open the settings surface" hack was hard-coded: the host exposes no such API.
+  assert.doesNotMatch(panelJs, /cards\.open|openSettings/);
+  // The gear's only i18n key is now an orphan and was removed from every locale.
+  assert.doesNotMatch(i18nSrc, /deploy\.openConfig/);
+});
+
+test("setup states show a plain-text pointer to the Settings page, not an editor", () => {
+  assert.match(panelHtml, /id="statusConfigBox"[\s\S]*?<p id="setupNotice"[^>]*data-i18n="setup\.configureInSettings"/);
+  assert.match(panelJs, /function paintSetupNotice\(s\) \{/);
+  assert.match(panelJs, /const show = SETUP_STATES\.has\(s\.state\);/);
+  assert.match(panelJs, /paintSetupNotice\(s\);/);
 });
 
 // ── Layer 2: behavioural layer (requires jsdom) ───────────────────────────
@@ -188,6 +208,20 @@ function stoppedStatus() {
     profiles: [{ id: "p1", name: "default", type: "local" }],
     activeProfileId: "p1",
     version: { checkState: "checked", local: "0.1.40", latest: "0.1.44.1" },
+    network: null,
+    configCandidates: [],
+    log: { lines: [] },
+    resources: {},
+  };
+}
+
+function setupStatus() {
+  return {
+    state: "unconfigured",
+    profile: { id: "p1", name: "default", type: "local" },
+    profiles: [{ id: "p1", name: "default", type: "local" }],
+    activeProfileId: "p1",
+    version: { checkState: "checked", local: null, latest: null },
     network: null,
     configCandidates: [],
     log: { lines: [] },
@@ -260,8 +294,7 @@ test(
       assert.ok($("profileDrawerBody").contains($("psEditor")), "#psEditor moved into the drawer");
       const fields = [...$("psEditor").querySelectorAll("input, select")];
       assert.ok(fields.length > 0 && fields.every((f) => f.disabled), "every editor field disabled in the drawer");
-      const actions = $("psEditor").querySelector(".edit-actions");
-      assert.ok(actions && actions.hidden, "save/cancel row hidden in the drawer");
+      assert.equal($("psEditor").querySelector(".edit-actions"), null, "no save/cancel row exists in the read-only editor");
 
       // Three dismissal paths.
       click($("profileDrawerClose"));
@@ -293,19 +326,18 @@ test(
       assert.equal($("profileDrawer").hidden, true, "badge does not open the drawer when stopped");
       assert.equal($("actionBtn").hidden, false, "start button still present when stopped");
 
-      // The shared editor still works in editable mode (zero regression).
-      click($("configBtn"));
-      await tick();
-      assert.equal($("statusConfigBox").hidden, false, "config box opens when stopped");
-      const rows = $("statusConfigBox").querySelectorAll(".profile-row");
-      assert.ok(rows.length > 0, "profile list renders");
-      const editBtn = [...$("statusConfigBox").querySelectorAll(".profile-row .btn")].find((b) => !b.classList.contains("danger"));
-      assert.ok(editBtn, "an edit action is present");
-      click(editBtn);
-      await tick();
-      assert.ok([...$("psEditor").querySelectorAll("input, select")].every((f) => !f.disabled), "editor opens editable");
-      assert.equal($("psEditor").querySelector(".edit-actions").hidden, false, "save/cancel visible in editable mode");
-      assert.equal($("profileDrawerBody").children.length, 0, "#psEditor back in the form, not the drawer");
+      // The gear + the in-panel profile manager are gone; nothing shows while stopped.
+      assert.equal($("configBtn"), null, "gear button removed from the panel");
+      assert.equal($("statusConfigBox").hidden, true, "no config box / notice while stopped");
+
+      // A setup state shows a plain-text pointer, and mounts no editor at all.
+      globalThis.__API__.status = setupStatus();
+      click($("refreshBtn"));
+      await waitFor(() => $("statusConfigBox").hidden === false);
+      assert.equal($("statusConfigBox").hidden, false, "setup notice shown in a setup state");
+      assert.ok(($("setupNotice").textContent || "").trim().length > 0, "setup notice carries copy");
+      assert.equal($("profileBadge").hidden, true, "profile badge hidden in a setup state");
+      assert.equal($("profileDrawerBody").children.length, 0, "no editor is mounted in the panel");
     } finally {
       // The panel schedules a poll timer; fire its beforeunload cleanup so the
       // test process can exit, then tear everything down.

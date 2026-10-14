@@ -294,96 +294,15 @@ body {
   border-top: 1px solid var(--border, rgba(83, 125, 150, 0.14));
 }
 
-.plugin-settings-form {
-  display: grid;
-  gap: 10px;
-}
-
-.config-select-form {
-  display: grid;
-  gap: 10px;
-}
-
-.config-select-title {
+.setup-notice {
+  margin: 0;
   font-size: 12px;
-  font-weight: 650;
-  color: var(--text, #3b3d3f);
-}
-
-.config-candidates {
-  display: grid;
-  gap: 6px;
-}
-
-.config-candidate {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
-  border-radius: 8px;
-  background: var(--bg, #f8f5ed);
-  cursor: pointer;
-}
-
-.config-candidate:hover {
-  border-color: var(--accent, #10b981);
-}
-
-.config-candidate input {
-  margin: 3px 0 0;
-  accent-color: var(--accent, #10b981);
-  flex: none;
-}
-
-.config-candidate-body {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.config-candidate-name {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.config-candidate-meta {
-  font-size: 11px;
-  color: var(--text-muted, #8e9196);
+  color: var(--text-light, #6b6f73);
 }
 
 .field-hint {
   font-size: 11px;
   color: #c14b39;
-}
-
-.not-installed-box {
-  border: 1px solid rgba(217, 164, 65, 0.4);
-  border-radius: 8px;
-  background: rgba(217, 164, 65, 0.08);
-  padding: 8px 10px;
-  display: grid;
-  gap: 2px;
-}
-
-.not-installed-title {
-  font-size: 12px;
-  font-weight: 650;
-  color: #8a5a00;
-}
-
-.not-installed-path {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
-  color: var(--text, #3b3d3f);
-  overflow-wrap: anywhere;
-  word-break: break-all;
-}
-
-.not-installed-sub {
-  font-size: 11px;
-  color: var(--text-light, #6b6f73);
 }
 
 .net-mode {
@@ -616,11 +535,6 @@ body {
 .kv-row.update .kv-v {
   color: #b8860b;
   font-weight: 650;
-}
-
-.kv-row.lan-ok {
-  border-left: 2px solid var(--accent, #10b981);
-  border-radius: 2px;
 }
 
 .kv-hint {
@@ -986,13 +900,6 @@ body {
 }
 
 /* ── Profiles: configuration page + start page ─────────────────────── */
-.section-title {
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--text, #3b3d3f);
-  padding-top: 2px;
-}
-
 .field-hint.muted {
   color: var(--text-muted, #8e9196);
 }
@@ -1109,49 +1016,6 @@ body {
   color: var(--text-light, #6b6f73);
 }
 
-.profile-list {
-  display: grid;
-  gap: 6px;
-}
-
-.profile-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
-  border-radius: 8px;
-  background: var(--bg, #f8f5ed);
-}
-.profile-row.active {
-  border-color: var(--accent, #10b981);
-  background: rgba(16, 185, 129, 0.08);
-}
-
-.profile-row-main {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.profile-row-dot {
-  color: var(--accent, #10b981);
-  font-size: 11px;
-}
-.profile-row-name {
-  font-size: 13px;
-  color: var(--text, #3b3d3f);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.profile-row-actions {
-  display: flex;
-  gap: 6px;
-  flex: none;
-}
-
 .profile-type-badge {
   font-size: 10px;
   padding: 1px 6px;
@@ -1183,15 +1047,6 @@ body {
   gap: 10px;
 }
 
-.btn.small {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-.btn.danger {
-  background: rgba(193, 75, 57, 0.1);
-  color: #c14b39;
-  border-color: rgba(193, 75, 57, 0.3);
-}
 .btn.cancel {
   background: transparent;
   color: var(--text-light, #6b6f73);

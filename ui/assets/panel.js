@@ -73,7 +73,6 @@ const els = {
   overlayLogBtn: document.getElementById("overlayLogBtn"),
   overlayLog: document.getElementById("overlayLog"),
   error: document.getElementById("error"),
-  configBtn: document.getElementById("configBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
   langSelect: document.getElementById("langSelect"),
   editForm: document.getElementById("editForm"),
@@ -90,11 +89,8 @@ const state = {
   working: false,
   formFilled: false,
   configFileFilled: null,
-  showConfig: false,
   // Profile picked on the stop page for this start.
   startProfileId: "",
-  // Profile being edited in the configuration page (null = none; "" = new).
-  editingProfileId: null,
 };
 
 // States where setup still needs input; the inline status form / config picker
@@ -579,7 +575,6 @@ function paintUnsupported(s) {
   for (const box of [els.versionBox, els.configBox, els.speedBox, els.resourceBox, els.logsBox, els.settingsBox]) {
     box.hidden = true;
   }
-  els.configBtn.hidden = true;
   els.overlay.hidden = true;
   els.error.hidden = true;
 }
@@ -594,7 +589,6 @@ function paint(s) {
   }
   els.unsupportedBox.hidden = true;
   els.statusCard.hidden = false;
-  els.configBtn.hidden = false;
   const isRunning = s.state === "running";
   const isBusy = s.state === "starting" || s.state === "stopping" || s.state === "restarting";
   const isSetup = SETUP_STATES.has(s.state);
@@ -639,7 +633,7 @@ function paint(s) {
   paintAccessInfo(s);
   paintStartOptions(s);
   paintActions(s);
-  paintSetup(s);
+  paintSetupNotice(s);
 
   showError(s.authFailed ? t("error.authFailed") : (s.error || ""));
 }
@@ -1222,46 +1216,37 @@ async function save(restart) {
 // shows every profile; the inline editor creates/edits one. While a service is
 // running the backend refuses edits/deletes and the buttons are disabled.
 
-let pluginForm = null;
 let pluginFormEls = null;
-let setupView = null;
 let deployConfigFilesKey = "";
 let editorType = "local";
 
 function ensurePluginForm() {
-  if (pluginForm) return pluginForm;
+  if (pluginFormEls) return pluginFormEls;
   const tpl = document.getElementById("pluginSettingsTemplate");
   if (!tpl) return null;
-  pluginForm = tpl.content.cloneNode(true).querySelector("form");
+  // The editor lives in a <template>; clone it into a detached fragment that
+  // parks #psEditor while the drawer is closed and holds it between opens.
+  const root = tpl.content.cloneNode(true);
   pluginFormEls = {
-    form: pluginForm,
-    list: pluginForm.querySelector("#psProfileList"),
-    addBtn: pluginForm.querySelector("#psAddBtn"),
-    editor: pluginForm.querySelector("#psEditor"),
-    editorTitle: pluginForm.querySelector("#psEditorTitle"),
-    name: pluginForm.querySelector("#ps-name"),
-    type: pluginForm.querySelector("#ps-type"),
-    localFields: pluginForm.querySelector("#psLocalFields"),
-    containerFields: pluginForm.querySelector("#psContainerFields"),
-    strataDir: pluginForm.querySelector("#ps-strataDir"),
-    pythonPath: pluginForm.querySelector("#ps-pythonPath"),
-    gpu: pluginForm.querySelector("#ps-gpu"),
-    configFile: pluginForm.querySelector("#ps-configFile"),
-    image: pluginForm.querySelector("#ps-image"),
-    containerName: pluginForm.querySelector("#ps-containerName"),
-    dataDir: pluginForm.querySelector("#ps-dataDir"),
-    ggufDir: pluginForm.querySelector("#ps-ggufDir"),
-    port: pluginForm.querySelector("#ps-port"),
-    saveBtn: pluginForm.querySelector("#psSaveBtn"),
-    cancelBtn: pluginForm.querySelector("#psCancelBtn"),
-    message: pluginForm.querySelector("#psMessage"),
+    root,
+    editor: root.querySelector("#psEditor"),
+    editorTitle: root.querySelector("#psEditorTitle"),
+    name: root.querySelector("#ps-name"),
+    type: root.querySelector("#ps-type"),
+    localFields: root.querySelector("#psLocalFields"),
+    containerFields: root.querySelector("#psContainerFields"),
+    strataDir: root.querySelector("#ps-strataDir"),
+    pythonPath: root.querySelector("#ps-pythonPath"),
+    gpu: root.querySelector("#ps-gpu"),
+    configFile: root.querySelector("#ps-configFile"),
+    image: root.querySelector("#ps-image"),
+    containerName: root.querySelector("#ps-containerName"),
+    dataDir: root.querySelector("#ps-dataDir"),
+    ggufDir: root.querySelector("#ps-ggufDir"),
+    port: root.querySelector("#ps-port"),
+    message: root.querySelector("#psMessage"),
   };
-  pluginFormEls.addBtn.addEventListener("click", () => openProfileEditor(null));
-  pluginFormEls.saveBtn.addEventListener("click", saveProfile);
-  pluginFormEls.cancelBtn.addEventListener("click", closeProfileEditor);
-  pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
-  pluginFormEls.form.addEventListener("input", () => setPsMessage(""));
-  return pluginForm;
+  return pluginFormEls;
 }
 
 function setEditorType(type) {
@@ -1286,36 +1271,18 @@ function fillProfileEditorFields(profile) {
   setEditorType(pluginFormEls.type.value);
 }
 
-function openProfileEditor(profile) {
-  state.editingProfileId = profile ? profile.id : "";
-  pluginFormEls.editorTitle.textContent = profile ? t("profile.editTitle") : t("profile.newTitle");
-  fillProfileEditorFields(profile);
-  setPsMessage("");
-  pluginFormEls.editor.hidden = false;
-  pluginFormEls.name.focus();
-}
-
-function closeProfileEditor() {
-  state.editingProfileId = null;
-  pluginFormEls.editor.hidden = true;
-  setPsMessage("");
-}
-
 function setProfileEditorReadOnly(readOnly) {
   if (!pluginFormEls) return;
   for (const el of pluginFormEls.editor.querySelectorAll("input, select")) {
     el.disabled = readOnly;
   }
-  const actions = pluginFormEls.editor.querySelector(".edit-actions");
-  if (actions) actions.hidden = readOnly;
   if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
 }
 
 function openProfileDetail() {
   if (state.working) return;
   if (!RUNNING_STATES.has(state.status?.state)) return;
-  const form = ensurePluginForm();
-  if (!form) return;
+  if (!ensurePluginForm()) return;
   api("profiles")
     .then((data) => {
       if (state.working) return;
@@ -1323,13 +1290,13 @@ function openProfileDetail() {
       const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
       const profile = profiles.find((p) => p.id === activeId) || profiles[0] || state.status?.profile || null;
       if (!profile) return;
-      state.editingProfileId = null;
       fillProfileEditorFields(profile);
       pluginFormEls.editorTitle.textContent = t("profile.viewTitle");
       setProfileEditorReadOnly(true);
       setPsMessage("");
       els.profileDrawerTitle.textContent = t("profile.viewTitle");
       els.profileDrawerBody.replaceChildren(pluginFormEls.editor);
+      applyI18n(pluginFormEls.editor);
       pluginFormEls.editor.hidden = false;
       els.profileReadOnlyHint.hidden = false;
       els.profileDrawer.hidden = false;
@@ -1341,12 +1308,10 @@ function openProfileDetail() {
 function closeProfileDetail() {
   if (!pluginFormEls) return;
   if (els.profileDrawer.hidden) return;
-  pluginFormEls.form.append(pluginFormEls.editor);
+  pluginFormEls.root.append(pluginFormEls.editor);
   setProfileEditorReadOnly(false);
   pluginFormEls.editor.hidden = true;
   setPsMessage("");
-  state.editingProfileId = null;
-  setupView = null;
   els.profileReadOnlyHint.hidden = true;
   els.profileDrawer.hidden = true;
   els.profileDrawerScrim.hidden = true;
@@ -1389,141 +1354,11 @@ function profileHasFields(profile) {
   return profile.type === "container" ? !!(profile.image && profile.containerName) : !!profile.strataDir;
 }
 
-// The list row markup is rebuilt only when something the row shows changes.
-let profileListKey = "";
-
-function renderProfileList(s) {
-  const list = Array.isArray(s.profiles) ? s.profiles : [];
-  const running = RUNNING_STATES.has(s.state);
-  const key = list.map((p) => `${p.id}:${p.name}:${p.type}`).join("|") + `#${s.activeProfileId}#${running}`;
-  if (key === profileListKey) return;
-  profileListKey = key;
-  const box = pluginFormEls.list;
-  box.replaceChildren();
-  for (const p of list) {
-    const row = document.createElement("div");
-    row.className = "profile-row";
-    if (p.id === s.activeProfileId) row.classList.add("active");
-
-    const main = document.createElement("div");
-    main.className = "profile-row-main";
-    const dot = document.createElement("span");
-    dot.className = "profile-row-dot";
-    dot.textContent = p.id === s.activeProfileId ? "●" : "○";
-    const name = document.createElement("span");
-    name.className = "profile-row-name";
-    name.textContent = p.name || p.id;
-    const badge = document.createElement("span");
-    badge.className = `profile-type-badge ${p.type}`;
-    badge.textContent = profileTypeLabel(p.type);
-    main.append(dot, name, badge);
-
-    const actions = document.createElement("div");
-    actions.className = "profile-row-actions";
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "btn small";
-    edit.textContent = t("profile.edit");
-    edit.disabled = state.working || running;
-    edit.addEventListener("click", () => openProfileEditor(list.find((x) => x.id === p.id)));
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "btn small danger";
-    del.textContent = t("profile.delete");
-    del.disabled = state.working || running || list.length <= 1;
-    del.addEventListener("click", () => confirmDeleteProfile(p));
-    actions.append(edit, del);
-
-    row.append(main, actions);
-    box.append(row);
-  }
-}
-
-function confirmDeleteProfile(profile) {
-  showConfirm({
-    title: tp("profile.deleteConfirm", { name: profile.name || profile.id }),
-    sub: t("profile.deleteConfirmSub"),
-    confirmText: t("profile.delete"),
-    trigger: pluginFormEls.list,
-    onConfirm: () => removeProfile(profile.id),
-  });
-}
-
-async function removeProfile(id) {
-  if (state.editingProfileId === id) closeProfileEditor();
-  state.working = true;
-  setPsMessage(t("profile.deleting"), "info");
-  showError("");
-  try {
-    await api("profiles/delete", { method: "POST", body: JSON.stringify({ id }) });
-    profileListKey = "";
-    setPsMessage(t("profile.deleted"), "ok");
-  } catch (e) {
-    setPsMessage(String(e?.message || e), "error");
-  } finally {
-    state.working = false;
-    await refresh();
-  }
-}
-
-async function saveProfile() {
-  if (state.working) return;
-  const type = pluginFormEls.type.value === "container" ? "container" : "local";
-  const body = {
-    name: pluginFormEls.name.value.trim(),
-    type,
-    ggufDir: pluginFormEls.ggufDir.value.trim(),
-    port: Number(pluginFormEls.port.value) || 0,
-  };
-  if (state.editingProfileId) body.id = state.editingProfileId;
-  if (type === "container") {
-    body.image = pluginFormEls.image.value.trim();
-    body.containerName = pluginFormEls.containerName.value.trim();
-    body.dataDir = pluginFormEls.dataDir.value.trim();
-  } else {
-    body.strataDir = pluginFormEls.strataDir.value.trim();
-    body.pythonPath = pluginFormEls.pythonPath.value.trim();
-    body.gpu = pluginFormEls.gpu.value.trim();
-    body.configFile = pluginFormEls.configFile.value || "";
-  }
-  state.working = true;
-  setPsMessage(t("profile.saving"), "info");
-  showError("");
-  try {
-    await api("profiles/save", { method: "POST", body: JSON.stringify(body) });
-    state.editingProfileId = null;
-    pluginFormEls.editor.hidden = true;
-    profileListKey = "";
-    deployConfigFilesKey = "";
-    state.configFileFilled = null;
-    state.formFilled = false;
-    setPsMessage(t("profile.saved"), "ok");
-  } catch (e) {
-    setPsMessage(String(e?.message || e), "error");
-  } finally {
-    state.working = false;
-    await refresh();
-  }
-}
-
-// Renders the configuration form when the user opened it or while setup is
-// still incomplete.
-function paintSetup(s) {
-  const show = state.showConfig || SETUP_STATES.has(s.state) || needsFirstRun(s);
+// Setup states (no usable profile yet) used to open the in-panel profile
+// manager. The panel no longer manages profiles; point at the Settings page.
+function paintSetupNotice(s) {
+  const show = SETUP_STATES.has(s.state);
   els.statusConfigBox.hidden = !show;
-  if (!show) {
-    setupView = null;
-    return;
-  }
-  const form = ensurePluginForm();
-  if (!form) return;
-  if (setupView !== "profiles") {
-    els.statusConfigBox.replaceChildren(form);
-    setupView = "profiles";
-  }
-  renderProfileList(s);
-  pluginFormEls.addBtn.disabled = state.working;
-  pluginFormEls.saveBtn.disabled = state.working;
 }
 
 // ── Start page: choose a profile ───────────────────────────────────────
@@ -1601,11 +1436,6 @@ function schedule() {
 }
 
 els.refreshBtn.addEventListener("click", () => refresh());
-els.configBtn.addEventListener("click", () => {
-  if (!els.profileDrawer.hidden) closeProfileDetail();
-  state.showConfig = !state.showConfig;
-  if (state.status) paint(state.status);
-});
 els.profileBadge.addEventListener("click", openProfileDetail);
 els.profileDrawerClose.addEventListener("click", closeProfileDetail);
 els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
@@ -1706,7 +1536,6 @@ function initLangSelect() {
 function relocalize() {
   applyI18n();
   for (const tpl of document.querySelectorAll("template")) applyI18n(tpl.content);
-  profileListKey = "";
   if (state.status) paint(state.status);
   if (!els.profileDrawer.hidden && pluginFormEls) {
     pluginFormEls.editorTitle.textContent = t("profile.viewTitle");

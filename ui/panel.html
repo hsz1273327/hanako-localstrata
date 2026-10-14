@@ -24,7 +24,6 @@
       </div>
       <div class="header-actions">
         <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
-        <button id="configBtn" class="icon-btn" type="button" title="Configure deployment" data-i18n-title="deploy.openConfig" aria-label="Configure deployment" data-i18n-aria-label="deploy.openConfig">&#x2699;</button>
         <button id="refreshBtn" class="icon-btn" type="button" title="Refresh" data-i18n-title="common.refresh" aria-label="Refresh" data-i18n-aria-label="common.refresh">&#x21bb;</button>
       </div>
     </header>
@@ -72,7 +71,9 @@
         </div>
         <div id="accessRows" class="stat-blocks" hidden></div>
       </div>
-      <div id="statusConfigBox" class="status-config" hidden></div>
+      <div id="statusConfigBox" class="status-config" hidden>
+        <p id="setupNotice" class="setup-notice" data-i18n="setup.configureInSettings">Configure environment profiles in Hana Settings → Local Strata.</p>
+      </div>
       <!-- 停机页：选一套配置启动 -->
       <div id="startOptionsBox" class="start-options" hidden>
         <div class="start-options-title" data-i18n="profile.chooseToStart">Choose a profile to start</div>
@@ -202,68 +203,56 @@
 
     <p id="error" class="error" role="status" hidden></p>
 
-    <!-- 配置页：管理多套环境配置（profiles） -->
     <template id="pluginSettingsTemplate">
-      <form id="pluginSettingsForm" class="plugin-settings-form">
-        <div class="section-title" data-i18n="profile.manage">Environment profiles</div>
-        <p class="field-hint muted" data-i18n="profile.manageHint">Each profile is one way to run Strata (local source or a container).</p>
-        <div id="psProfileList" class="profile-list"></div>
-        <button id="psAddBtn" class="btn" type="button" data-i18n="profile.add">+ New profile</button>
+      <div id="psEditor" class="profile-editor" hidden>
+        <div id="psEditorTitle" class="profile-editor-head"></div>
+        <label class="field"><span data-i18n="profile.name">Name</span>
+          <input id="ps-name" data-key="name" type="text" autocomplete="off" spellcheck="false" placeholder="default" data-i18n-placeholder="profile.namePlaceholder">
+        </label>
+        <label class="field"><span data-i18n="profile.type">Type</span>
+          <select id="ps-type" data-key="type">
+            <option value="local" data-i18n="profile.typeLocal">Local (source)</option>
+            <option value="container" data-i18n="profile.typeContainer">Container (Docker)</option>
+          </select>
+        </label>
 
-        <div id="psEditor" class="profile-editor" hidden>
-          <div id="psEditorTitle" class="profile-editor-head"></div>
-          <label class="field"><span data-i18n="profile.name">Name</span>
-            <input id="ps-name" data-key="name" type="text" autocomplete="off" spellcheck="false" placeholder="default" data-i18n-placeholder="profile.namePlaceholder">
+        <div id="psLocalFields" class="profile-type-fields">
+          <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
+            <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
           </label>
-          <label class="field"><span data-i18n="profile.type">Type</span>
-            <select id="ps-type" data-key="type">
-              <option value="local" data-i18n="profile.typeLocal">Local (source)</option>
-              <option value="container" data-i18n="profile.typeContainer">Container (Docker)</option>
-            </select>
+          <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
+            <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="python3" data-i18n-placeholder="field.pythonPathPlaceholder">
           </label>
-
-          <div id="psLocalFields" class="profile-type-fields">
-            <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
-              <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
-            </label>
-            <label class="field"><span data-i18n="field.pythonPath">Python interpreter</span>
-              <input id="ps-pythonPath" data-key="pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="python3" data-i18n-placeholder="field.pythonPathPlaceholder">
-            </label>
-            <label class="field"><span data-i18n="field.gpu">GPU selector (optional)</span>
-              <input id="ps-gpu" data-key="gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
-            </label>
-            <label class="field"><span data-i18n="field.configFile">Config file (optional override)</span>
-              <select id="ps-configFile" data-key="configFile"></select>
-            </label>
-          </div>
-
-          <div id="psContainerFields" class="profile-type-fields" hidden>
-            <label class="field"><span data-i18n="field.image">Image</span>
-              <input id="ps-image" data-key="image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest">
-            </label>
-            <label class="field"><span data-i18n="field.containerName">Container name</span>
-              <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
-            </label>
-            <label class="field"><span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
-              <input id="ps-dataDir" data-key="dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
-            </label>
-          </div>
-
-          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
-            <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-            <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+          <label class="field"><span data-i18n="field.gpu">GPU selector (optional)</span>
+            <input id="ps-gpu" data-key="gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
           </label>
-          <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
-            <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
+          <label class="field"><span data-i18n="field.configFile">Config file (optional override)</span>
+            <select id="ps-configFile" data-key="configFile"></select>
           </label>
-
-          <div class="edit-actions">
-            <button id="psSaveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
-            <button id="psCancelBtn" class="btn cancel" type="button" data-i18n="common.cancel">Cancel</button>
-          </div>
-          <p id="psMessage" class="message" role="status"></p>
         </div>
-      </form>
+
+        <div id="psContainerFields" class="profile-type-fields" hidden>
+          <label class="field"><span data-i18n="field.image">Image</span>
+            <input id="ps-image" data-key="image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest">
+          </label>
+          <label class="field"><span data-i18n="field.containerName">Container name</span>
+            <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+          </label>
+          <label class="field"><span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
+            <input id="ps-dataDir" data-key="dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
+          </label>
+        </div>
+
+        <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
+          <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+          <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+        </label>
+        <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
+          <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
+        </label>
+
+        <p id="psMessage" class="message" role="status"></p>
+      </div>
     </template>
 
     <!-- 统一二次确认浮层：position:absolute 脱离文档流，锚定在触发按钮附近，
@@ -278,7 +267,7 @@
     </div>
 
     <!-- 运行中配置只读抽屉：复用 #psEditor（配置模板里的编辑器）。
-         打开时把 #psEditor 移入抽屉只读展示，关闭时移回 #pluginSettingsForm。 -->
+         打开时把 #psEditor 移入抽屉只读展示，关闭时移回模板（#pluginSettingsTemplate）。 -->
     <div id="profileDrawerScrim" class="profile-drawer-scrim" hidden></div>
     <div id="profileDrawer" class="profile-drawer" role="dialog" aria-modal="true" aria-labelledby="profileDrawerTitle" hidden>
       <div class="profile-drawer-bar">

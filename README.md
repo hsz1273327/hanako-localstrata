@@ -36,14 +36,15 @@ the header.
   sampling parameters, max output and reasoning effort, with a pending-change
   diff and a "save & restart" action.
 - **Logs** — tail of the Strata log.
-- **First-run setup** — point at the Strata directory, a Python interpreter
-  and (optionally) a GGUF model folder; when no usable config exists the same
-  start button runs `setup.py` and then starts the service.
+- **First-run setup** — set the Strata directory, a Python interpreter and
+  (optionally) a GGUF model folder in Hana's settings page (App **Local
+  Strata**); when no usable config exists the same start button runs `setup.py`
+  and then starts the service.
 - **Auto-start** — optionally bring Strata up together with Hana.
 - **Environment profiles** — each profile is either a **local** Strata source
-  checkout or a **container**. Manage them on the configuration page and pick
-  one to start on the stop page; while a service is running, profiles are
-  locked (no edit/delete).
+  checkout or a **container**. Manage them in Hana's settings page (App
+  **Local Strata**) and pick one to start on the stop page; while a service is
+  running, the in-use profile is locked against edits and deletes.
 
 ### Requirements
 
@@ -123,7 +124,7 @@ Configured in Hana's settings page (app **Local Strata**):
 
 | Key | Default | Meaning |
 |---|---|---|
-| `strataDir` | — | Path to the Strata project; also set from the in-app setup form |
+| `strataDir` | — | Path to the Strata project (per profile; set in this settings page) |
 | `pythonPath` | — | Python interpreter; empty = auto-detect `python3` / `python.exe` |
 | `ggufDir` | — | Folder with the GGUF shards. Local: `setup.py --gguf-dir`. Container: mounted at `/gguf` + `GGUF_DIR`. Empty = first start downloads the model |
 | `configFile` | — | Optional override; empty = auto-use the newest `strata-*.json` (or generate one on first start) |
@@ -132,7 +133,7 @@ Configured in Hana's settings page (app **Local Strata**):
 | `autoStart` | `false` | Try to start the active profile together with Hana |
 | `refreshSec` | `5` | Status polling interval, in seconds |
 | `apiKey` | — | Strata API key, if the service requires one |
-| `profiles` | `""` | Internal JSON array of environment profiles; manage from the panel, not the Hana settings form |
+| `profiles` | `""` | Internal JSON array of environment profiles; manage them in this settings page, not by hand |
 | `activeProfileId` | `""` | Internal: id of the currently selected profile |
 
 ### Tech notes
@@ -184,8 +185,12 @@ Requires a Hana install that provides `scripts/validate-app.mjs`
 - **参数编辑** —— 上下文长度、KV 量化、会话缓存、采样参数、最大输出、思考档位，
   带待保存改动对比和「保存并重启」。
 - **日志** —— Strata 日志尾部。
-- **首次配置引导** —— 填写 Strata 目录与 Python 解释器，再选择自动发现的
-  `strata-*.json` 配置文件。
+- **首次配置引导** —— 在 Hana 设置页（App **Local Strata**）填写 Strata 目录、
+  Python 解释器与（可选的）GGUF 模型目录；没有可用配置时，同一个启动按钮会先跑
+  `setup.py` 再启动服务。
+- **环境配置（profiles）** —— 每套配置要么是**本机（源码）**、要么是**容器**。
+  在 Hana 设置页（App **Local Strata**）管理，在停机页选择要启动的那套；服务运行中
+  会锁定正在使用的那套（不允许改 / 删）。
 - **随 Hana 启动** —— 可选是否随 Hana 一起拉起 Strata。
 
 ### 要求
@@ -204,8 +209,8 @@ Requires a Hana install that provides `scripts/validate-app.mjs`
 
 ### 适用范围
 
-本 App 用**环境配置（profiles）**来管理 Strata。一套配置就是一种运行
-Strata 的方式，分为两类：
+本 App 用**环境配置（profiles）**来管理 Strata（在 Hana 设置页的 **Local
+Strata** 里增删改）。一套配置就是一种运行 Strata 的方式，分为两类：
 
 - **本机（源码）** —— 在 Strata 目录里跑 `START-HERE.bat`（Windows）或
   `./setup.sh`（Linux）的那种，服务以**本地进程**形式运行 `serve/server.py`。
@@ -251,7 +256,7 @@ manifest 的 `id`。
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `strataDir` | — | Strata 项目目录；也可在 App 内首次配置表单填写 |
+| `strataDir` | — | Strata 项目目录（按配置，在本设置页填写） |
 | `pythonPath` | — | Python 解释器；留空则自动探测 `python3` / `python.exe` |
 | `ggufDir` | — | 含全部分片 GGUF 的目录。本机：`setup.py --gguf-dir`；容器：挂载到 `/gguf` 并传 `GGUF_DIR`。留空则首次启动下载模型 |
 | `configFile` | — | 可选覆盖；留空则自动使用最新的 `strata-*.json`（没有则在首次启动时生成） |
@@ -260,7 +265,7 @@ manifest 的 `id`。
 | `autoStart` | `false` | 随 Hana 启动时尝试拉起当前配置 |
 | `refreshSec` | `5` | 状态刷新间隔（秒）|
 | `apiKey` | — | 服务需要时的 Strata API Key |
-| `profiles` | `""` | 内部：环境配置的 JSON 数组；请在面板里管理，不要手改 |
+| `profiles` | `""` | 内部：环境配置的 JSON 数组；请在本设置页管理，不要手改 |
 | `activeProfileId` | `""` | 内部：当前选中配置的 id |
 
 ### 技术说明
