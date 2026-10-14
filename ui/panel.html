@@ -20,6 +20,7 @@
           </svg>
         </span>
         <span class="title">Strata</span>
+        <button type="button" id="profileBadge" class="profile-badge" hidden title="View profile details" aria-label="View profile details"></button>
       </div>
       <div class="header-actions">
         <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
@@ -48,7 +49,6 @@
           <span id="dot" class="dot stopped"></span>
           <span id="stateText" class="state-text" data-i18n="state.checking">Checking…</span>
           <span id="netMode" class="net-mode local" data-i18n="netMode.local">Local</span>
-          <span id="profileBadge" class="profile-badge" hidden></span>
         </div>
         <div class="status-actions">
           <button id="modeBtn" class="icon-btn status-action" type="button" title="Local mode (click to switch to LAN)" data-i18n-title="modeBtn.local" aria-label="Local mode (click to switch to LAN)" data-i18n-aria-label="modeBtn.local"></button>
@@ -275,6 +275,18 @@
         <button id="confirmOk" class="btn warn" type="button" data-i18n="common.confirm">Confirm</button>
         <button id="confirmCancel" class="btn cancel" type="button" data-i18n="common.cancel">Cancel</button>
       </div>
+    </div>
+
+    <!-- 运行中配置只读抽屉：复用 #psEditor（配置模板里的编辑器）。
+         打开时把 #psEditor 移入抽屉只读展示，关闭时移回 #pluginSettingsForm。 -->
+    <div id="profileDrawerScrim" class="profile-drawer-scrim" hidden></div>
+    <div id="profileDrawer" class="profile-drawer" role="dialog" aria-modal="true" aria-labelledby="profileDrawerTitle" hidden>
+      <div class="profile-drawer-bar">
+        <span id="profileDrawerTitle" class="profile-drawer-title" data-i18n="profile.viewTitle">View profile</span>
+        <button id="profileDrawerClose" class="profile-drawer-close" type="button" aria-label="Close" data-i18n-aria-label="profile.close">×</button>
+      </div>
+      <p id="profileReadOnlyHint" class="profile-readonly-hint" data-i18n="profile.readOnlyHint">This profile is read-only while the service runs.</p>
+      <div id="profileDrawerBody" class="profile-drawer-body"></div>
     </div>
 
     <!-- 全屏操作遮罩（乐观更新：点击操作按钮后立刻出现，盖住整个面板） -->

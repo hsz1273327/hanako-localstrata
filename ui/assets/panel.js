@@ -52,6 +52,12 @@ const els = {
   startProfileList: document.getElementById("startProfileList"),
   startOptionsHint: document.getElementById("startOptionsHint"),
   profileBadge: document.getElementById("profileBadge"),
+  profileDrawerScrim: document.getElementById("profileDrawerScrim"),
+  profileDrawer: document.getElementById("profileDrawer"),
+  profileDrawerTitle: document.getElementById("profileDrawerTitle"),
+  profileDrawerClose: document.getElementById("profileDrawerClose"),
+  profileDrawerBody: document.getElementById("profileDrawerBody"),
+  profileReadOnlyHint: document.getElementById("profileReadOnlyHint"),
   versionBox: document.getElementById("versionBox"),
   configBox: document.getElementById("configBox"),
   speedBox: document.getElementById("speedBox"),
@@ -314,6 +320,14 @@ function paintVersion(s) {
           undefined,
           t("container.updateHint"),
         ]);
+      } else if (RUNNING_STATES.has(s.state)) {
+        rows.push([
+          t("label.latestVersion"),
+          tp("version.available", { version: latest }),
+          "update",
+          undefined,
+          t("version.stopToUpdate"),
+        ]);
       } else {
         rows.push([
           t("label.latestVersion"),
@@ -424,7 +438,15 @@ function paintProfileBadge(s) {
   el.hidden = false;
   el.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
   el.className = `profile-badge ${prof.type}`;
-  el.title = prof.name;
+  const canView = RUNNING_STATES.has(s.state);
+  el.disabled = !canView;
+  if (canView) {
+    el.title = t("profile.viewDetails");
+    el.setAttribute("aria-label", t("profile.viewDetails"));
+  } else {
+    el.title = prof.name;
+    el.setAttribute("aria-label", prof.name);
+  }
 }
 
 function paintConfig(s) {
@@ -553,6 +575,7 @@ function paintUnsupported(s) {
   els.unsupportedBox.hidden = false;
 
   els.statusCard.hidden = true;
+  els.profileBadge.hidden = true;
   for (const box of [els.versionBox, els.configBox, els.speedBox, els.resourceBox, els.logsBox, els.settingsBox]) {
     box.hidden = true;
   }
@@ -563,6 +586,8 @@ function paintUnsupported(s) {
 
 function paint(s) {
   state.status = s;
+  const running = RUNNING_STATES.has(s.state);
+  if (!running && els.profileDrawer && !els.profileDrawer.hidden) closeProfileDetail();
   if (s.state === "unsupported") {
     paintUnsupported(s);
     return;
@@ -609,7 +634,7 @@ function paint(s) {
   els.speedBox.hidden = isSetup;
   els.resourceBox.hidden = isSetup;
   els.logsBox.hidden = isSetup;
-  els.settingsBox.hidden = isSetup;
+  els.settingsBox.hidden = isSetup || running;
 
   paintAccessInfo(s);
   paintStartOptions(s);
@@ -1245,9 +1270,7 @@ function setEditorType(type) {
   pluginFormEls.containerFields.hidden = editorType !== "container";
 }
 
-function openProfileEditor(profile) {
-  state.editingProfileId = profile ? profile.id : "";
-  pluginFormEls.editorTitle.textContent = profile ? t("profile.editTitle") : t("profile.newTitle");
+function fillProfileEditorFields(profile) {
   pluginFormEls.name.value = profile?.name || "";
   pluginFormEls.type.value = profile?.type || "local";
   pluginFormEls.strataDir.value = profile?.strataDir || "";
@@ -1261,6 +1284,12 @@ function openProfileEditor(profile) {
   deployConfigFilesKey = "";
   populateProfileConfigFiles(currentCandidates(), profile?.configFile || "");
   setEditorType(pluginFormEls.type.value);
+}
+
+function openProfileEditor(profile) {
+  state.editingProfileId = profile ? profile.id : "";
+  pluginFormEls.editorTitle.textContent = profile ? t("profile.editTitle") : t("profile.newTitle");
+  fillProfileEditorFields(profile);
   setPsMessage("");
   pluginFormEls.editor.hidden = false;
   pluginFormEls.name.focus();
@@ -1270,6 +1299,57 @@ function closeProfileEditor() {
   state.editingProfileId = null;
   pluginFormEls.editor.hidden = true;
   setPsMessage("");
+}
+
+function setProfileEditorReadOnly(readOnly) {
+  if (!pluginFormEls) return;
+  for (const el of pluginFormEls.editor.querySelectorAll("input, select")) {
+    el.disabled = readOnly;
+  }
+  const actions = pluginFormEls.editor.querySelector(".edit-actions");
+  if (actions) actions.hidden = readOnly;
+  if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
+}
+
+function openProfileDetail() {
+  if (state.working) return;
+  if (!RUNNING_STATES.has(state.status?.state)) return;
+  const form = ensurePluginForm();
+  if (!form) return;
+  api("profiles")
+    .then((data) => {
+      if (state.working) return;
+      const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+      const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
+      const profile = profiles.find((p) => p.id === activeId) || profiles[0] || state.status?.profile || null;
+      if (!profile) return;
+      state.editingProfileId = null;
+      fillProfileEditorFields(profile);
+      pluginFormEls.editorTitle.textContent = t("profile.viewTitle");
+      setProfileEditorReadOnly(true);
+      setPsMessage("");
+      els.profileDrawerTitle.textContent = t("profile.viewTitle");
+      els.profileDrawerBody.replaceChildren(pluginFormEls.editor);
+      pluginFormEls.editor.hidden = false;
+      els.profileReadOnlyHint.hidden = false;
+      els.profileDrawer.hidden = false;
+      els.profileDrawerScrim.hidden = false;
+    })
+    .catch((e) => showError(String(e?.message || e)));
+}
+
+function closeProfileDetail() {
+  if (!pluginFormEls) return;
+  if (els.profileDrawer.hidden) return;
+  pluginFormEls.form.append(pluginFormEls.editor);
+  setProfileEditorReadOnly(false);
+  pluginFormEls.editor.hidden = true;
+  setPsMessage("");
+  state.editingProfileId = null;
+  setupView = null;
+  els.profileReadOnlyHint.hidden = true;
+  els.profileDrawer.hidden = true;
+  els.profileDrawerScrim.hidden = true;
 }
 
 function setPsMessage(text, kind = "info") {
@@ -1522,8 +1602,18 @@ function schedule() {
 
 els.refreshBtn.addEventListener("click", () => refresh());
 els.configBtn.addEventListener("click", () => {
+  if (!els.profileDrawer.hidden) closeProfileDetail();
   state.showConfig = !state.showConfig;
   if (state.status) paint(state.status);
+});
+els.profileBadge.addEventListener("click", openProfileDetail);
+els.profileDrawerClose.addEventListener("click", closeProfileDetail);
+els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !els.profileDrawer.hidden) {
+    e.preventDefault();
+    closeProfileDetail();
+  }
 });
 els.unsupportedLink.addEventListener("click", () => {
   openExternal(els.unsupportedLink.dataset.url || "https://github.com/Niko1221/Strata");
@@ -1618,6 +1708,9 @@ function relocalize() {
   for (const tpl of document.querySelectorAll("template")) applyI18n(tpl.content);
   profileListKey = "";
   if (state.status) paint(state.status);
+  if (!els.profileDrawer.hidden && pluginFormEls) {
+    pluginFormEls.editorTitle.textContent = t("profile.viewTitle");
+  }
   renderDiff();
 }
 
