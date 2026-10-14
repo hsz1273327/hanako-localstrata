@@ -16,6 +16,8 @@ import {
   ensureProfiles,
   serializeProfiles,
   validateProfile,
+  profileReady,
+  missingProfileFields,
   findProfile,
   profileFromFlat,
   emptyLocalProfile,
@@ -50,6 +52,58 @@ after(() => {
       /* ignore */
     }
   }
+});
+
+// Readiness is the rule the stop page and the profile list rely on. Pin it with
+// a fully filled container profile (the "dockertest" report): a complete profile
+// must never be judged as unable to start.
+test("readiness: a filled container profile is ready; an empty one names its fields", () => {
+  const filled = normalizeProfile({
+    id: "c1",
+    name: "dockertest",
+    type: "container",
+    image: "strata:latest",
+    containerName: "strata",
+    dataDir: "/data/strata-docker-config",
+  });
+  assert.deepEqual(missingProfileFields(filled), []);
+  assert.equal(profileReady(filled), true);
+
+  assert.deepEqual(
+    missingProfileFields(normalizeProfile({ type: "container", image: "", containerName: "strata" })),
+    ["image"],
+  );
+  assert.deepEqual(
+    missingProfileFields(normalizeProfile({ type: "container", image: "strata:latest", containerName: "" })),
+    ["containerName"],
+  );
+  // Local readiness keys off the Strata directory only.
+  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "/srv/Strata" })), []);
+  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "" })), ["strataDir"]);
+});
+
+// The status payload must carry the readiness verdict (and the missing keys) per
+// profile. The panel only receives {id,name,type} plus these; without them it
+// re-derived the fields it never got and marked every profile "not ready".
+test("the status payload carries each profile's readiness", async () => {
+  const dir = tmpDir();
+  const local = localProfile({ id: "l1", name: "default", strataDir: dir });
+  const container = normalizeProfile({
+    id: "c1",
+    name: "dockertest",
+    type: "container",
+    image: "strata:latest",
+    containerName: "strata",
+    dataDir: "/data/strata-docker-config",
+  });
+  const ctx = makeCtx({});
+  await writeProfiles(ctx, [local, container], "l1");
+  const status = await getStatus(ctx, { platform: "linux" });
+  const byId = Object.fromEntries(status.profiles.map((p) => [p.id, p]));
+  assert.equal(byId.c1.ready, true, "a complete container profile is ready");
+  assert.deepEqual(byId.c1.missing, []);
+  assert.equal(byId.l1.ready, true);
+  assert.deepEqual(byId.l1.missing, []);
 });
 
 function makeCtx(values = {}) {

@@ -1368,23 +1368,25 @@ function populateProfileConfigFiles(candidates, selected) {
   sel.value = selected || "";
 }
 
-function profileHasFields(profile) {
-  if (!profile) return false;
-  return profile.type === "container" ? !!(profile.image && profile.containerName) : !!profile.strataDir;
+// Readiness is decided by the backend (lib/profiles.js `profileReady`) and
+// carried on each /status profile as `ready`. The panel must NOT re-derive it:
+// the status list carries only {id,name,type}, so re-deriving used to mark every
+// profile "not ready" even when it was fully filled.
+function profileIsReady(profile) {
+  return !!profile?.ready;
 }
 
-// Which fields must hold a value before this profile can start (the readiness
-// rule in lib/profiles.js `profileReady`). Localized with the form's own field
-// copy so the hint and the editor name the same thing.
+// The backend also reports which readiness fields are still empty, as stable
+// keys (lib/profiles.js `missingProfileFields`); name them with the form's own
+// field copy so the hint and the editor say the same thing.
+const START_FIELD_LABELS = {
+  strataDir: "field.strataDir",
+  image: "field.image",
+  containerName: "field.containerName",
+};
+
 function missingStartFields(profile) {
-  if (!profile) return [];
-  if (profile.type === "container") {
-    const missing = [];
-    if (!profile.image) missing.push(t("field.image"));
-    if (!profile.containerName) missing.push(t("field.containerName"));
-    return missing;
-  }
-  return profile.strataDir ? [] : [t("field.strataDir")];
+  return (profile?.missing || []).map((key) => t(START_FIELD_LABELS[key] || key));
 }
 
 // Why the selected profile cannot start yet: the concrete missing fields when
@@ -1416,7 +1418,7 @@ function selectedStartProfile(s) {
 function canStartSelected(s, profile) {
   if (!profile) return s?.launch?.canStart !== false;
   if (profile.id === s.activeProfileId) return s?.launch?.canStart !== false;
-  return profileHasFields(profile);
+  return profileIsReady(profile);
 }
 
 function renderStartProfileList(list, selectedId) {
