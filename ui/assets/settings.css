@@ -85,7 +85,8 @@ body {
 
 .field input[type="number"],
 .field input[type="password"],
-.field input[type="text"] {
+.field input[type="text"],
+.field select {
   font: inherit;
   font-size: 13px;
   color: var(--text, #3b3d3f);
@@ -97,7 +98,12 @@ body {
   max-width: 100%;
 }
 
-.field input:focus {
+.field select {
+  padding-right: 6px;
+}
+
+.field input:focus,
+.field select:focus {
   outline: 2px solid var(--accent, #10b981);
   outline-offset: 1px;
   border-color: transparent;
@@ -115,18 +121,74 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
+.field-hint:empty {
+  display: none;
+}
+
+/* A hint + its action button on one row (image pull). */
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Provenance tag next to a runtime-filled or default-backed field. Reads as a
+ * quiet annotation, not a status, so it stays muted and small. */
+.field-source {
+  font-size: 10px;
+  color: var(--text-muted, #8e9196);
+  font-style: italic;
+}
+
+.field-source.error {
+  color: #c14b39;
+}
+
+.profile-runtime-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(83, 125, 150, 0.1);
+  overflow-wrap: anywhere;
+}
+
+.profile-runtime-note.error {
+  color: #c14b39;
+}
+
 .settings-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-actions-start {
+  justify-content: flex-start;
 }
 
 .btn {
-  border: 1px solid transparent;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
   border-radius: 6px;
   font: inherit;
   font-size: 13px;
   padding: 8px 10px;
   cursor: pointer;
+  color: var(--text, #3b3d3f);
+  background: var(--bg, #f8f5ed);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* Injected icons are decorative and monochrome: they size with the label and
+ * inherit its color through currentColor. flex:none keeps them from being
+ * squashed next to longer localized labels. */
+.btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
 
 .btn:disabled {
@@ -134,9 +196,29 @@ body {
   cursor: default;
 }
 
+/* Primary actions are lifted out of the outline row with a neutral dark solid
+ * fill, never through a colored/status hue. --bg-card is the wrong lever here:
+ * the Save buttons live inside a --bg-card container, so a card-colored fill
+ * would read as recessed. A neutral deep gray + white text instead gives the
+ * fill weight against the plain --bg outline buttons. */
 .btn.primary {
-  background: var(--accent, #10b981);
+  background: var(--text, #3b3d3f);
   color: #fff;
+  border-color: var(--text, #3b3d3f);
+  font-weight: 650;
+}
+
+.btn.small {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* Destructive intent is the one thing that earns color: red marks a delete
+ * action, clearly apart from the neutral outline used by View/Edit. */
+.btn.danger {
+  background: rgba(193, 75, 57, 0.1);
+  color: #c14b39;
+  border-color: rgba(193, 75, 57, 0.3);
 }
 
 .message {
@@ -158,27 +240,183 @@ body {
   display: none;
 }
 
-.env-box {
-  grid-template-columns: 1fr auto;
-  align-items: center;
+/* ── Environment profiles ─────────────────────────────────────────────── */
+
+.profile-list {
+  display: grid;
+  gap: 6px;
 }
 
-.env-text {
-  display: grid;
-  gap: 2px;
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 8px;
+  background: var(--bg, #f8f5ed);
+}
+
+.profile-row.active {
+  border-color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.profile-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
-.env-title {
+.profile-row-name {
   font-size: 13px;
-  font-weight: 600;
+  color: var(--text, #3b3d3f);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.profile-type-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  color: var(--text-light, #6b6f73);
+  white-space: nowrap;
+}
+
+/* A type tag is a label, not a status, so it stays neutral. */
+.profile-type-badge.container {
+  border-color: var(--border, rgba(83, 125, 150, 0.28));
+  color: var(--text-light, #6b6f73);
+}
+
+.profile-active-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #0c8a60;
+  white-space: nowrap;
+}
+
+/* Right-side drawer: floats above the page instead of pushing the list, so
+ * the profile rows and their scroll position never move while it is open. */
+.profile-editor {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 250;
+  width: min(420px, 100%);
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  border-left: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  background: var(--bg-card, #fcfaf5);
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.18);
+  animation: profile-drawer-in 160ms ease-out;
+}
+
+@keyframes profile-drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-editor {
+    animation: none;
+  }
+}
+
+/* Semi-transparent backdrop; clicking it closes the drawer. */
+.profile-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(1px);
+}
+
+.profile-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-editor-close {
+  flex: none;
+  line-height: 1;
+  font-size: 16px;
+  padding: 2px 8px;
+}
+
+.profile-editor-head {
+  font-size: 12px;
+  font-weight: 650;
   color: var(--text, #3b3d3f);
 }
 
-.env-hint {
-  font-size: 11px;
-  color: var(--text-muted, #8e9196);
+/* Shown only in the read-only "view" variant while the service runs. */
+.profile-readonly-hint {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(83, 125, 150, 0.1);
   overflow-wrap: anywhere;
+}
+
+.profile-type-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(193, 75, 57, 0.35);
+  border-radius: 8px;
+  background: rgba(193, 75, 57, 0.06);
+}
+
+.profile-confirm-text {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text, #3b3d3f);
+  overflow-wrap: anywhere;
+}
+
+.profile-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* The final "Delete" inside the two-step confirm is a stronger commit than
+ * the inline row button: solid red fill with white text. Scoped so it
+ * overrides .btn.danger and .btn background/color. */
+.profile-confirm .btn.danger {
+  background: #c14b39;
+  color: #fff;
+  border-color: #c14b39;
 }
 
 [hidden] {
@@ -186,11 +424,21 @@ body {
 }
 
 @media (max-width: 420px) {
-  .env-box {
-    grid-template-columns: 1fr;
+  .profile-editor {
+    width: 100%;
   }
 
-  .settings-actions .btn {
+  .profile-row {
+    flex-wrap: wrap;
+  }
+
+  .profile-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .settings-actions .btn,
+  .settings-actions-start .btn {
     width: 100%;
   }
 }

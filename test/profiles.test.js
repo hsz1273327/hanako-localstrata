@@ -194,6 +194,64 @@ test("writeProfiles persists and readAllConfig restores the active profile", asy
   assert.equal(cfg.configFile, "");
 });
 
+// ── General defaults fallback (priority: profile value → general default) ──
+
+test("general defaults fill empty profile fields; the profile's own values win", async () => {
+  const ctx = makeCtx({ defaultGgufDir: "/general/models", defaultPort: 9000 });
+  await writeProfiles(
+    ctx,
+    [
+      localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0, configFile: "strata-a.json" }),
+      localProfile({ id: "p2", name: "own", strataDir: "/two", ggufDir: "/own/models", port: 1234, configFile: "strata-b.json" }),
+    ],
+    "p1",
+  );
+
+  // Active p1 leaves both fields empty → the general defaults apply.
+  let cfg = await readAllConfig(ctx);
+  assert.equal(cfg.activeProfile.ggufDir, "/general/models");
+  assert.equal(cfg.activeProfile.port, 9000);
+  assert.equal(cfg.ggufDir, "/general/models");
+  assert.equal(cfg.port, 9000);
+  // The configFile fallback/auto path is untouched.
+  assert.equal(cfg.activeProfile.configFile, "strata-a.json");
+  assert.equal(cfg.configFile, "strata-a.json");
+
+  // Switch to p2: its own values win over the general defaults.
+  await selectProfile(ctx, "p2");
+  cfg = await readAllConfig(ctx);
+  assert.equal(cfg.activeProfile.ggufDir, "/own/models");
+  assert.equal(cfg.activeProfile.port, 1234);
+  assert.equal(cfg.ggufDir, "/own/models");
+  assert.equal(cfg.port, 1234);
+});
+
+test("a synthesized default profile also honours the general defaults", async () => {
+  const ctx = makeCtx({ strataDir: "/legacy", defaultGgufDir: "/general", defaultPort: 9001 });
+  const cfg = await readAllConfig(ctx);
+  assert.equal(cfg.activeProfile.ggufDir, "/general");
+  assert.equal(cfg.activeProfile.port, 9001);
+  assert.equal(cfg.ggufDir, "/general");
+  assert.equal(cfg.port, 9001);
+});
+
+test("general defaults are applied to the effective profile, not the persisted list", async () => {
+  const ctx = makeCtx({ defaultGgufDir: "/general/models", defaultPort: 9000 });
+  await writeProfiles(
+    ctx,
+    [localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0 })],
+    "p1",
+  );
+  const cfg = await readAllConfig(ctx);
+  // The effective copy the deployers receive carries the resolved values…
+  assert.equal(cfg.activeProfile.ggufDir, "/general/models");
+  assert.equal(cfg.activeProfile.port, 9000);
+  // …but the stored profile keeps its original empty/0 values.
+  const stored = JSON.parse(ctx._store.profiles);
+  assert.equal(stored[0].ggufDir, "");
+  assert.equal(stored[0].port, 0);
+});
+
 test("patchActiveProfile updates one field on the active profile", async () => {
   const ctx = makeCtx({});
   await writeProfiles(
@@ -270,7 +328,11 @@ test("selectProfile persists the pick and rejects unknown ids", async () => {
   await assert.rejects(() => selectProfile(ctx, "missing"), /配置不存在/);
 });
 
-test("running service locks profile edits and deletes", async () => {
+// The narrowed rule (1.1.0 batch 9): while the service runs, only the profile
+// it is running from is frozen. Any other profile is plain stored
+// configuration — editing or deleting it writes ctx.config and nothing else,
+// so the running deployment cannot be disturbed.
+test("running service locks the in-use profile only", async () => {
   const dir = tmpDir();
   fs.mkdirSync(path.join(dir, "serve"), { recursive: true });
   fs.writeFileSync(path.join(dir, "serve", "server.py"), "# fake\n");
@@ -289,15 +351,41 @@ test("running service locks profile edits and deletes", async () => {
 
   try {
     const profile = localProfile({ id: "run", name: "default", strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json", port });
+    const spare = localProfile({ id: "spare", name: "spare", strataDir: "/elsewhere" });
     fs.writeFileSync(path.join(dir, "strata-demo.json"), JSON.stringify({ port }));
 
     const ctx = makeCtx({});
-    await writeProfiles(ctx, [profile], "run");
+    await writeProfiles(ctx, [profile, spare], "run");
     const status = await getStatus(ctx);
     assert.equal(status.state, "running");
 
-    await assert.rejects(() => saveProfile(ctx, { ...profile, name: "changed" }), /运行中.*不能修改配置/);
-    await assert.rejects(() => deleteProfile(ctx, "run"), /运行中.*不能删除配置/);
+    // The profile in use is locked while the service runs.
+    await assert.rejects(
+      () => saveProfile(ctx, { ...profile, name: "changed" }),
+      /运行中.*不能修改正在使用的配置/,
+    );
+    await assert.rejects(() => deleteProfile(ctx, "run"), /运行中.*不能删除正在使用的配置/);
+
+    // Another profile is not: the write only touches ctx.config, and the
+    // active selection plus the running service stay exactly as they were.
+    const saved = await saveProfile(ctx, { ...spare, name: "renamed", ggufDir: "/models/x" });
+    assert.equal(saved.saved, true);
+    let cfg = await readAllConfig(ctx);
+    assert.equal(findProfile(cfg.profiles, "spare").name, "renamed");
+    assert.equal(findProfile(cfg.profiles, "spare").ggufDir, "/models/x");
+    assert.equal(cfg.activeProfileId, "run");
+    assert.equal((await getStatus(ctx)).state, "running");
+
+    // Deleting it is the same kind of action, so it is allowed too.
+    const deleted = await deleteProfile(ctx, "spare");
+    assert.equal(deleted.deleted, "spare");
+    cfg = await readAllConfig(ctx);
+    assert.equal(cfg.profiles.length, 1);
+    assert.equal(cfg.activeProfileId, "run");
+    assert.equal((await getStatus(ctx)).state, "running");
+
+    // The structural rules still hold: the last profile cannot be removed.
+    await assert.rejects(() => deleteProfile(ctx, "run"), /至少保留一套配置|正在使用的配置/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

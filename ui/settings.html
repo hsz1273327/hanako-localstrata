@@ -14,7 +14,7 @@
       <select id="langSelect" class="lang-select" aria-label="Language" data-i18n-aria-label="lang.label"></select>
     </header>
 
-    <!-- 常规：随 Hana 启动 / 刷新间隔 / Strata API Key -->
+    <!-- 常规：随 Hana 启动 / 刷新间隔 / Strata API Key / 默认模型目录 / 默认端口 -->
     <section class="group-box">
       <h2 class="group-title" data-i18n="settings.general">General</h2>
 
@@ -34,19 +34,138 @@
         <span class="field-hint" data-i18n="settings.apiKeyHint">Stored by Hana.</span>
       </label>
 
+      <label class="field" for="defaultGgufDir">
+        <span data-i18n="settings.defaultGgufDir">Default model directory (GGUF)</span>
+        <input id="defaultGgufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="settings.defaultGgufDirPlaceholder">
+        <div class="field-inline">
+          <button id="defaultGgufDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+        </div>
+        <span class="field-hint" data-i18n="settings.defaultGgufDirHint">Used when a profile leaves the model directory empty.</span>
+      </label>
+
+      <label class="field" for="defaultPort">
+        <span data-i18n="settings.defaultPort">Default port (0 = auto)</span>
+        <input id="defaultPort" type="number" min="0" max="65535" step="1" inputmode="numeric">
+        <span class="field-hint" data-i18n="settings.defaultPortHint">Used when a profile leaves the port at 0.</span>
+      </label>
+
       <div class="settings-actions">
         <button id="saveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
       </div>
       <p id="message" class="message" role="status"></p>
     </section>
 
-    <!-- 环境配置入口：目录/Python/GPU/GGUF/Config/端口都归 profile，在面板里 -->
-    <section class="group-box env-box">
-      <div class="env-text">
-        <span class="env-title" data-i18n="settings.environment">Environment profiles</span>
-        <span class="env-hint" data-i18n="settings.envHint"></span>
+    <!-- 环境配置：直接在本页管理 profile（列表 + 就地编辑），不再跳面板。
+         Strata 目录 / Python / GPU / GGUF / 端口都属于 profile。 -->
+    <section class="group-box">
+      <h2 class="group-title" data-i18n="profile.manage">Environment profiles</h2>
+      <p class="field-hint" data-i18n="profile.manageHint">Each profile is one way to run Strata (local source or a container).</p>
+
+      <div class="settings-actions settings-actions-start">
+        <button id="profileAddBtn" class="btn" type="button" data-i18n="profile.add">+ New profile</button>
       </div>
-      <button id="openPanelBtn" class="btn" type="button" data-i18n="settings.openPanel">Manage in the panel</button>
+      <div id="profileList" class="profile-list"></div>
+
+      <div id="profileConfirm" class="profile-confirm" hidden>
+        <div class="profile-confirm-text">
+          <span id="profileConfirmTitle"></span>
+          <span id="profileConfirmSub" class="field-hint" data-i18n="profile.deleteConfirmSub">This cannot be undone; at least one profile must remain.</span>
+        </div>
+        <div class="profile-confirm-actions">
+          <button id="profileConfirmOk" class="btn small danger" type="button" data-i18n="profile.delete">Delete</button>
+          <button id="profileConfirmCancel" class="btn small" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+      </div>
+
+      <div id="profileDrawerScrim" class="profile-drawer-scrim" hidden></div>
+      <div id="profileEditor" class="profile-editor" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle" hidden>
+        <div class="profile-editor-bar">
+          <div id="profileEditorTitle" class="profile-editor-head"></div>
+          <button id="profileEditorCloseBtn" class="btn small profile-editor-close" type="button" aria-label="Close" data-i18n-aria-label="profile.close">×</button>
+        </div>
+        <p id="profileReadOnlyHint" class="field-hint profile-readonly-hint" data-i18n="profile.readOnlyHint" hidden></p>
+        <p id="profileRuntimeNote" class="field-hint profile-runtime-note" data-i18n="profile.runtimeNote" hidden></p>
+
+        <label class="field" for="pf-name">
+          <span data-i18n="profile.name">Name</span>
+          <input id="pf-name" type="text" autocomplete="off" spellcheck="false" placeholder="default" data-i18n-placeholder="profile.namePlaceholder">
+        </label>
+
+        <label class="field" for="pf-type">
+          <span data-i18n="profile.type">Type</span>
+          <select id="pf-type">
+            <option value="local" data-i18n="profile.typeLocal">Local (source)</option>
+            <option value="container" data-i18n="profile.typeContainer">Container (Docker)</option>
+          </select>
+        </label>
+
+        <div id="pfLocalFields" class="profile-type-fields">
+          <label class="field" for="pf-strataDir">
+            <span data-i18n="field.strataDir">Strata directory</span>
+            <input id="pf-strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
+            <div class="field-inline">
+              <button id="pf-strataDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+            </div>
+          </label>
+          <label class="field" for="pf-pythonPath">
+            <span data-i18n="field.pythonPath">Python interpreter</span>
+            <input id="pf-pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="python3" data-i18n-placeholder="field.pythonPathPlaceholder">
+            <div class="field-inline">
+              <button id="pf-pythonPath-pick" class="btn small" type="button" data-i18n="field.pickPython">Choose Python…</button>
+            </div>
+          </label>
+          <label class="field" for="pf-gpu">
+            <span data-i18n="field.gpu">GPU selector (optional)</span>
+            <input id="pf-gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
+          </label>
+        </div>
+
+        <div id="pfContainerFields" class="profile-type-fields" hidden>
+          <label class="field" for="pf-image">
+            <span data-i18n="field.image">Image</span>
+            <input id="pf-image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest" list="pf-image-options">
+            <datalist id="pf-image-options"></datalist>
+            <span id="pf-image-status" class="field-hint"></span>
+            <div id="pf-image-pull-row" class="field-inline">
+              <button id="pf-image-pull" class="btn small" type="button">Pull</button>
+              <span class="field-hint" data-i18n="field.imagePullHint">Downloads a large file.</span>
+            </div>
+          </label>
+          <label class="field" for="pf-containerName">
+            <span data-i18n="field.containerName">Container name</span>
+            <input id="pf-containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+          </label>
+          <label class="field" for="pf-dataDir">
+            <span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
+            <input id="pf-dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
+            <div class="field-inline">
+              <button id="pf-dataDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+            </div>
+          </label>
+        </div>
+
+        <label class="field" for="pf-ggufDir">
+          <span data-i18n="field.ggufDir">GGUF model directory</span>
+          <input id="pf-ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+          <div class="field-inline">
+            <button id="pf-ggufDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+          </div>
+          <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+        </label>
+
+        <label class="field" for="pf-port">
+          <span data-i18n="field.port">Port (0 = auto)</span>
+          <input id="pf-port" type="number" min="0" max="65535" step="1">
+        </label>
+
+        <div id="profileEditorActions" class="settings-actions">
+          <button id="profileSaveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>
+          <button id="profileCancelBtn" class="btn" type="button" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <p id="profileEditorMessage" class="message" role="status"></p>
+      </div>
+
+      <p id="profileMessage" class="message" role="status"></p>
     </section>
   </main>
 
