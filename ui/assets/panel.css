@@ -930,37 +930,33 @@ body {
 
 /* Header environment picker (shown while stopped). A compact chip, like the
  * badge it replaces, so the title row keeps its shape. */
+/* Header environment picker (shown while stopped). Deliberately the same shape
+ * as #langSelect; width is content-driven (no cap) so the current environment
+ * is not clipped, and min-width:0 lets the header shrink it when it is tight. */
 .env-select {
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.5;
-  height: 20px;
-  color: var(--text-light, #6b6f73);
+  height: 28px;
+  padding: 0 4px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  border-radius: 6px;
   background: var(--bg-card, #fcfaf5);
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
-  border-radius: 999px;
-  padding: 0 4px 0 7px;
+  color: var(--text, #3b3d3f);
+  font: inherit;
+  font-size: 12px;
   cursor: pointer;
-  max-width: 14em;
-  min-width: 0;
   flex: 0 1 auto;
+  min-width: 0;
 }
-.env-select:hover,
 .env-select:focus {
-  border-color: var(--accent, #10b981);
+  outline: 2px solid var(--accent, #10b981);
+  outline-offset: 1px;
 }
 .env-select:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-/* Header "edit current environment" action, sized to the chip row. */
-.profile-edit-btn {
-  width: 22px;
-  height: 22px;
-  font-size: 13px;
-  flex: none;
-}
+/* Header "edit current environment" action: a normal header icon button, so it
+ * lines up with the other 28px controls instead of a bespoke chip size. */
 
 /* Right-side drawer for the running profile's read-only details. */
 .profile-drawer {

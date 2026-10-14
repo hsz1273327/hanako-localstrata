@@ -470,7 +470,7 @@ test(
       assert.equal($("envSelect").hidden, false, "the picker is shown while stopped");
       assert.equal($("envSelect").value, "p1", "the picker reflects the current environment");
       assert.equal($("envSelect").options.length, 3, "every environment is offered");
-      assert.equal($("envSelect").options[0].textContent, "default", "the picker names the environment only (no · type suffix)");
+      assert.equal($("envSelect").options[0].textContent, "default · Local (source)", "the picker names the environment (name + type)");
 
       // "Cannot start" is about the CURRENT environment, and the hint hangs on
       // the status card next to the start button, naming the missing field.

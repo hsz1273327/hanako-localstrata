@@ -1655,9 +1655,8 @@ function renderEnvOptions(profiles) {
   for (const p of list) {
     const opt = document.createElement("option");
     opt.value = p.id;
-    // The picker names the environment only; the " · type" suffix belongs to the
-    // running badge (with it, the stopped picker read exactly like the badge).
-    opt.textContent = p.name || p.id;
+    // Name + type, the same pair the running badge shows.
+    opt.textContent = `${p.name || p.id} · ${profileTypeLabel(p.type)}`;
     els.envSelect.append(opt);
   }
   els.envSelect.value = "";
