@@ -14,7 +14,11 @@ async function api(path, init = {}) {
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const res = await hana.api.fetch(path, { ...init, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `HTTP ${res.status}`);
+    err.validation = data?.validation;
+    throw err;
+  }
   return data;
 }
 
@@ -55,11 +59,14 @@ const els = {
   startOptionsHint: document.getElementById("startOptionsHint"),
   envSelect: document.getElementById("envSelect"),
   profileBadge: document.getElementById("profileBadge"),
+  profileEditBtn: document.getElementById("profileEditBtn"),
   profileDrawerScrim: document.getElementById("profileDrawerScrim"),
   profileDrawer: document.getElementById("profileDrawer"),
   profileDrawerTitle: document.getElementById("profileDrawerTitle"),
   profileDrawerClose: document.getElementById("profileDrawerClose"),
   profileDrawerBody: document.getElementById("profileDrawerBody"),
+  profileDrawerActions: document.getElementById("profileDrawerActions"),
+  profileDrawerSave: document.getElementById("profileDrawerSave"),
   profileReadOnlyHint: document.getElementById("profileReadOnlyHint"),
   versionBox: document.getElementById("versionBox"),
   configBox: document.getElementById("configBox"),
@@ -92,6 +99,11 @@ const state = {
   working: false,
   formFilled: false,
   configFileFilled: null,
+  // The profile open in the drawer for EDITING (null in the read-only view).
+  editingProfileId: null,
+  // An existing local profile's configFile, carried through an edit so a value
+  // missing from the candidates list is never silently dropped.
+  originalConfigFile: "",
 };
 
 // States where setup still needs input; the inline status form / config picker
@@ -433,6 +445,7 @@ function paintEnv(s) {
   const show = !!prof && s.state !== "unsupported";
   els.profileBadge.hidden = !show || !running;
   els.envSelect.hidden = !show || running;
+  els.profileEditBtn.hidden = !show || running;
   if (show && running) {
     els.profileBadge.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
     els.profileBadge.className = `profile-badge ${prof.type}`;
@@ -573,6 +586,7 @@ function paintUnsupported(s) {
   els.statusCard.hidden = true;
   els.profileBadge.hidden = true;
   els.envSelect.hidden = true;
+  els.profileEditBtn.hidden = true;
   for (const box of [els.versionBox, els.configBox, els.speedBox, els.resourceBox, els.logsBox, els.settingsBox]) {
     box.hidden = true;
   }
@@ -1262,6 +1276,9 @@ function ensurePluginForm() {
     port: root.querySelector("#ps-port"),
     message: root.querySelector("#psMessage"),
   };
+  // Switching the profile type toggles which fields apply (edit mode only; the
+  // select is disabled in the read-only view).
+  pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
   return pluginFormEls;
 }
 
@@ -1295,30 +1312,50 @@ function setProfileEditorReadOnly(readOnly) {
   if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
 }
 
+// Open the shared profile drawer for the CURRENT environment. `readOnly` is the
+// running-view variant; the editable variant is only reachable while stopped.
+async function openDrawer(readOnly) {
+  if (state.working || !ensurePluginForm() || !els.profileDrawer.hidden) return;
+  let profile = null;
+  try {
+    const data = await api("profiles");
+    const list = Array.isArray(data?.profiles) ? data.profiles : [];
+    const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
+    profile = list.find((p) => p.id === activeId) || list[0] || state.status?.profile || null;
+  } catch (e) {
+    showError(String(e?.message || e));
+    return;
+  }
+  if (!profile) return;
+  state.editingProfileId = readOnly ? null : profile.id;
+  state.originalConfigFile = profile.type === "local" ? profile.configFile || "" : "";
+  fillProfileEditorFields(profile);
+  setProfileEditorReadOnly(readOnly);
+  setPsMessage("");
+  const title = readOnly ? t("profile.viewTitle") : t("profile.editTitle");
+  pluginFormEls.editorTitle.textContent = title;
+  els.profileDrawerTitle.textContent = title;
+  els.profileDrawerBody.replaceChildren(pluginFormEls.editor);
+  applyI18n(pluginFormEls.editor);
+  pluginFormEls.editor.hidden = false;
+  els.profileReadOnlyHint.hidden = !readOnly;
+  els.profileDrawerActions.hidden = readOnly;
+  els.profileDrawer.hidden = false;
+  els.profileDrawerScrim.hidden = false;
+}
+
+// The header badge (running only) opens the read-only view; the header pencil
+// (stopped only) opens the editable one.
 function openProfileDetail() {
-  if (state.working) return;
   if (!RUNNING_STATES.has(state.status?.state)) return;
-  if (!ensurePluginForm()) return;
-  api("profiles")
-    .then((data) => {
-      if (state.working) return;
-      const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
-      const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
-      const profile = profiles.find((p) => p.id === activeId) || profiles[0] || state.status?.profile || null;
-      if (!profile) return;
-      fillProfileEditorFields(profile);
-      pluginFormEls.editorTitle.textContent = t("profile.viewTitle");
-      setProfileEditorReadOnly(true);
-      setPsMessage("");
-      els.profileDrawerTitle.textContent = t("profile.viewTitle");
-      els.profileDrawerBody.replaceChildren(pluginFormEls.editor);
-      applyI18n(pluginFormEls.editor);
-      pluginFormEls.editor.hidden = false;
-      els.profileReadOnlyHint.hidden = false;
-      els.profileDrawer.hidden = false;
-      els.profileDrawerScrim.hidden = false;
-    })
-    .catch((e) => showError(String(e?.message || e)));
+  openDrawer(true);
+}
+
+// Edit the CURRENT environment only — list / create / delete / switch stay in
+// the settings page.
+function openProfileEditor() {
+  if (RUNNING_STATES.has(state.status?.state)) return;
+  openDrawer(false);
 }
 
 function closeProfileDetail() {
@@ -1328,9 +1365,69 @@ function closeProfileDetail() {
   setProfileEditorReadOnly(false);
   pluginFormEls.editor.hidden = true;
   setPsMessage("");
+  state.editingProfileId = null;
+  state.originalConfigFile = "";
   els.profileReadOnlyHint.hidden = true;
+  els.profileDrawerActions.hidden = true;
   els.profileDrawer.hidden = true;
   els.profileDrawerScrim.hidden = true;
+}
+
+// The drawer's fields, shaped like the save route expects (mirrors the
+// settings page's profile form).
+function collectProfileEdits() {
+  const type = pluginFormEls.type.value === "container" ? "container" : "local";
+  const body = {
+    id: state.editingProfileId,
+    name: pluginFormEls.name.value.trim(),
+    type,
+    ggufDir: pluginFormEls.ggufDir.value.trim(),
+    port: Number(pluginFormEls.port.value) || 0,
+  };
+  if (type === "container") {
+    body.image = pluginFormEls.image.value.trim();
+    body.containerName = pluginFormEls.containerName.value.trim();
+    body.dataDir = pluginFormEls.dataDir.value.trim();
+  } else {
+    body.strataDir = pluginFormEls.strataDir.value.trim();
+    body.pythonPath = pluginFormEls.pythonPath.value.trim();
+    body.gpu = pluginFormEls.gpu.value.trim();
+    // Never drop a stored configFile just because it is not in the options.
+    body.configFile = pluginFormEls.configFile.value || state.originalConfigFile || "";
+  }
+  return body;
+}
+
+// Save-time validation is the backend's (lib/profiles.js validateProfile); its
+// `validation` codes map to the same localized copy the settings page uses.
+const SAVE_ERROR_KEYS = {
+  nameRequired: "profile.errNameRequired",
+  nameTaken: "profile.errNameTaken",
+  imageRequired: "profile.errImageRequired",
+  containerNameRequired: "profile.errContainerNameRequired",
+  portInvalid: "profile.errPortInvalid",
+};
+
+async function saveProfileEdit() {
+  if (state.working || !state.editingProfileId || !pluginFormEls) return;
+  state.working = true;
+  els.profileDrawerSave.disabled = true;
+  setPsMessage(t("profile.saving"), "info");
+  let ok = false;
+  try {
+    await api("profiles/save", { method: "POST", body: JSON.stringify(collectProfileEdits()) });
+    ok = true;
+  } catch (e) {
+    const code = (e?.validation || [])[0];
+    setPsMessage(code && SAVE_ERROR_KEYS[code] ? t(SAVE_ERROR_KEYS[code]) : String(e?.message || e), "error");
+  } finally {
+    state.working = false;
+    if (els.profileDrawerSave) els.profileDrawerSave.disabled = false;
+  }
+  if (ok) {
+    closeProfileDetail();
+    await refresh();
+  }
 }
 
 function setPsMessage(text, kind = "info") {
@@ -1460,6 +1557,8 @@ function schedule() {
 
 els.refreshBtn.addEventListener("click", () => refresh());
 els.profileBadge.addEventListener("click", openProfileDetail);
+els.profileEditBtn.addEventListener("click", openProfileEditor);
+els.profileDrawerSave.addEventListener("click", saveProfileEdit);
 els.envSelect.addEventListener("change", () => selectEnv(els.envSelect.value));
 els.profileDrawerClose.addEventListener("click", closeProfileDetail);
 els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
@@ -1562,7 +1661,9 @@ function relocalize() {
   envOptionsKey = "";
   if (state.status) paint(state.status);
   if (!els.profileDrawer.hidden && pluginFormEls) {
-    pluginFormEls.editorTitle.textContent = t("profile.viewTitle");
+    const title = state.editingProfileId ? t("profile.editTitle") : t("profile.viewTitle");
+    pluginFormEls.editorTitle.textContent = title;
+    els.profileDrawerTitle.textContent = title;
   }
   renderDiff();
 }

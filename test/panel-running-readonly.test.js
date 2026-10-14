@@ -136,7 +136,7 @@ test("the new i18n copy exists and is non-empty in all six locales", async () =>
 test("the profile-management gear and its manager block are gone from the panel", () => {
   assert.doesNotMatch(panelHtml, /id="configBtn"/);
   assert.doesNotMatch(panelHtml, /id="psProfileList"|id="psAddBtn"|id="psSaveBtn"|id="psCancelBtn"|class="section-title"/);
-  for (const gone of ["function paintSetup\\(", "renderProfileList", "profileListKey", "openProfileEditor", "closeProfileEditor", "saveProfile", "removeProfile", "confirmDeleteProfile", "showConfig"]) {
+  for (const gone of ["function paintSetup\\(", "renderProfileList", "profileListKey", "openProfileEditor\\(profile\\)", "closeProfileEditor\\(", "saveProfile\\(", "removeProfile\\(", "confirmDeleteProfile", "showConfig"]) {
     assert.doesNotMatch(panelJs, new RegExp(gone), `panel.js must no longer reference ${gone}`);
   }
   // No "open the settings surface" hack was hard-coded: the host exposes no such API.
@@ -180,6 +180,22 @@ test("the header picker switches the current environment and refreshes every car
   assert.match(panelJs, /state\.working = false;\s*await refresh\(\);/);
 });
 
+test("a header action edits the CURRENT environment through the shared drawer", () => {
+  assert.match(panelHtml, /id="profileEditBtn"[^>]*data-i18n-aria-label="profile\.editTitle"/);
+  assert.match(panelHtml, /id="profileDrawerSave"/);
+  assert.match(panelJs, /function openProfileEditor\(\)/);
+  assert.match(panelJs, /els\.profileEditBtn\.hidden = !show \|\| running;/);
+  assert.match(panelJs, /els\.profileEditBtn\.addEventListener\("click", openProfileEditor\)/);
+  // Reuses the ONE drawer/editor (no second editor, no management UI).
+  assert.match(panelJs, /async function openDrawer\(readOnly\)/);
+  assert.match(panelJs, /els\.profileDrawerActions\.hidden = readOnly;/);
+  assert.doesNotMatch(panelJs, /profiles\/delete/);
+  assert.doesNotMatch(panelJs, /openProfileEditor\(null\)/);
+  // Saving goes through the existing route and then refreshes.
+  assert.match(panelJs, /await api\("profiles\/save", \{ method: "POST", body: JSON\.stringify\(collectProfileEdits\(\)\) \}\)/);
+  assert.match(panelJs, /if \(ok\) \{\s*closeProfileDetail\(\);\s*await refresh\(\);/);
+});
+
 // ── Layer 2: behavioural layer (requires jsdom) ───────────────────────────
 //
 // Skipped unless jsdom resolves. This repo is dependency-free by design; the
@@ -210,7 +226,13 @@ export const hana = {
         const id = init && init.body ? JSON.parse(init.body).id : null;
         (globalThis.__API__.selectCalls = globalThis.__API__.selectCalls || []).push(id);
         if (s.select && s.select.status) globalThis.__API__.status = s.select.status;
+        if (s.select && s.select.profiles) globalThis.__API__.profiles = s.select.profiles;
         return res({ saved: true, activeProfileId: id });
+      }
+      if (p === "profiles/save") {
+        const body = init && init.body ? JSON.parse(init.body) : null;
+        (globalThis.__API__.saveCalls = globalThis.__API__.saveCalls || []).push(body);
+        return res(s.save || { saved: true });
       }
       return res({});
     },
@@ -348,6 +370,7 @@ test(
       assert.equal($("resourceBox").hidden, false, "resources shown while running");
       assert.equal($("logsBox").hidden, false, "logs shown while running");
       assert.equal($("modelRow").hidden, false, "model row shown while running");
+      assert.equal($("profileEditBtn").hidden, true, "no edit entry while running");
       assert.equal($("uptimeRow").hidden, false, "uptime row shown while running");
 
       // Badge -> read-only drawer.
@@ -358,6 +381,7 @@ test(
       const fields = [...$("psEditor").querySelectorAll("input, select")];
       assert.ok(fields.length > 0 && fields.every((f) => f.disabled), "every editor field disabled in the drawer");
       assert.equal($("psEditor").querySelector(".edit-actions"), null, "no save/cancel row exists in the read-only editor");
+      assert.equal($("profileDrawerActions").hidden, true, "the read-only view has no save action");
 
       // Three dismissal paths.
       click($("profileDrawerClose"));
@@ -408,7 +432,13 @@ test(
       assert.match($("startOptionsHint").textContent, /Strata directory/, "the hint names the missing field");
 
       // Switching the environment persists the choice AND refreshes every card.
-      globalThis.__API__.select = { status: switchedStatus() };
+      globalThis.__API__.select = {
+        status: switchedStatus(),
+        profiles: {
+          profiles: [{ id: "p3", name: "dockertest", type: "container", image: "strata:latest", containerName: "strata", dataDir: "/data/strata-docker-config", ggufDir: "", port: 0, configFile: "" }],
+          activeProfileId: "p3",
+        },
+      };
       const sel = $("envSelect");
       sel.value = "p3";
       sel.dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -418,6 +448,23 @@ test(
       assert.match($("configRows").textContent || "", /dockertest/, "the service-config card followed the new environment");
       assert.equal($("actionBtn").disabled, false, "a ready environment enables start");
       assert.equal($("startOptionsHint").hidden, true, "no 'cannot start' hint for a ready environment");
+
+      // The header pencil opens the SAME drawer, editable, for the current
+      // environment; saving goes through the existing route and refreshes.
+      assert.equal($("profileEditBtn").hidden, false, "the edit entry is offered while stopped");
+      click($("profileEditBtn"));
+      await waitFor(() => $("profileDrawer").hidden === false);
+      assert.equal($("profileDrawerActions").hidden, false, "the editable view shows a save action");
+      assert.equal($("profileDrawerTitle").textContent, "Edit profile", "the editable view is titled as editing");
+      assert.ok(
+        [...$("psEditor").querySelectorAll("input, select")].every((f) => !f.disabled),
+        "the fields are editable",
+      );
+      click($("profileDrawerSave"));
+      await waitFor(() => $("profileDrawer").hidden === true);
+      assert.equal(globalThis.__API__.saveCalls.length, 1, "save went through POST /profiles/save");
+      assert.equal(globalThis.__API__.saveCalls[0].id, "p3", "the CURRENT environment was edited");
+      assert.equal(globalThis.__API__.saveCalls[0].type, "container", "the edited fields were sent");
 
       // The gear + the in-panel profile manager are gone; nothing shows while stopped.
       assert.equal($("configBtn"), null, "gear button removed from the panel");
