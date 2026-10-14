@@ -904,20 +904,23 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
-/* Header badge: current profile name + type */
+/* Header badge: the environment control in its READ-ONLY state. The same chip
+ * as the picker below — same size / font / padding / place — but quiet: no
+ * arrow, no fill, muted text, so nothing invites a click. */
 .profile-badge {
   appearance: none;
   font-family: inherit;
-  font-size: 11px;
-  line-height: 1.5;
-  background: transparent;
-  cursor: pointer;
-  padding: 1px 7px;
-  border-radius: 999px;
+  height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-light, #6b6f73);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
   white-space: nowrap;
-  max-width: 14em;
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
@@ -930,20 +933,31 @@ body {
 
 /* Header environment picker (shown while stopped). A compact chip, like the
  * badge it replaces, so the title row keeps its shape. */
-/* Header environment picker (shown while stopped). Deliberately the same shape
- * as #langSelect; width is content-driven (no cap) so the current environment
- * is not clipped, and min-width:0 lets the header shrink it when it is tight. */
+/* Header environment control, PICKER state (shown while stopped). The same
+ * chip metrics as .profile-badge, but it reads as a control: a filled surface,
+ * stronger text, and a monochrome ▾ in the text colour. Width is content-driven
+ * (no cap) and min-width:0 lets the header shrink it when it is tight. */
+.env-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text, #3b3d3f);
+  flex: 0 1 auto;
+  min-width: 0;
+}
 .env-select {
+  appearance: none;
   height: 28px;
-  padding: 0 4px;
-  border: 1px solid var(--border, rgba(83, 125, 150, 0.22));
+  padding: 0 20px 0 8px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
   border-radius: 6px;
   background: var(--bg-card, #fcfaf5);
-  color: var(--text, #3b3d3f);
+  color: inherit;
   font: inherit;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  flex: 0 1 auto;
+  width: 100%;
   min-width: 0;
 }
 .env-select:focus {
@@ -953,6 +967,16 @@ body {
 .env-select:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* The "you can pick" cue: a single-colour glyph in the control's own text
+ * colour (currentColor), never a coloured or bespoke icon. */
+.env-select-arrow {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+  font-size: 9px;
+  line-height: 1;
+  color: currentColor;
 }
 
 /* Header "edit current environment" action: a normal header icon button, so it

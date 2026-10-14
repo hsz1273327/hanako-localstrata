@@ -70,12 +70,12 @@ test("a container version box shows the image fields, never build/source info", 
 test("the header control mirrors the running state: badge while running, picker while stopped", () => {
   // The read-only badge is shown only in a running state; the picker only while stopped.
   assert.match(panelJs, /els\.profileBadge\.hidden = !show \|\| !running;/);
-  assert.match(panelJs, /els\.envSelect\.hidden = !show \|\| running;/);
+  assert.match(panelJs, /els\.envSelectWrap\.hidden = !show \|\| running;/);
   assert.match(panelJs, /els\.profileBadge\.title = t\("profile\.viewDetails"\);/);
   // The detail drawer stays running-only.
   assert.match(panelJs, /if \(!RUNNING_STATES\.has\(state\.status\?\.state\)\) return;/);
   // Unsupported (macOS) hides both header controls explicitly.
-  assert.match(panelJs, /els\.profileBadge\.hidden = true;\s*els\.envSelect\.hidden = true;/);
+  assert.match(panelJs, /els\.profileBadge\.hidden = true;\s*els\.envSelectWrap\.hidden = true;/);
 });
 
 test("the drawer never auto-closes on a repaint — only the user (or a successful save)", () => {
@@ -137,10 +137,11 @@ test("header layout guards keep the badge from crowding or clipping the right-si
   const badgeRule = panelCss.match(/\.profile-badge \{[^}]*\}/);
   assert.ok(badgeRule, ".profile-badge rule not found");
   assert.match(badgeRule[0], /min-width: 0;/);
-  assert.match(badgeRule[0], /max-width: 14em;/);
   assert.match(badgeRule[0], /overflow: hidden;/);
   assert.match(badgeRule[0], /text-overflow: ellipsis;/);
   assert.match(badgeRule[0], /white-space: nowrap;/);
+  // The picker wraps the select so its ▾ can be a theme-coloured glyph.
+  assert.match(panelCss, /\.env-select-wrap \{[^}]*min-width: 0;/);
 });
 
 test("the new i18n copy exists and is non-empty in all six locales", async () => {
@@ -194,7 +195,7 @@ test("the header picker switches the current environment and refreshes every car
   assert.match(panelJs, /function paintEnv\(s\)/);
   // Running stays read-only: the picker hides, the badge shows.
   assert.match(panelJs, /els\.profileBadge\.hidden = !show \|\| !running;/);
-  assert.match(panelJs, /els\.envSelect\.hidden = !show \|\| running;/);
+  assert.match(panelJs, /els\.envSelectWrap\.hidden = !show \|\| running;/);
   assert.match(panelJs, /els\.envSelect\.addEventListener\("change", \(\) => selectEnv\(els\.envSelect\.value\)\)/);
   // Selecting persists the choice via the still-present route, then refreshes.
   assert.match(panelJs, /await api\("profiles\/select", \{ method: "POST", body: JSON\.stringify\(\{ id \}\) \}\)/);
@@ -410,7 +411,7 @@ test(
       assert.equal($("logsBox").hidden, false, "logs shown while running");
       assert.equal($("modelRow").hidden, false, "model row shown while running");
       assert.equal($("profileEditBtn").hidden, true, "no edit entry while running");
-      assert.equal($("envSelect").hidden, true, "the picker is hidden while running (read-only badge instead)");
+      assert.equal($("envSelectWrap").hidden, true, "the picker is hidden while running (read-only badge instead)");
       assert.equal($("profileBadge").hidden, false, "the badge is shown while running");
       assert.equal($("uptimeRow").hidden, false, "uptime row shown while running");
 
@@ -467,7 +468,7 @@ test(
       // While stopped the header shows the PICKER, not the badge, and the
       // picker reflects the current environment.
       assert.equal($("profileBadge").hidden, true, "the badge is hidden while stopped");
-      assert.equal($("envSelect").hidden, false, "the picker is shown while stopped");
+      assert.equal($("envSelectWrap").hidden, false, "the picker is shown while stopped");
       assert.equal($("envSelect").value, "p1", "the picker reflects the current environment");
       assert.equal($("envSelect").options.length, 3, "every environment is offered");
       assert.equal($("envSelect").options[0].textContent, "default · Local (source)", "the picker names the environment (name + type)");

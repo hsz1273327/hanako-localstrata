@@ -58,6 +58,7 @@ const els = {
   accessRows: document.getElementById("accessRows"),
   statusConfigBox: document.getElementById("statusConfigBox"),
   startOptionsHint: document.getElementById("startOptionsHint"),
+  envSelectWrap: document.getElementById("envSelectWrap"),
   envSelect: document.getElementById("envSelect"),
   profileBadge: document.getElementById("profileBadge"),
   profileEditBtn: document.getElementById("profileEditBtn"),
@@ -449,7 +450,7 @@ function paintEnv(s) {
   const running = RUNNING_STATES.has(s.state);
   const show = !!prof && s.state !== "unsupported";
   els.profileBadge.hidden = !show || !running;
-  els.envSelect.hidden = !show || running;
+  els.envSelectWrap.hidden = !show || running;
   els.profileEditBtn.hidden = !show || running;
   if (show && running) {
     els.profileBadge.textContent = `${prof.name} · ${profileTypeLabel(prof.type)}`;
@@ -592,7 +593,7 @@ function paintUnsupported(s) {
 
   els.statusCard.hidden = true;
   els.profileBadge.hidden = true;
-  els.envSelect.hidden = true;
+  els.envSelectWrap.hidden = true;
   els.profileEditBtn.hidden = true;
   for (const box of [els.versionBox, els.configBox, els.speedBox, els.resourceBox, els.logsBox, els.settingsBox]) {
     box.hidden = true;

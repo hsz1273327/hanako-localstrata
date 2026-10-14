@@ -21,7 +21,10 @@
         </span>
         <span class="title">Strata</span>
         <button type="button" id="profileBadge" class="profile-badge" hidden title="View profile details" aria-label="View profile details"></button>
-        <select id="envSelect" class="env-select" hidden aria-label="Select environment" data-i18n-aria-label="profile.selectEnv" title="Select environment" data-i18n-title="profile.selectEnv"></select>
+        <span id="envSelectWrap" class="env-select-wrap" hidden>
+          <select id="envSelect" class="env-select" aria-label="Select environment" data-i18n-aria-label="profile.selectEnv" title="Select environment" data-i18n-title="profile.selectEnv"></select>
+          <span class="env-select-arrow" aria-hidden="true">&#x25BE;</span>
+        </span>
         <button id="profileEditBtn" class="icon-btn" type="button" hidden title="Edit profile" data-i18n-title="profile.editTitle" aria-label="Edit profile" data-i18n-aria-label="profile.editTitle">&#x270E;</button>
       </div>
       <div class="header-actions">
