@@ -1071,6 +1071,20 @@ body {
   gap: 10px;
 }
 
+/* A field and an inline action on one row (the tag + its re-pull button). */
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn.small {
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  flex: none;
+}
+
 .btn.cancel {
   background: transparent;
   color: var(--text-light, #6b6f73);

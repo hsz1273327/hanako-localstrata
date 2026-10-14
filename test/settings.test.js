@@ -229,22 +229,19 @@ test("the profile row keeps its own inset without the dot", () => {
   assert.doesNotMatch(css, /profile-row-main[^{]*:first-child/);
 });
 
-// The image pull entry must not sit next to "available locally".
-// The pull entry is always offered once an image name is typed; only its
-// wording follows the local state, and it never contradicts the status line.
-test("the image pull entry wording follows the local state", () => {
+// The settings pull entry acquires a MISSING image (first pull). Refreshing an
+// image that already exists locally is the panel's "pull again", so here the
+// entry hides once the image is local.
+test("the settings pull entry acquires a missing image", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
   assert.match(html, /id="pf-image-pull-row"/);
 
   const src = fs.readFileSync(path.join(ROOT, "ui/assets/settings.js"), "utf8");
   assert.match(src, /function\s+renderImageAction\s*\(/);
-  // Shown whenever a name is present — never hidden just because it is local.
-  assert.match(src, /if\s*\(row\)\s*row\.hidden\s*=\s*!value;/);
-  // Local → "pull again", otherwise → "pull"; same flow either way.
-  assert.match(
-    src,
-    /els\.profileImagePull\.textContent\s*=\s*t\(local\s*\?\s*["']field\.imageRepull["']\s*:\s*["']field\.imagePull["']\)/,
-  );
+  // Offered only while the image is NOT local.
+  assert.match(src, /if\s*\(row\)\s*row\.hidden\s*=\s*!value\s*\|\|\s*local;/);
+  // The wording is always "pull" here; "pull again" lives in the panel.
+  assert.match(src, /els\.profileImagePull\.textContent\s*=\s*t\(["']field\.imagePull["']\)/);
   assert.match(
     src,
     /const\s+local\s*=\s*imageListLoaded\s*&&\s*imageAvailable\s*&&\s*!imageError\s*&&\s*imageMatches\(value\)/,
@@ -263,7 +260,7 @@ test("the image pull entry wording follows the local state", () => {
 // promises: local source vs container.
 test("settings page profile editor exposes type-specific fields", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image", "pf-containerName", "pf-dataDir", "pf-ggufDir", "pf-port"]) {
+  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image-name", "pf-image-tag", "pf-containerName", "pf-dataDir", "pf-ggufDir", "pf-port"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
   // Delete still goes through an explicit confirmation step.
@@ -327,7 +324,7 @@ test("the editor marks empty start-required fields", () => {
   const css = fs.readFileSync(path.join(ROOT, "ui/assets/settings.css"), "utf8");
   assert.match(src, /const START_REQUIRED_FIELDS = \{/);
   assert.match(src, /local: \["profileStrataDir"\]/);
-  assert.match(src, /container: \["profileImage", "profileContainerName"\]/);
+  assert.match(src, /container: \["profileImageName", "profileContainerName"\]/);
   assert.match(src, /hint\.textContent = t\("field\.neededToStart"\)/);
   // Never shown in the read-only "view" variant (nothing can be filled there).
   assert.match(src, /function renderStartHints\(\) \{\s*clearStartHints\(\);\s*if \(editorReadOnly\) return;/);

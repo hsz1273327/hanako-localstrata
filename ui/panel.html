@@ -229,8 +229,15 @@
         </div>
 
         <div id="psContainerFields" class="profile-type-fields" hidden>
-          <label class="field"><span data-i18n="field.image">Image</span>
-            <input id="ps-image" data-key="image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest">
+          <label class="field"><span data-i18n="field.imageName">Image name</span>
+            <input id="ps-imageName" data-key="imageName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
+          </label>
+          <label class="field"><span data-i18n="field.imageTag">Tag</span>
+            <div class="field-inline">
+              <input id="ps-imageTag" data-key="imageTag" type="text" autocomplete="off" spellcheck="false" placeholder="latest">
+              <button id="ps-imagePull" class="btn small" type="button" hidden data-i18n="field.imageRepull">Pull again</button>
+            </div>
+            <span id="ps-imageStatus" class="field-hint"></span>
           </label>
           <label class="field"><span data-i18n="field.containerName">Container name</span>
             <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">

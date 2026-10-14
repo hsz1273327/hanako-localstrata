@@ -60,7 +60,7 @@ test("a container version box shows the image, never the source repo version", (
   const body = panelJs.slice(panelJs.indexOf("function paintVersion(s) {"), panelJs.indexOf("function paintConfig(s) {"));
   assert.ok(body.length > 0, "paintVersion body not found");
   // ...the docker branch renders the image and returns BEFORE any source-version row.
-  assert.match(body, /if \(iv\?\.tag\) rows\.push\(\[t\("label\.image"\), iv\.tag\]\)/);
+  assert.match(body, /if \(ref\) rows\.push\(\[t\("label\.image"\), ref\]\)/);
   assert.match(body, /if \(isDockerMethod\(s\)\) \{[\s\S]*?renderKvRows\(els\.versionRows, rows\);\s*return;/);
   assert.doesNotMatch(body, /container\.updateHint/);
 });
@@ -215,6 +215,20 @@ test("a header action edits the CURRENT environment through the shared drawer", 
   assert.match(panelJs, /if \(ok\) \{\s*closeProfileDetail\(\);\s*await refresh\(\);/);
 });
 
+test("the panel splits the image into name + tag, with re-pull beside the tag", () => {
+  assert.match(panelHtml, /<input id="ps-imageName"[^>]*data-key="imageName"/);
+  assert.match(panelHtml, /<input id="ps-imageTag"[^>]*data-key="imageTag"/);
+  assert.match(panelHtml, /<button id="ps-imagePull"[^>]*data-i18n="field\.imageRepull"/);
+  // The re-pull button sits inside the TAG field's own <label>.
+  const tagLabel = panelHtml.match(/<label class="field"><span data-i18n="field\.imageTag">[\s\S]*?<\/label>/);
+  assert.ok(tagLabel, "tag field label not found");
+  assert.match(tagLabel[0], /id="ps-imagePull"/);
+  // Wire-up: the button re-pulls name:tag through the shared backend flow.
+  assert.match(panelJs, /async function panelPullImage\(\)/);
+  assert.match(panelJs, /api\("images\/pull", \{ method: "POST", body: JSON\.stringify\(\{ image: ref \}\) \}\)/);
+  assert.match(panelJs, /pluginFormEls\.imagePull\.hidden = !local;/);
+});
+
 // ── Layer 2: behavioural layer (requires jsdom) ───────────────────────────
 //
 // Skipped unless jsdom resolves. This repo is dependency-free by design; the
@@ -244,6 +258,7 @@ export const hana = {
       if (p === "settings") return res(s.settings || { hasConfig: true, values: {}, configFile: "" });
       if (p === "profiles") return res(s.profiles || { profiles: [], activeProfileId: "" });
       if (p === "profiles/running") return res({ running: false });
+      if (p === "images") return res(s.images || { available: false, images: [] });
       if (p === "profiles/select") {
         const id = init && init.body ? JSON.parse(init.body).id : null;
         (globalThis.__API__.selectCalls = globalThis.__API__.selectCalls || []).push(id);
@@ -309,7 +324,7 @@ function stoppedStatus() {
 function switchedStatus() {
   return {
     ...stoppedStatus(),
-    profile: { id: "p3", name: "dockertest", type: "container", ready: true, missing: [] },
+    profile: { id: "p3", name: "dockertest", type: "container", ready: true, missing: [], imageName: "strata", imageTag: "latest" },
     activeProfileId: "p3",
     launch: { method: "docker", canStart: true, canChoose: false, allowed: ["docker"], localReady: false, reason: null },
   };
@@ -463,7 +478,7 @@ test(
       globalThis.__API__.select = {
         status: switchedStatus(),
         profiles: {
-          profiles: [{ id: "p3", name: "dockertest", type: "container", image: "strata:latest", containerName: "strata", dataDir: "/data/strata-docker-config", ggufDir: "", port: 0, configFile: "" }],
+          profiles: [{ id: "p3", name: "dockertest", type: "container", imageName: "strata", imageTag: "latest", containerName: "strata", dataDir: "/data/strata-docker-config", ggufDir: "", port: 0, configFile: "" }],
           activeProfileId: "p3",
         },
       };
@@ -477,13 +492,24 @@ test(
       assert.equal($("actionBtn").disabled, false, "a ready environment enables start");
       assert.equal($("startOptionsHint").hidden, true, "no 'cannot start' hint for a ready environment");
 
+      // The version box names the CURRENT image and never shows the source repo's
+      // version (a container is versioned by its image).
+      assert.match($("versionRows").textContent || "", /strata:latest/, "the version box names the current image");
+      assert.doesNotMatch($("versionRows").textContent || "", /Latest version/i, "no source-repo version row for a container");
+
       // The header pencil opens the SAME drawer, editable, for the current
       // environment; saving goes through the existing route and refreshes.
       assert.equal($("profileEditBtn").hidden, false, "the edit entry is offered while stopped");
+      globalThis.__API__.images = { available: true, images: [{ ref: "strata:latest", repository: "strata", tag: "latest" }] };
       click($("profileEditBtn"));
       await waitFor(() => $("profileDrawer").hidden === false);
       assert.equal($("profileDrawerActions").hidden, false, "the editable view shows a save action");
       assert.equal($("profileDrawerTitle").textContent, "Edit profile", "the editable view is titled as editing");
+      assert.equal($("ps-imageName").value, "strata", "the image NAME field is populated");
+      assert.equal($("ps-imageTag").value, "latest", "the image TAG field is populated");
+      // The image exists locally → the panel offers "pull again" beside the tag.
+      await waitFor(() => $("ps-imagePull").hidden === false);
+      assert.equal($("ps-imagePull").textContent, "Pull again", "the re-pull entry is offered for a local image");
       assert.ok(
         [...$("psEditor").querySelectorAll("input, select")].every((f) => !f.disabled),
         "the fields are editable",

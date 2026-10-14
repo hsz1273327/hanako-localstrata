@@ -64,7 +64,8 @@ const els = {
   profilePythonPath: document.getElementById("pf-pythonPath"),
   profilePythonPathPick: document.getElementById("pf-pythonPath-pick"),
   profileGpu: document.getElementById("pf-gpu"),
-  profileImage: document.getElementById("pf-image"),
+  profileImageName: document.getElementById("pf-image-name"),
+  profileImageTag: document.getElementById("pf-image-tag"),
   profileImageOptions: document.getElementById("pf-image-options"),
   profileImageStatus: document.getElementById("pf-image-status"),
   profileImagePullRow: document.getElementById("pf-image-pull-row"),
@@ -193,7 +194,7 @@ const FIELD_INPUTS = {
   strataDir: () => els.profileStrataDir,
   pythonPath: () => els.profilePythonPath,
   gpu: () => els.profileGpu,
-  image: () => els.profileImage,
+  image: () => els.profileImageName,
   containerName: () => els.profileContainerName,
   dataDir: () => els.profileDataDir,
   ggufDir: () => els.profileGgufDir,
@@ -219,7 +220,7 @@ function captureProfileValues(profile) {
     strataDir: profile?.strataDir || "",
     pythonPath: profile?.pythonPath || "",
     gpu: profile?.gpu || "",
-    image: profile?.image || "",
+    image: profile?.imageName || "",
     containerName: profile?.containerName || "",
     dataDir: profile?.dataDir || "",
     ggufDir: profile?.ggufDir || "",
@@ -382,14 +383,22 @@ function renderImageOptions() {
   els.profileImageOptions.replaceChildren();
   for (const img of imageList) {
     const opt = document.createElement("option");
-    opt.value = String(img?.ref || "");
+    opt.value = String(img?.repository || img?.ref || "");
     els.profileImageOptions.append(opt);
   }
 }
 
+// The "name:tag" reference composed from the two image fields.
+function profileImageInputRef() {
+  const name = els.profileImageName?.value.trim() || "";
+  const tag = els.profileImageTag?.value.trim() || "";
+  if (!name) return "";
+  return tag ? `${name}:${tag}` : name;
+}
+
 function renderImageStatus() {
   if (!els.profileImageStatus) return;
-  const value = els.profileImage.value.trim() || "";
+  const value = profileImageInputRef();
   const listKnown = imageListLoaded && imageAvailable && !imageError;
   if (imageListLoaded && !listKnown) {
     // Docker missing or `docker images` failing: surface the reason.
@@ -417,11 +426,12 @@ function renderImageStatus() {
 // Both wordings run the same pull flow and the same polling feedback.
 function renderImageAction() {
   const row = els.profileImagePullRow;
-  const value = els.profileImage.value.trim() || "";
-  if (row) row.hidden = !value;
-  if (!els.profileImagePull) return;
+  const value = profileImageInputRef();
   const local = imageListLoaded && imageAvailable && !imageError && imageMatches(value);
-  els.profileImagePull.textContent = t(local ? "field.imageRepull" : "field.imagePull");
+  // This page acquires a MISSING image; refreshing one that already exists is
+  // the panel's "pull again".
+  if (row) row.hidden = !value || local;
+  if (els.profileImagePull) els.profileImagePull.textContent = t("field.imagePull");
 }
 
 async function loadImages() {
@@ -443,7 +453,7 @@ async function loadImages() {
 function pullBusyText(state) {
   const tail = Array.isArray(state?.tail) && state.tail.length ? state.tail[state.tail.length - 1] : "";
   return tp("field.imagePullBusy", {
-    image: state?.image || els.profileImage?.value.trim() || "",
+    image: state?.image || profileImageInputRef(),
     tail,
   });
 }
@@ -475,7 +485,7 @@ async function pollImagePull() {
 
 async function pullImage() {
   if (editorReadOnly || imagePullBusy) return;
-  const image = els.profileImage?.value.trim() || "";
+  const image = profileImageInputRef();
   if (!image) return;
   imagePullBusy = true;
   if (els.profileImagePull) els.profileImagePull.disabled = true;
@@ -689,7 +699,7 @@ function setProfileEditorType(type) {
 // cannot start then).
 const START_REQUIRED_FIELDS = {
   local: ["profileStrataDir"],
-  container: ["profileImage", "profileContainerName"],
+  container: ["profileImageName", "profileContainerName"],
 };
 
 function clearStartHints() {
@@ -734,7 +744,8 @@ function editorFields() {
     els.profileStrataDir,
     els.profilePythonPath,
     els.profileGpu,
-    els.profileImage,
+    els.profileImageName,
+    els.profileImageTag,
     els.profileContainerName,
     els.profileDataDir,
     els.profileGgufDir,
@@ -784,7 +795,8 @@ function openProfileEditor(profile, readOnly = false) {
   els.profileStrataDir.value = profile?.strataDir || "";
   els.profilePythonPath.value = profile?.pythonPath || "";
   els.profileGpu.value = profile?.gpu || "";
-  els.profileImage.value = profile?.image || "";
+  els.profileImageName.value = profile?.imageName || "";
+  els.profileImageTag.value = profile?.imageTag || "";
   els.profileContainerName.value = profile?.containerName || "";
   els.profileDataDir.value = profile?.dataDir || "";
   els.profileGgufDir.value = profile?.ggufDir || "";
@@ -845,9 +857,10 @@ async function saveProfile() {
   const body = { name, type, port, ggufDir: els.profileGgufDir.value.trim() };
   if (editingProfileId) body.id = editingProfileId;
   if (type === "container") {
-    const image = els.profileImage.value.trim();
+    const imageName = els.profileImageName.value.trim();
+    const imageTag = els.profileImageTag.value.trim();
     const containerName = els.profileContainerName.value.trim();
-    if (!image) {
+    if (!imageName) {
       setProfileMessage(t("profile.errImageRequired"), "error");
       return;
     }
@@ -855,7 +868,8 @@ async function saveProfile() {
       setProfileMessage(t("profile.errContainerNameRequired"), "error");
       return;
     }
-    body.image = image;
+    body.imageName = imageName;
+    body.imageTag = imageTag;
     body.containerName = containerName;
     body.dataDir = els.profileDataDir.value.trim();
   } else {
@@ -981,7 +995,8 @@ els.profileType.addEventListener("change", () => {
   renderStartHints();
   if (els.profileType.value === "container") loadImages();
 });
-els.profileImage.addEventListener("input", () => renderImageStatus());
+els.profileImageName.addEventListener("input", () => renderImageStatus());
+els.profileImageTag.addEventListener("input", () => renderImageStatus());
 els.profileImagePull.addEventListener("click", pullImage);
 els.profileDataDirPick.addEventListener("click", () => pickDirectory(els.profileDataDir));
 els.profileGgufDirPick.addEventListener("click", () => pickDirectory(els.profileGgufDir));

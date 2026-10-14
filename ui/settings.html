@@ -121,15 +121,21 @@
         </div>
 
         <div id="pfContainerFields" class="profile-type-fields" hidden>
-          <label class="field" for="pf-image">
-            <span data-i18n="field.image">Image</span>
-            <input id="pf-image" type="text" autocomplete="off" spellcheck="false" placeholder="strata:latest" list="pf-image-options">
+          <label class="field" for="pf-image-name">
+            <span data-i18n="field.imageName">Image name</span>
+            <input id="pf-image-name" type="text" autocomplete="off" spellcheck="false" placeholder="strata" list="pf-image-options">
             <datalist id="pf-image-options"></datalist>
-            <span id="pf-image-status" class="field-hint"></span>
-            <div id="pf-image-pull-row" class="field-inline">
-              <button id="pf-image-pull" class="btn small" type="button">Pull</button>
-              <span class="field-hint" data-i18n="field.imagePullHint">Downloads a large file.</span>
+          </label>
+          <label class="field" for="pf-image-tag">
+            <span data-i18n="field.imageTag">Tag</span>
+            <div class="field-inline">
+              <input id="pf-image-tag" type="text" autocomplete="off" spellcheck="false" placeholder="latest">
+              <span id="pf-image-pull-row" class="field-inline">
+                <button id="pf-image-pull" class="btn small" type="button">Pull</button>
+              </span>
             </div>
+            <span id="pf-image-status" class="field-hint"></span>
+            <span class="field-hint" data-i18n="field.imagePullHint">Downloads a large file.</span>
           </label>
           <label class="field" for="pf-containerName">
             <span data-i18n="field.containerName">Container name</span>

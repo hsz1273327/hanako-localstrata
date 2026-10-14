@@ -17,6 +17,7 @@ async function api(path, init = {}) {
   if (!res.ok) {
     const err = new Error(data?.error || `HTTP ${res.status}`);
     err.validation = data?.validation;
+    err.data = data;
     throw err;
   }
   return data;
@@ -304,13 +305,24 @@ async function openExternal(url) {
   }
 }
 
+// The "name:tag" reference the docker CLI consumes, from the profile's two
+// image fields (the backend sends them on the container profile view).
+function imageRefOf(profile) {
+  const name = String(profile?.imageName || "").trim();
+  const tag = String(profile?.imageTag || "").trim();
+  if (!name) return "";
+  return tag ? `${name}:${tag}` : name;
+}
+
 function paintVersion(s) {
   const rows = [];
   if (isDockerMethod(s)) {
     // A container deployment is versioned by its IMAGE, not by the source repo:
     // the source "latest version" (and its update path) does not apply here.
+    // Show the same "name:tag" the service card shows, so the two agree.
+    const ref = imageRefOf(s.profile);
+    if (ref) rows.push([t("label.image"), ref]);
     const iv = s?.imageVersion;
-    if (iv?.tag) rows.push([t("label.image"), iv.tag]);
     if (iv?.created) {
       const d = new Date(iv.created);
       if (!Number.isNaN(d.getTime())) rows.push([t("label.imageBuilt"), d.toLocaleString()]);
@@ -463,7 +475,8 @@ function paintConfig(s) {
   }
   if (isDockerMethod(s) && s.docker) {
     rows.push([t("label.container"), s.docker.containerName || "—"]);
-    if (s.docker.image) rows.push([t("label.image"), s.docker.image]);
+    const ref = imageRefOf(s.profile) || s.docker.image;
+    if (ref) rows.push([t("label.image"), ref]);
     rows.push([t("label.containerState"), dockerStateLabel(s.docker.state)]);
   }
   if (Number.isFinite(cs?.context)) rows.push([t("label.context"), fmtK(cs.context)]);
@@ -1264,7 +1277,10 @@ function ensurePluginForm() {
     pythonPath: root.querySelector("#ps-pythonPath"),
     gpu: root.querySelector("#ps-gpu"),
     configFile: root.querySelector("#ps-configFile"),
-    image: root.querySelector("#ps-image"),
+    imageName: root.querySelector("#ps-imageName"),
+    imageTag: root.querySelector("#ps-imageTag"),
+    imagePull: root.querySelector("#ps-imagePull"),
+    imageStatus: root.querySelector("#ps-imageStatus"),
     containerName: root.querySelector("#ps-containerName"),
     dataDir: root.querySelector("#ps-dataDir"),
     ggufDir: root.querySelector("#ps-ggufDir"),
@@ -1274,6 +1290,9 @@ function ensurePluginForm() {
   // Switching the profile type toggles which fields apply (edit mode only; the
   // select is disabled in the read-only view).
   pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
+  pluginFormEls.imagePull.addEventListener("click", panelPullImage);
+  pluginFormEls.imageName.addEventListener("input", renderPanelImage);
+  pluginFormEls.imageTag.addEventListener("input", renderPanelImage);
   return pluginFormEls;
 }
 
@@ -1281,6 +1300,7 @@ function setEditorType(type) {
   editorType = type === "container" ? "container" : "local";
   pluginFormEls.localFields.hidden = editorType !== "local";
   pluginFormEls.containerFields.hidden = editorType !== "container";
+  renderPanelImage();
 }
 
 function fillProfileEditorFields(profile) {
@@ -1289,7 +1309,8 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.strataDir.value = profile?.strataDir || "";
   pluginFormEls.pythonPath.value = profile?.pythonPath || "";
   pluginFormEls.gpu.value = profile?.gpu || "";
-  pluginFormEls.image.value = profile?.image || "";
+  pluginFormEls.imageName.value = profile?.imageName || "";
+  pluginFormEls.imageTag.value = profile?.imageTag || "";
   pluginFormEls.containerName.value = profile?.containerName || "";
   pluginFormEls.dataDir.value = profile?.dataDir || "";
   pluginFormEls.ggufDir.value = profile?.ggufDir || "";
@@ -1305,6 +1326,8 @@ function setProfileEditorReadOnly(readOnly) {
     el.disabled = readOnly;
   }
   if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
+  // A write-side action is never offered in the read-only view.
+  if (readOnly && pluginFormEls.imagePull) pluginFormEls.imagePull.hidden = true;
 }
 
 // Open the shared profile drawer for the CURRENT environment. `readOnly` is the
@@ -1337,6 +1360,8 @@ async function openDrawer(readOnly) {
   els.profileDrawerActions.hidden = readOnly;
   els.profileDrawer.hidden = false;
   els.profileDrawerScrim.hidden = false;
+  // The panel offers "pull again" for an image that already exists locally.
+  if (!readOnly) loadPanelImages();
 }
 
 // The header badge (running only) opens the read-only view; the header pencil
@@ -1362,6 +1387,12 @@ function closeProfileDetail() {
   setPsMessage("");
   state.editingProfileId = null;
   state.originalConfigFile = "";
+  stopPanelPull();
+  panelImagesLoaded = false;
+  if (pluginFormEls?.imageStatus) {
+    pluginFormEls.imageStatus.textContent = "";
+    pluginFormEls.imageStatus.className = "field-hint";
+  }
   els.profileReadOnlyHint.hidden = true;
   els.profileDrawerActions.hidden = true;
   els.profileDrawer.hidden = true;
@@ -1380,7 +1411,8 @@ function collectProfileEdits() {
     port: Number(pluginFormEls.port.value) || 0,
   };
   if (type === "container") {
-    body.image = pluginFormEls.image.value.trim();
+    body.imageName = pluginFormEls.imageName.value.trim();
+    body.imageTag = pluginFormEls.imageTag.value.trim();
     body.containerName = pluginFormEls.containerName.value.trim();
     body.dataDir = pluginFormEls.dataDir.value.trim();
   } else {
@@ -1391,6 +1423,121 @@ function collectProfileEdits() {
     body.configFile = pluginFormEls.configFile.value || state.originalConfigFile || "";
   }
   return body;
+}
+
+// ── Image re-pull (panel) ──────────────────────────────────────────────
+//
+// The panel only offers "pull again", and only for an image that already exists
+// locally — acquiring a missing image is the settings page's job. Same backend
+// flow as the settings page: POST /images/pull + GET /images/pull polling.
+
+let panelImages = [];
+let panelImagesLoaded = false;
+let panelImagesAvailable = false;
+let panelPullTimer = null;
+
+function panelImageInputRef() {
+  return imageRefOf({
+    imageName: pluginFormEls.imageName.value,
+    imageTag: pluginFormEls.imageTag.value,
+  });
+}
+
+function panelImageExists(ref) {
+  const want = String(ref || "").toLowerCase();
+  if (!want) return false;
+  for (const img of panelImages) {
+    const repo = String(img?.repository || "").toLowerCase();
+    const tag = String(img?.tag || "").toLowerCase();
+    if (String(img?.ref || "").toLowerCase() === want) return true;
+    if (repo && tag && `${repo}:${tag}` === want) return true;
+    // An omitted/`latest` tag matches the bare repository name.
+    if (repo && (!tag || tag === "<none>" || tag === "latest") && repo === want) return true;
+  }
+  return false;
+}
+
+function renderPanelImage() {
+  if (!pluginFormEls?.imagePull) return;
+  const local = panelImagesLoaded && panelImagesAvailable && panelImageExists(panelImageInputRef());
+  pluginFormEls.imagePull.hidden = !local;
+}
+
+async function loadPanelImages() {
+  try {
+    const data = await api("images");
+    panelImagesAvailable = data?.available !== false;
+    panelImages = Array.isArray(data?.images) ? data.images : [];
+  } catch {
+    panelImagesAvailable = false;
+    panelImages = [];
+  }
+  panelImagesLoaded = true;
+  renderPanelImage();
+}
+
+function stopPanelPull() {
+  if (panelPullTimer) {
+    window.clearInterval(panelPullTimer);
+    panelPullTimer = null;
+  }
+}
+
+function setPanelPullStatus(text, kind = "") {
+  if (!pluginFormEls?.imageStatus) return;
+  pluginFormEls.imageStatus.textContent = text || "";
+  pluginFormEls.imageStatus.className = kind ? `field-hint ${kind}` : "field-hint";
+}
+
+async function pollPanelPull(ref) {
+  let st = null;
+  try {
+    st = await api("images/pull");
+  } catch {
+    stopPanelPull();
+    return;
+  }
+  if (st?.running) {
+    const tail = Array.isArray(st.tail) && st.tail.length ? st.tail[st.tail.length - 1] : "";
+    setPanelPullStatus(tp("field.imagePullBusy", { image: st.image || ref, tail }), "info");
+    return;
+  }
+  stopPanelPull();
+  if (st?.ok) {
+    panelImagesLoaded = false;
+    await loadPanelImages();
+    setPanelPullStatus(tp("field.imagePulled", { image: st.image || ref }), "ok");
+  } else {
+    setPanelPullStatus(tp("field.imagePullFailed", { error: st?.error || "" }), "error");
+  }
+}
+
+async function panelPullImage() {
+  const ref = panelImageInputRef();
+  if (!ref || state.working) return;
+  setPanelPullStatus(tp("field.imagePullBusy", { image: ref, tail: "" }), "info");
+  try {
+    const res = await api("images/pull", { method: "POST", body: JSON.stringify({ image: ref }) });
+    const st = res?.state || res;
+    if (st?.running) {
+      stopPanelPull();
+      panelPullTimer = window.setInterval(() => pollPanelPull(ref), 1500);
+    } else if (st?.ok) {
+      panelImagesLoaded = false;
+      await loadPanelImages();
+      setPanelPullStatus(tp("field.imagePulled", { image: ref }), "ok");
+    } else {
+      setPanelPullStatus(tp("field.imagePullFailed", { error: st?.error || "" }), "error");
+    }
+  } catch (e) {
+    // 409: another surface already started a pull — follow it.
+    if (e?.data?.already && e.data.state?.running) {
+      stopPanelPull();
+      panelPullTimer = window.setInterval(() => pollPanelPull(ref), 1500);
+      return;
+    }
+    setPanelPullStatus(tp("field.imagePullFailed", { error: String(e?.message || e) }), "error");
+  }
 }
 
 // Save-time validation is the backend's (lib/profiles.js validateProfile); its
@@ -1462,7 +1609,7 @@ function populateProfileConfigFiles(candidates, selected) {
 // field copy so the hint and the editor say the same thing.
 const START_FIELD_LABELS = {
   strataDir: "field.strataDir",
-  image: "field.image",
+  image: "field.imageName",
   containerName: "field.containerName",
 };
 
