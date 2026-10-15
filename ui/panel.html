@@ -142,6 +142,8 @@
     <details class="settings" id="settingsBox">
       <summary data-i18n="group.edit">Parameters</summary>
       <form id="editForm" class="edit-form">
+        <!-- 因果句：这里的笔迹与「运行 setup…」的笔迹是什么关系（实测口径）。 -->
+        <p class="field-hint muted" data-i18n="edit.causalityNote">Edits write into this config</p>
         <!-- 主题成组：一个组 = 一个主题，不再有「启动参数」这种零区分度的名字
              （所有项都是启动参数）。每个组内：只读报告在可改字段之前。 -->
         <fieldset class="group">
@@ -347,6 +349,27 @@
     <div id="confirmPopover" class="confirm-popover" role="dialog" aria-modal="false" hidden>
       <div id="confirmTitle" class="confirm-popover-title"></div>
       <div id="confirmSub" class="confirm-popover-sub" hidden></div>
+      <!-- The setup parameters, shown only for the "Run setup…" dialog: what this
+           run should change. Prefilled with the current values, so leaving one
+           alone keeps it; picking "— setup decides —" takes it out of the command. -->
+      <div id="setupParams" class="confirm-popover-body" hidden>
+        <p class="field-hint muted" id="setupParamsHint" data-i18n="configPick.setupParamsHint">Only setup can set these</p>
+        <label class="field"><span data-i18n="field.vision">Vision</span>
+          <select id="sp-vision" data-setup="vision"></select>
+        </label>
+        <label class="field"><span data-i18n="edit.context">Context length</span>
+          <select id="sp-context" data-setup="context"></select>
+        </label>
+        <label class="field"><span data-i18n="edit.kv">KV quantization</span>
+          <select id="sp-kv" data-setup="kv"></select>
+        </label>
+        <label class="field"><span data-i18n="edit.kvStream">KV streaming</span>
+          <select id="sp-kvStreaming" data-setup="kvStreaming"></select>
+        </label>
+        <label class="field"><span data-i18n="edit.lowRam">Low-RAM expert mode</span>
+          <select id="sp-lowRam" data-setup="lowRam"></select>
+        </label>
+      </div>
       <div class="confirm-popover-actions">
         <button id="confirmOk" class="btn warn" type="button" data-i18n="common.confirm">Confirm</button>
         <button id="confirmCancel" class="btn cancel" type="button" data-i18n="common.cancel">Cancel</button>

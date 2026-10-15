@@ -13,8 +13,10 @@ import { EventEmitter } from "node:events";
 
 import {
   FIRST_RUN_STAGES,
+  SETUP_PARAMS,
   needsInitialSetup,
   initialSetupPlan,
+  validateSetupParams,
   classifySetupLine,
   beginFirstRun,
   getFirstRunState,
@@ -179,6 +181,115 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
   assert.ok(spawnedArgs.includes(gguf));
   assert.equal(saved, "strata-iq2_xs.json");
   assert.equal(startMethod, "local");
+});
+
+// ── A re-run's parameters (the "Run setup…" pass-through) ────────────────
+
+// Which parameters a re-run may be asked to change, and the values setup itself
+// accepts (setup.py's argparse choices, setup.py:4584-4664). Everything else is
+// setup's call: the hardware side (--backend/--gpu(s)), the paths the profile owns
+// (--gguf-dir/--data-dir/--port), and what setup derives from RAM/VRAM
+// (--resident-budget-gib/--vram-reserve-mib). `context`/`kv` are in the list
+// because a re-run REBUILDS `args`: measured against setup's own
+// write_setup_config, a hand-set --max-context came back as setup's answer.
+test("the setup parameters are whitelisted, in setup's own value domains", () => {
+  assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), ["context", "kv", "kvStreaming", "lowRam", "vision"]);
+
+  const ok = validateSetupParams({ vision: "gpu", lowRam: "resident", kvStreaming: "on", context: "131072", kv: "k8v4" });
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.clean, { vision: "gpu", lowRam: "resident", kvStreaming: "on", context: "131072", kv: "k8v4" });
+
+  // Empty/absent means "let setup decide": no flag is handed over at all.
+  assert.deepEqual(validateSetupParams({ vision: "", lowRam: undefined }).clean, {});
+  assert.deepEqual(validateSetupParams(undefined).clean, {});
+  assert.deepEqual(validateSetupParams(null).clean, {});
+
+  // A value outside setup's choices, or a parameter setup does not take, is
+  // refused rather than forwarded as an unknown flag.
+  assert.match(validateSetupParams({ vision: "maybe" }).errors.join(), /vision/);
+  assert.match(validateSetupParams({ backend: "hip" }).errors.join(), /setup 不接受参数/);
+  assert.match(validateSetupParams("vision=gpu").errors.join(), /对象/);
+  // `context` is a plain int to setup, so a context the config already holds is
+  // acceptable even when our list does not carry it — otherwise the form would
+  // quietly fall back to "setup decides" and the value would change by itself.
+  assert.deepEqual(validateSetupParams({ context: "98304" }).errors, []);
+  assert.match(validateSetupParams({ context: "0" }).errors.join(), /context/);
+  assert.match(validateSetupParams({ context: "many" }).errors.join(), /context/);
+
+  // The plan echoes exactly what would be passed, and reports what was refused.
+  const plan = initialSetupPlan({ state: "stopped" }, {}, { force: true, setup: { vision: "gpu", nope: "x" } });
+  assert.deepEqual(plan.setup, { vision: "gpu" });
+  assert.equal(plan.setupErrors.length, 1);
+});
+
+test("a re-run passes the requested flags in setup's spelling, and nothing else", async () => {
+  resetFirstRunState();
+  const dir = makeStrataDir({ config: { name: "strata-iq3_s.json", data: { args: ["--max-context", "262144"], port: 8080 } } });
+  let spawnedArgs = null;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {}, configCandidates: [] }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/IQ3_S", configFile: "strata-iq3_s.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: (cmd, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        // The same tag as before = the earlier file is rewritten (setup keeps .bak).
+        fs.writeFileSync(path.join(dir, "strata-iq3_s.json"), JSON.stringify({ args: ["--max-context", "131072"], port: 8080 }));
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  };
+
+  const started = await beginFirstRun(makeCtx({ strataDir: dir }), {
+    io,
+    force: true,
+    startAfter: false,
+    setup: { vision: "gpu", lowRam: "resident", kvStreaming: "on", context: "131072", kv: "k8v4" },
+  });
+  assert.equal(started.needed, true);
+  const state = await waitForDone();
+  assert.equal(state.error, null);
+
+  for (const [flag, value] of [["--vision", "gpu"], ["--low-ram", "resident"], ["--kv-streaming", "on"], ["--context", "131072"], ["--kv", "k8v4"]]) {
+    const at = spawnedArgs.indexOf(flag);
+    assert.ok(at >= 0, `${flag} must be passed through`);
+    assert.equal(spawnedArgs[at + 1], value, `${flag} takes setup's own value`);
+  }
+  assert.ok(spawnedArgs.includes("--setup") && spawnedArgs.includes("--yes") && spawnedArgs.includes("--no-start"));
+  // Not ours to pass: the hardware side, the profile's paths, setup's derivations.
+  for (const flag of ["--backend", "--gpu", "--gpus", "--data-dir", "--port", "--resident-budget-gib", "--vram-reserve-mib"]) {
+    assert.equal(spawnedArgs.includes(flag), false, `${flag} must not be passed`);
+  }
+});
+
+test("a re-run with nothing asked for passes no parameter flags (setup decides)", async () => {
+  resetFirstRunState();
+  const dir = makeStrataDir({ config: { name: "strata-a.json", data: { args: [], port: 8080 } } });
+  let spawnedArgs = null;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {}, configCandidates: [] }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "", configFile: "strata-a.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: (cmd, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    },
+  };
+  await beginFirstRun(makeCtx({ strataDir: dir }), { io, force: true, startAfter: false, setup: {} });
+  await waitForDone();
+  for (const spec of Object.values(SETUP_PARAMS)) {
+    assert.equal(spawnedArgs.includes(spec.flag), false, `${spec.flag} must not appear`);
+  }
 });
 
 test("local first run drives a real setup.py process and discovers the config (POSIX)", async (t) => {

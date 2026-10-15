@@ -339,6 +339,20 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
+/* The setup parameters live INSIDE the confirm popover: compact, and scrollable
+ * so a small window can still reach the confirm button. */
+.confirm-popover-body {
+  display: grid;
+  gap: 6px;
+  max-height: 46vh;
+  overflow: auto;
+  margin: 6px 0;
+}
+
+.confirm-popover-body .field {
+  font-size: 12px;
+}
+
 .net-mode {
   flex: none;
   font-size: 11px;

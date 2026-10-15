@@ -202,6 +202,47 @@ test("startConfigSetup runs the setup job with startAfter:false and never starts
   assert.equal(saved, "strata-new.json", "the freshly built config becomes the selection");
 });
 
+test("startConfigSetup forwards only whitelisted setup parameters", async () => {
+  resetFirstRunState();
+  const dir = makeLocalDir();
+  const ctx = localCtx(dir);
+  let spawnedArgs = null;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/x", configFile: "strata-a.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: (cmd, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        fs.writeFileSync(path.join(dir, "strata-b.json"), JSON.stringify({ port: 59996 }));
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  };
+  const res = await startConfigSetup(ctx, { io, platform: "linux", setup: { vision: "gpu", lowRam: "on" } });
+  assert.equal(res.running, true);
+  assert.deepEqual(res.plan.setup, { vision: "gpu", lowRam: "on" }, "the plan echoes what will be passed");
+  const deadline = Date.now() + 3000;
+  while (!getFirstRunState().done && !getFirstRunState().error && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  assert.equal(spawnedArgs[spawnedArgs.indexOf("--vision") + 1], "gpu");
+  assert.equal(spawnedArgs[spawnedArgs.indexOf("--low-ram") + 1], "on");
+
+  // A value setup does not accept never reaches the job.
+  resetFirstRunState();
+  await assert.rejects(
+    () => startConfigSetup(ctx, { io, platform: "linux", setup: { vision: "maybe" } }),
+    /vision/,
+  );
+  assert.equal(getFirstRunState().running, false, "no job was started");
+});
+
 test("startConfigSetup refuses a container profile before running anything", async () => {
   resetFirstRunState();
   const ctx = makeCtx({
@@ -292,8 +333,9 @@ test("the panel wires the two config routes without a second progress contract",
   assert.match(js, /tp\("configPick\.context", \{ context: c\.context \}\)/);
   // Selection persists server-side, then repaints.
   assert.match(js, /api\("config\/select", \{ method: "POST", body: JSON\.stringify\(\{ file \}\) \}\)/);
-  // "Run setup" reuses the shared first-run overlay + GET /start polling.
-  assert.match(js, /api\("config\/setup", \{ method: "POST" \}\)/);
+  // "Run setup" reuses the shared first-run overlay + GET /start polling, and
+  // carries the parameters the user asked to change (the popover's form).
+  assert.match(js, /api\("config\/setup", \{ method: "POST", body: JSON\.stringify\(\{ setup: collectSetupParams\(\) \}\) \}\)/);
   assert.match(js, /showFirstRunOverlay\(res, "configPick\.running"\)/);
   assert.match(js, /await waitForFirstRun\(\)/);
   // No bespoke progress route was introduced.
@@ -331,6 +373,8 @@ test("the routes refuse a running service and non-local profiles", () => {
   assert.match(src, /status\.profile\?\.type === "container" \|\| status\.launch\?\.method === "docker"/);
   assert.match(src, /app\.post\(\s*"\/config\/select"/);
   assert.match(src, /app\.post\(\s*"\/config\/setup"/);
-  // A new config is built by the shared first-run job, not a parallel pipeline.
-  assert.match(src, /beginFirstRun\(ctx, \{ \.\.\.opts, force: true, startAfter: false \}\)/);
+  // A config is built by the shared first-run job, not a parallel pipeline, and
+  // only whitelisted setup parameters are forwarded into it.
+  assert.match(src, /validateSetupParams\(opts\.setup\)/);
+  assert.match(src, /beginFirstRun\(ctx, \{ \.\.\.opts, setup: clean, force: true, startAfter: false \}\)/);
 });

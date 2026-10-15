@@ -12,7 +12,7 @@
 // auto-start); progress is polled through GET /start, the exact same contract a
 // first launch uses — there is deliberately no second progress API.
 import { readAllConfig, savePluginConfig, getStatus, listConfigFiles, describeConfigFile } from "../lib/strata.js";
-import { beginFirstRun } from "../lib/firstrun.js";
+import { beginFirstRun, validateSetupParams } from "../lib/firstrun.js";
 
 const RUNNING_STATES = new Set(["running", "starting", "stopping", "restarting"]);
 
@@ -55,11 +55,15 @@ export async function selectConfig(ctx, file, opts = {}) {
   return { saved: true, configFile: name, status: await getStatus(ctx, opts) };
 }
 
-// Build a new config: same job as a first launch, forced (a config may already
-// exist) and without the trailing service start.
+// Build a config: same job as a first launch, forced (a config may already
+// exist) and without the trailing service start. `opts.setup` (whitelisted by
+// lib/firstrun.js's validateSetupParams) carries the parameters the user asked to
+// change this run; omitting one leaves it to setup.
 export async function startConfigSetup(ctx, opts = {}) {
   await assertConfigEditable(ctx, opts);
-  return beginFirstRun(ctx, { ...opts, force: true, startAfter: false });
+  const { clean, errors } = validateSetupParams(opts.setup);
+  if (errors.length) throw validationError(errors[0], errors);
+  return beginFirstRun(ctx, { ...opts, setup: clean, force: true, startAfter: false });
 }
 
 export default function registerConfigRoutes(app, ctx) {
@@ -78,8 +82,14 @@ export default function registerConfigRoutes(app, ctx) {
   });
 
   app.post("/config/setup", async (c) => {
+    let body = null;
     try {
-      const result = await startConfigSetup(ctx);
+      body = await c.req.json();
+    } catch {
+      // No body = run setup with everything left to setup. Not an error.
+    }
+    try {
+      const result = await startConfigSetup(ctx, { setup: body?.setup });
       if (result.alreadyRunning) {
         return c.json({ ...result, error: "已有配置任务正在进行中" }, 409);
       }

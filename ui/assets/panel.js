@@ -56,6 +56,7 @@ const els = {
   confirmPopover: document.getElementById("confirmPopover"),
   confirmTitle: document.getElementById("confirmTitle"),
   confirmSub: document.getElementById("confirmSub"),
+  setupParams: document.getElementById("setupParams"),
   confirmOk: document.getElementById("confirmOk"),
   confirmCancel: document.getElementById("confirmCancel"),
   accessRows: document.getElementById("accessRows"),
@@ -1077,11 +1078,14 @@ function confirmPosition(trigger) {
   els.confirmPopover.style.top = `${Math.round(top)}px`;
 }
 
-function showConfirm({ title, sub, confirmText, cancelText, onConfirm, trigger, timeout } = {}) {
+function showConfirm({ title, sub, confirmText, cancelText, onConfirm, trigger, timeout, body } = {}) {
   closeConfirm();
   els.confirmTitle.textContent = title || "";
   els.confirmSub.textContent = sub || "";
   els.confirmSub.hidden = !sub;
+  // The setup parameters belong to the "Run setup…" dialog only; every other
+  // dialog must not inherit them. The caller re-shows it when it wants it.
+  if (els.setupParams) els.setupParams.hidden = !body;
   els.confirmOk.textContent = confirmText || t("common.confirm");
   els.confirmCancel.textContent = cancelText || t("common.cancel");
   confirmState.onConfirm = typeof onConfirm === "function" ? onConfirm : null;
@@ -1979,6 +1983,73 @@ async function selectConfigFile(file) {
 // This is THE "re-run setup to change settings" entry — with the boundary the
 // copy states: it rebuilds from setup's recommended answers, so a specific
 // setting means running setup.py with its flag.
+// ── the setup parameters (what a "Run setup…" should change) ───────────────
+//
+// Only setup can set these (the engine does not know `--vision`-as-a-choice,
+// `--low-ram` or `--kv-streaming`), and `--context`/`--kv` are here because a
+// re-run REBUILDS the config's `args`: measured against setup's own
+// `write_setup_config`, a hand-set `--max-context` came back as setup's answer.
+// Prefilling the current value is what makes "leave it alone" mean "keep it".
+const SETUP_FIELDS = {
+  vision: ["no", "yes", "gpu", "cpu"],
+  context: ["8192", "32768", "65536", "131072", "262144", "524288"],
+  kv: ["int8", "q4_0", "k8v4"],
+  kvStreaming: ["auto", "on", "off"],
+  lowRam: ["auto", "on", "off", "resident", "mmap"],
+};
+
+function setupSelects() {
+  return [...document.querySelectorAll("#setupParams [data-setup]")];
+}
+
+// "— setup decides —" (value "") then setup's own values for that flag. A current
+// value that is NOT one of them (a context this list does not carry) is injected
+// too: a select that cannot show what is in effect would quietly fall back to
+// "setup decides" — the value would change without anyone asking for it.
+function fillSetupOptions(select) {
+  const key = select.dataset.setup;
+  const decide = document.createElement("option");
+  decide.value = "";
+  decide.textContent = t("configPick.setupDecide");
+  const options = [decide];
+  const current = String(currentSetupValues()[key] ?? "").trim();
+  const values = [...(SETUP_FIELDS[key] || [])];
+  if (current && !values.includes(current)) values.unshift(current);
+  for (const value of values) {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = value;
+    options.push(opt);
+  }
+  select.replaceChildren(...options);
+}
+
+// The CURRENT value of each parameter, so the form opens on "what is in effect"
+// rather than blank. Anything we cannot read stays on "setup decides".
+function currentSetupValues() {
+  const values = state.config?.values || {};
+  const vision = visionInfo || {};
+  return {
+    vision: vision.available ? (vision.encoder === "gpu" ? "gpu" : vision.encoder === "cpu" ? "cpu" : "") : "",
+    context: values.context !== undefined && values.context !== null ? String(values.context) : "",
+    kv: values.kv || "",
+    // The report rows say what setup chose: streaming on/off, low-RAM mode.
+    kvStreaming: isAbsent(values.kvResident) ? "off" : "on",
+    lowRam: values.lowRamMode && values.lowRamMode !== "auto" ? values.lowRamMode : "auto",
+  };
+}
+
+// Only the parameters the user actually asked for; "setup decides" is omitted
+// (the backend whitelists the same names).
+function collectSetupParams() {
+  const params = {};
+  for (const select of setupSelects()) {
+    const value = String(select.value || "").trim();
+    if (value) params[select.dataset.setup] = value;
+  }
+  return params;
+}
+
 async function startConfigSetup() {
   if (state.working) return;
   state.working = true;
@@ -1986,7 +2057,7 @@ async function startConfigSetup() {
   els.configSetupBtn.disabled = true;
   showError("");
   try {
-    const res = await api("config/setup", { method: "POST" });
+    const res = await api("config/setup", { method: "POST", body: JSON.stringify({ setup: collectSetupParams() }) });
     if (res && res.running !== false) {
       showFirstRunOverlay(res, "configPick.running");
       await waitForFirstRun();
@@ -2018,17 +2089,23 @@ els.envSelect.addEventListener("change", () => selectEnv(els.envSelect.value));
 els.configFileSelect.addEventListener("change", () => selectConfigFile(els.configFileSelect.value));
 els.configSetupBtn.addEventListener("click", () => {
   if (state.working) return;
+  // Fill the parameter form from what is in effect NOW, then let the user change
+  // only what they mean to. "— setup decides —" takes a parameter out of the run.
+  for (const select of setupSelects()) fillSetupOptions(select);
+  const current = currentSetupValues();
+  for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
   showConfirm({
     title: t("configPick.confirmTitle"),
     // Its own copy, not the first-launch one: this run rebuilds an EXISTING
-    // config from setup's recommended answers, so it must say so out loud
-    // (hand-edited values can be reverted; a targeted change means running
-    // setup.py with the flag yourself).
+    // config, so it must say what that means (measured against setup's own
+    // writer: hand-added engine options are dropped and the file is kept as
+    // .bak; top-level settings like sampling are carried over).
     sub: tp("configPick.setupSub", {
       dir: state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
     }),
     confirmText: t("configPick.confirmAction"),
     trigger: els.configSetupBtn,
+    body: els.setupParams,
     onConfirm: startConfigSetup,
   });
 });
