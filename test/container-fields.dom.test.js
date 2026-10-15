@@ -187,6 +187,25 @@ test("the card picker renders the catalog and the vendor split works end to end"
   }
 });
 
+// ① The compose directory is the ROOT of the deployment (the compose file's
+// home, the relative-path basis, the project's location), so it leads the block
+// — an identity field beside the container name, not a trailing afterthought.
+test("the compose directory leads the container block", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", preset: true });
+    ctr.setCatalog(CATALOG);
+    const deployLabel = ctr.refs.deployDir.parent;
+    assert.equal(host.children[0], deployLabel, "the deploy field is the first child");
+    assert.equal(host.children[1], ctr.refs.deployBox, "its resolved-path line follows it");
+    const gpuLabel = ctr.refs.gpuModel.parent;
+    assert.ok(host.children.indexOf(gpuLabel) > host.children.indexOf(deployLabel), "the card model comes after");
+  } finally {
+    dom.restore();
+  }
+});
+
 // A field the form does not render (the template-contributed device rules) is
 // preserved through render → collect, so an edit never drops it.
 test("collect() preserves the fields the form does not render", () => {

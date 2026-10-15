@@ -396,6 +396,9 @@ export function createContainerFields(host, opts = {}) {
         class: "cf-deploy-line",
         children: [i18nSpan("field.composeFile"), deployPath, deployActions],
       }),
+      // The compose directory is the basis for any relative host path; say so
+      // where the user can see it.
+      i18nHint("field.pathBasisHint"),
     ],
   });
 
@@ -440,6 +443,12 @@ export function createContainerFields(host, opts = {}) {
 
   host.classList.add("cf-fields");
   host.replaceChildren(
+    // The compose directory comes FIRST: it is the root of the deployment — the
+    // compose file, the relative-path basis and the project's home — an identity
+    // field, on the same level as the container name above it, not a trailing
+    // afterthought.
+    deployDir.field,
+    deployBox,
     gpuModelField,
     // The preset prompt is a sibling block, not inside the label (its buttons
     // are a block action, and interactive content inside a label is ambiguous).
@@ -456,8 +465,6 @@ export function createContainerFields(host, opts = {}) {
     securityOpt,
     shmSize.field,
     apiKeyEnv.field,
-    deployDir.field,
-    deployBox,
   );
 
   function modelLabel(entry) {
