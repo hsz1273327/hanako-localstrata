@@ -232,6 +232,7 @@ test("config-picker i18n copy exists and is non-empty in all six locales", () =>
     "configPick.context",
     "configPick.containerManaged",
     "configPick.confirmTitle",
+    "configPick.setupSub",
     "configPick.confirmAction",
     "configPick.running",
   ];
@@ -240,7 +241,43 @@ test("config-picker i18n copy exists and is non-empty in all six locales", () =>
       assert.equal(typeof STRINGS[lang]?.[key], "string", `${lang} is missing ${key}`);
       assert.ok(STRINGS[lang][key].length > 0, `${lang}.${key} must not be empty`);
     }
+    // The confirmation states the two things a user must know before pressing
+    // it: it is heavy, and it rebuilds from setup's RECOMMENDED answers.
+    assert.match(STRINGS[lang]["configPick.setupSub"], /\{dir\}/, `${lang}.configPick.setupSub must take the model dir`);
   }
+});
+
+test("the setup entry is named the same way in the copy and in the hints", () => {
+  // "Re-run setup" is only actionable if the hint names the entry the user can
+  // actually press. The button label minus its ellipsis must appear verbatim in
+  // every hint that tells them to re-run setup.
+  const hintKeys = ["edit.kvStreamHint", "edit.lowRamHint", "vision.setupNote"];
+  for (const lang of LANGS) {
+    const entry = STRINGS[lang]["configPick.new"].replace(/[…\.]+$/u, "").trim();
+    assert.ok(entry.length > 4, `${lang}: the entry label is too short to be a pointer`);
+    assert.match(entry, /setup/i, `${lang}: the entry must be recognised as the setup run`);
+    for (const key of hintKeys) {
+      assert.ok(
+        STRINGS[lang][key].includes(entry),
+        `${lang}.${key} must point at the entry ("${entry}") instead of saying "re-run setup" into the void`,
+      );
+    }
+  }
+});
+
+test("the setup confirmation uses its own copy, not the first-launch one", () => {
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  const dialog = js.slice(js.indexOf("els.configSetupBtn.addEventListener(\"click\""), js.indexOf("els.profileDrawerClose.addEventListener"));
+  // The two dialogs differ: a rebuild of an EXISTING config must say that hand
+  // edits can be reverted and that a targeted change means running setup.py
+  // with the flag, which the first-launch wording does not have to say.
+  assert.match(dialog, /tp\("configPick\.setupSub"/, "the setup dialog has its own body copy");
+  assert.doesNotMatch(dialog, /firstRun\.confirmSub/, "and does not borrow the first-launch body");
+  assert.match(dialog, /t\("configPick\.confirmTitle"\)/);
+  assert.match(dialog, /t\("configPick\.confirmAction"\)/);
+  // Still the same single job + progress contract, still stopped-only.
+  assert.match(dialog, /onConfirm: startConfigSetup/);
+  assert.match(fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8"), /id="configPickBox"/);
 });
 
 test("the panel wires the two config routes without a second progress contract", () => {
@@ -255,7 +292,7 @@ test("the panel wires the two config routes without a second progress contract",
   assert.match(js, /tp\("configPick\.context", \{ context: c\.context \}\)/);
   // Selection persists server-side, then repaints.
   assert.match(js, /api\("config\/select", \{ method: "POST", body: JSON\.stringify\(\{ file \}\) \}\)/);
-  // "New config" reuses the shared first-run overlay + GET /start polling.
+  // "Run setup" reuses the shared first-run overlay + GET /start polling.
   assert.match(js, /api\("config\/setup", \{ method: "POST" \}\)/);
   assert.match(js, /showFirstRunOverlay\(res, "configPick\.running"\)/);
   assert.match(js, /await waitForFirstRun\(\)/);

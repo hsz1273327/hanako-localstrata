@@ -1973,9 +1973,12 @@ async function selectConfigFile(file) {
   }
 }
 
-// Build a NEW config: the backend runs the same setup job as a first launch
-// (without the trailing start); progress is polled through GET /start, the one
-// staged-progress contract, via the shared first-run overlay.
+// Run setup: the backend runs the same job as a first launch (`--setup --yes
+// --no-start`), without the trailing start; progress is polled through GET
+// /start, the one staged-progress contract, via the shared first-run overlay.
+// This is THE "re-run setup to change settings" entry — with the boundary the
+// copy states: it rebuilds from setup's recommended answers, so a specific
+// setting means running setup.py with its flag.
 async function startConfigSetup() {
   if (state.working) return;
   state.working = true;
@@ -2017,7 +2020,11 @@ els.configSetupBtn.addEventListener("click", () => {
   if (state.working) return;
   showConfirm({
     title: t("configPick.confirmTitle"),
-    sub: tp("firstRun.confirmSub", {
+    // Its own copy, not the first-launch one: this run rebuilds an EXISTING
+    // config from setup's recommended answers, so it must say so out loud
+    // (hand-edited values can be reverted; a targeted change means running
+    // setup.py with the flag yourself).
+    sub: tp("configPick.setupSub", {
       dir: state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
     }),
     confirmText: t("configPick.confirmAction"),
