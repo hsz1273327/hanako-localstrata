@@ -257,7 +257,21 @@ export function createContainerFields(host, opts = {}) {
         type: "button",
         attrs: { "data-i18n": "field.pickPath" },
       });
-      button.addEventListener("click", () => pickPath(input, "directory", notify));
+      button.addEventListener("click", async () => {
+        const before = input.value;
+        await pickPath(input, "directory", notify);
+        // The picker writes the value programmatically, which fires no event of
+        // its own — so a pick would otherwise leave every listener (the deploy
+        // path preview included) showing the previous answer. Emit the same
+        // signal a committed user edit does.
+        if (input.value !== before) {
+          try {
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+          } catch {
+            /* environments without the Event constructor: typing still works */
+          }
+        }
+      });
       extra.push(make("div", { class: "field-inline", children: [button] }));
     }
     const field = make("label", { class: "field", children: [i18nSpan(labelKey), input, ...extra, i18nHint(hintKey)] });
@@ -402,14 +416,18 @@ export function createContainerFields(host, opts = {}) {
     ],
   });
 
+  // `input` (typing) is coalesced so a burst of keystrokes cannot hammer the
+  // route; `change` means the value is committed (blur, or a picker choice), so
+  // it resolves at once — the line can never be left showing an older answer.
   deployDir.input.addEventListener("input", () => refreshDeployPath());
-  deployDir.input.addEventListener("change", () => refreshDeployPath());
+  deployDir.input.addEventListener("change", () => refreshDeployPath({ immediate: true }));
 
   let deployTimer = null;
-  // Coalesce the path probes a burst of keystrokes would otherwise fire.
-  function refreshDeployPath() {
+  function refreshDeployPath({ immediate = false } = {}) {
     if (deployTimer) clearTimeout(deployTimer);
-    deployTimer = setTimeout(probeDeployPath, 120);
+    deployTimer = null;
+    if (immediate) probeDeployPath();
+    else deployTimer = setTimeout(probeDeployPath, 300);
   }
 
   async function probeDeployPath() {
@@ -519,7 +537,7 @@ export function createContainerFields(host, opts = {}) {
     deployDir.input.value = src.DeployDir || "";
     applyVendorSplit();
     applyI18n(host);
-    refreshDeployPath();
+    refreshDeployPath({ immediate: true });
   }
 
   function collect() {
@@ -563,7 +581,7 @@ export function createContainerFields(host, opts = {}) {
     if (patch.ApiKeyEnv !== undefined) apiKeyEnv.input.value = String(patch.ApiKeyEnv);
     if (patch.DeployDir !== undefined) deployDir.input.value = String(patch.DeployDir);
     applyVendorSplit();
-    refreshDeployPath();
+    refreshDeployPath({ immediate: true });
   }
 
   function setReadOnly(flag) {

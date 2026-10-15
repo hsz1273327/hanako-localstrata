@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createContainerFields } from "../ui/assets/profile-fields.js";
-import { saveProfile } from "../routes/settings.js";
+import registerSettingsRoutes, { saveProfile } from "../routes/settings.js";
 import { readAllConfig } from "../lib/strata.js";
 import { mi50Preset } from "../lib/mi50.js";
 
@@ -109,6 +109,12 @@ function installDom() {
     dispatch(type) {
       for (const fn of this.listeners[type] || []) fn({ target: this, preventDefault() {} });
     }
+    dispatchEvent(ev) {
+      // The module emits a native `change` after a picker choice; route it into
+      // the same listener map so the stub exercises the real path.
+      this.dispatch(ev && ev.type ? ev.type : String(ev));
+      return true;
+    }
     get childElementCount() {
       return this.children.length;
     }
@@ -203,6 +209,178 @@ test("the compose directory leads the container block", () => {
     assert.ok(host.children.indexOf(gpuLabel) > host.children.indexOf(deployLabel), "the card model comes after");
   } finally {
     dom.restore();
+  }
+});
+
+// ── the compose path preview follows the directory input ──────────────────
+
+// A tiny backend stand-in: it resolves exactly the way the route does (a
+// non-empty DeployDir wins; empty falls back to the per-container folder) and
+// records every probe so the calls themselves can be asserted.
+function previewBackend() {
+  const calls = [];
+  const api = async (p, init) => {
+    assert.equal(p, "profiles/compose-path");
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    const deployDir = String(body.DeployDir || "").trim() || `/home/u/.hanako-localstrata/${body.containerName || "strata"}`;
+    return { deployDir, file: `${deployDir}/docker-compose.yml` };
+  };
+  return { calls, api };
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test("typing into the compose directory re-resolves the line (debounced)", async () => {
+  const dom = installDom();
+  try {
+    const { calls, api } = previewBackend();
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", api, containerName: () => "strata" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "strata" });
+    await sleep(30);
+    assert.equal(ctr.refs.deployPath.dataset.path, "/home/u/.hanako-localstrata/strata/docker-compose.yml");
+
+    // A keystroke must NOT fire a probe straight away…
+    ctr.refs.deployDir.value = "/data/strata-docker";
+    ctr.refs.deployDir.dispatch("input");
+    await sleep(60);
+    assert.equal(calls.length, 1, "a keystroke is coalesced, not sent immediately");
+    assert.equal(ctr.refs.deployPath.dataset.path, "/home/u/.hanako-localstrata/strata/docker-compose.yml");
+
+    // …but the line catches up once the debounce elapses.
+    await sleep(300);
+    assert.equal(ctr.refs.deployPath.dataset.path, "/data/strata-docker/docker-compose.yml");
+    assert.equal(calls[calls.length - 1].DeployDir, "/data/strata-docker");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("a committed change resolves at once", async () => {
+  const dom = installDom();
+  try {
+    const { calls, api } = previewBackend();
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", api, containerName: () => "strata" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "strata" });
+    await sleep(30);
+
+    ctr.refs.deployDir.value = "/data/strata-docker";
+    ctr.refs.deployDir.dispatch("change");
+    await sleep(60);
+    // Well inside the 300ms debounce: a `change` is a commit, resolved now.
+    assert.equal(ctr.refs.deployPath.dataset.path, "/data/strata-docker/docker-compose.yml");
+    assert.equal(calls.length, 2);
+  } finally {
+    dom.restore();
+  }
+});
+
+// The directory picker writes the value programmatically (no event of its own),
+// which is exactly how the line used to get stuck on the default.
+test("choosing a directory with the picker also updates the line", async () => {
+  const dom = installDom();
+  try {
+    const { calls, api } = previewBackend();
+    const pickPath = async (input) => {
+      input.value = "/data/strata-docker";
+    };
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", api, pickPath, containerName: () => "strata" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "strata" });
+    await sleep(30);
+
+    const pick = host.querySelectorAll("button").find((b) => b.className.includes("cf-pick"));
+    assert.ok(pick, "the deploy field carries a picker button");
+    pick.dispatch("click");
+    await sleep(60);
+    assert.equal(ctr.refs.deployDir.value, "/data/strata-docker");
+    assert.equal(ctr.refs.deployPath.dataset.path, "/data/strata-docker/docker-compose.yml");
+    assert.equal(calls[calls.length - 1].DeployDir, "/data/strata-docker");
+  } finally {
+    dom.restore();
+  }
+});
+
+// The two actions target whatever the line currently shows, not a value baked in
+// at open time.
+test("the open/copy actions follow the resolved path", async () => {
+  const dom = installDom();
+  try {
+    const { api } = previewBackend();
+    const opened = [];
+    const copied = [];
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, {
+      idPrefix: "t-",
+      api,
+      containerName: () => "strata",
+      openDir: (path) => opened.push(path),
+      copyText: (text) => copied.push(text),
+    });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "strata" });
+    await sleep(30);
+
+    ctr.refs.deployDir.value = "/data/strata-docker";
+    ctr.refs.deployDir.dispatch("change");
+    await sleep(60);
+
+    ctr.refs.openButton.dispatch("click");
+    ctr.refs.copyButton.dispatch("click");
+    assert.deepEqual(opened, ["/data/strata-docker/docker-compose.yml"]);
+    assert.deepEqual(copied, ["/data/strata-docker/docker-compose.yml"]);
+  } finally {
+    dom.restore();
+  }
+});
+
+// The preview line and the file the save actually writes must be the same path:
+// both go through resolveDeployDir / composeFilePath (the route and the writer
+// share one source), so a change in the field can never make them disagree.
+test("the previewed compose path is exactly the file the save writes", async () => {
+  const dom = installDom();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strata-preview-"));
+  const handlers = {};
+  const app = { get: (p, h) => { handlers[p] = h; }, post: (p, h) => { handlers[p] = h; } };
+  const ctx = makeCtx({});
+  registerSettingsRoutes(app, ctx);
+  const api = async (p, init) => {
+    // The page calls without a leading slash (the SDK adds the route prefix);
+    // the registered handler map is keyed with it.
+    const handler = handlers[p.startsWith("/") ? p : `/${p}`];
+    assert.equal(typeof handler, "function", `no route for ${p}`);
+    const res = await handler({ req: { json: async () => JSON.parse(init.body) }, json: (data) => ({ data }) });
+    return res.data;
+  };
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", api, containerName: () => "mybox", profileId: () => "" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "mybox", GpuModel: "nvidia" });
+    // The user points the deployment at their own directory and commits it.
+    ctr.refs.deployDir.value = dir;
+    ctr.refs.deployDir.dispatch("change");
+    await sleep(60);
+
+    const saved = await saveProfile(ctx, {
+      name: "mybox",
+      type: "container",
+      imageName: "strata",
+      imageTag: "latest",
+      containerName: "mybox",
+      ...ctr.collect(),
+    });
+    assert.equal(ctr.refs.deployPath.dataset.path, path.join(dir, "docker-compose.yml"));
+    assert.equal(saved.compose.file, ctr.refs.deployPath.dataset.path, "preview and real write must agree");
+    assert.ok(fs.existsSync(saved.compose.file), "the file is really there");
+  } finally {
+    dom.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

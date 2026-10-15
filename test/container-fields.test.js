@@ -199,6 +199,13 @@ test("DeployDir is shown, and the compose path is resolved server-side", async (
   assert.equal(explicit.data.deployDir, "/srv/compose");
   assert.equal(explicit.data.file, path.join("/srv/compose", "docker-compose.yml"));
 
+  // A changed directory yields a changed file path, under THAT directory — the
+  // preview follows the input rather than the container-name fallback.
+  const nested = await call({ containerName: "strata-mi50", DeployDir: "/data/strata-docker" });
+  assert.equal(nested.data.deployDir, "/data/strata-docker");
+  assert.equal(nested.data.file, path.join("/data/strata-docker", "docker-compose.yml"));
+  assert.notEqual(nested.data.file, explicit.data.file);
+
   const fallback = await call({ containerName: "mybox" });
   assert.ok(fallback.data.deployDir.endsWith(path.join(".hanako-localstrata", "mybox")), "empty DeployDir falls back to the stable per-container folder");
   assert.ok(fallback.data.file.endsWith("docker-compose.yml"));
