@@ -35,6 +35,8 @@ import {
 } from "../lib/strata.js";
 import { saveProfile, deleteProfile } from "../routes/settings.js";
 import { defaultRunParams, buildRunArgs } from "../lib/deployer/docker.js";
+import { gpuTemplate, parseGpuIds, GPU_VENDORS } from "../lib/gpu.js";
+import { containerSpec, renderComposeFile } from "../lib/compose.js";
 
 const tmpRoots = [];
 
@@ -574,7 +576,7 @@ test("startService with profileId persists the active profile", async () => {
   assert.equal((await readAllConfig(ctx)).activeProfileId, "p2");
 });
 
-test("container profile uses the generic run recipe and starts via docker", async () => {
+test("a legacy container profile migrates its fields onto the new model", () => {
   const profile = normalizeProfile({
     id: "c1",
     name: "card",
@@ -585,16 +587,63 @@ test("container profile uses the generic run recipe and starts via docker", asyn
     ggufDir: "/models/UD",
     port: 8088,
   });
-  const params = defaultRunParams(profile, profile.port);
+  // dataDir → VolumeBinds ("<dir>:/data") …
+  assert.deepEqual(profile.VolumeBinds, ["/srv/strata:/data"]);
+  // …ggufDir → ModelDir + ModelsBindDir=/gguf (the old mount point)…
+  assert.equal(profile.ModelDir, "/models/UD");
+  assert.equal(profile.ModelsBindDir, "/gguf");
+  // …and port → both engine ports.
+  assert.equal(profile.EnginePort, 8088);
+  assert.equal(profile.EngineBindPort, 8088);
+  // The removed fields are gone, and the legacy env that made the old container
+  // work is preserved on the environment list.
+  assert.equal(profile.dataDir, undefined);
+  assert.equal(profile.ggufDir, undefined);
+  assert.equal(profile.port, undefined);
+  assert.ok(profile.environment.includes("STRATA_DATA=/data"));
+  assert.ok(profile.environment.includes("GGUF_DIR=/gguf"));
+  assert.ok(profile.environment.includes("PORT=8088"));
+  assert.ok(profile.environment.includes("HOST=0.0.0.0"));
+});
+
+test("a container profile without legacy fields gets no implicit env", () => {
+  const profile = normalizeProfile({
+    id: "c2",
+    name: "mi50",
+    type: "container",
+    imageName: "xxdoman/strata-mi50",
+    imageTag: "0.1.43.1",
+    containerName: "strata-mi50",
+    ModelDir: "/models/UD",
+  });
+  assert.equal(profile.ModelsBindDir, "/models");
+  assert.deepEqual(profile.VolumeBinds, []);
+  assert.deepEqual(profile.environment, []);
+  assert.equal(profile.EnginePort, 0);
+  assert.equal(profile.image, "xxdoman/strata-mi50:0.1.43.1");
+});
+
+// The legacy `docker run` recipe is only used when the host has no
+// `docker compose`; it is built from the same spec as the compose file.
+test("container profile starts via the legacy docker run path when compose is absent", async () => {
+  const profile = normalizeProfile({
+    id: "c1",
+    name: "card",
+    type: "container",
+    image: "strata",
+    containerName: "strata",
+    dataDir: "/srv/strata",
+    ggufDir: "/models/UD",
+    port: 8088,
+  });
+  const params = defaultRunParams(profile, { apiKey: "" });
   assert.equal(params.image, "strata");
   assert.ok(params.env.includes("STRATA_DATA=/data"));
   assert.ok(params.env.includes("GGUF_DIR=/gguf"));
   assert.ok(params.env.includes("PORT=8088"));
   assert.ok(params.binds.includes("/srv/strata:/data"));
   assert.ok(params.binds.includes("/models/UD:/gguf"));
-  assert.equal(params.gpus, "all");
   const args = buildRunArgs("strata", params);
-  assert.ok(args.includes("--gpus") && args.includes("all"));
   assert.ok(args.includes("8088:8088"));
   assert.ok(args.includes("strata"));
 
@@ -627,8 +676,189 @@ test("container profile uses the generic run recipe and starts via docker", asyn
   assert.equal(started.created, true);
   const runCall = calls.find((c) => c[0] === "raw" && c[1] === "run");
   assert.ok(runCall, "expected docker run");
-  assert.ok(runCall.includes("--gpus"));
   assert.ok(runCall.includes("/models/UD:/gguf"));
   assert.equal(started.profile.name, "card");
   assert.equal(started.profile.type, "container");
+});
+
+// With compose on the host, start goes through `docker compose up -d`, after
+// materializing the compose file from the profile fields.
+test("container start uses docker compose up and writes the compose file", async () => {
+  const dir = tmpDir();
+  const profile = normalizeProfile({
+    id: "c2",
+    name: "mi50",
+    type: "container",
+    imageName: "xxdoman/strata-mi50",
+    imageTag: "0.1.43.1",
+    containerName: "strata-mi50",
+    ModelDir: "/models/UD",
+    ModelsBindDir: "/models",
+    VolumeBinds: ["/srv/data:/data"],
+    EnginePort: 8085,
+    EngineBindPort: 8085,
+    GpuVendor: "amd",
+    device_cgroup_rules: ["c 227:* rmw"],
+    ulimits: ["memlock=-1"],
+    security_opt: ["seccomp=unconfined"],
+    environment: ["MODELS_DIR=/models"],
+    ApiKeyEnv: "API_KEY",
+    DeployDir: dir,
+  });
+  const upCalls = [];
+  const docker = {
+    available: () => true,
+    inspect: () => null,
+    imageExists: () => true,
+    imageInspect: () => null,
+    raw: () => ({ ok: true, stdout: "", stderr: "" }),
+    start: () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+    restart: () => ({ ok: true }),
+    logs: () => "",
+    exec: () => {
+      throw new Error("not running");
+    },
+    execRaw: () => ({ ok: true }),
+    catFile: () => null,
+    cp: () => ({ ok: true }),
+    pull: () => ({ ok: true }),
+    compose: {
+      available: () => true,
+      up: (d) => {
+        upCalls.push(d);
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      stop: () => ({ ok: true }),
+      restart: () => ({ ok: true }),
+      logs: () => ({ ok: true, stdout: "", stderr: "" }),
+    },
+  };
+  const ctx = makeCtx({});
+  await writeProfiles(ctx, [profile], profile.id);
+  const started = await startService(ctx, { docker, platform: "linux" });
+  assert.equal(started.started, true);
+  assert.equal(started.via, "compose");
+  assert.deepEqual(upCalls, [dir]);
+
+  const text = fs.readFileSync(path.join(dir, "docker-compose.yml"), "utf8");
+  assert.match(text, /image: "xxdoman\/strata-mi50:0\.1\.43\.1"/);
+  assert.match(text, /container_name: "strata-mi50"/);
+  assert.match(text, /- "8085:8085"/);
+  assert.match(text, /- "\/models\/UD:\/models"/);
+  assert.match(text, /- "\/srv\/data:\/data"/);
+  // AMD vendor template: the ROCm device nodes + its cgroup rule, unioned with
+  // the user's own rule.
+  assert.match(text, /- "\/dev\/kfd"/);
+  assert.match(text, /- "\/dev\/dri"/);
+  assert.match(text, /device_cgroup_rules:/);
+  assert.match(text, /- "c 226:\* rmw"/);
+  assert.match(text, /- "c 227:\* rmw"/);
+  assert.match(text, /memlock: -1/);
+  assert.match(text, /- "seccomp=unconfined"/);
+  // The API key is interpolated from .env, never baked into the shareable file.
+  assert.match(text, /- "API_KEY=\$\{STRATA_API_KEY\}"/);
+});
+
+// ── GPU vendor template (lib/gpu.js) ──────────────────────────────────────
+//
+// The docker vocabulary (device reservations / --gpus / device nodes) is a
+// template the user never types: only the vendor (+ optional card ids) is
+// entered. Every branch is pinned so the compose writer and the legacy
+// `docker run` path cannot drift.
+
+test("gpuTemplate: nvidia expands to a device reservation and --gpus", () => {
+  const all = gpuTemplate("nvidia", "all");
+  assert.deepEqual(all.devices, []);
+  assert.deepEqual(all.deployDevices, [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }]);
+  assert.equal(all.cliGpus, "all");
+
+  // Empty ids behave like "all" (picking the vendor without picking cards).
+  assert.deepEqual(gpuTemplate("nvidia", "").deployDevices, [
+    { driver: "nvidia", count: "all", capabilities: ["gpu"] },
+  ]);
+
+  const ids = gpuTemplate("nvidia", "0,1");
+  assert.deepEqual(ids.deployDevices, [
+    { driver: "nvidia", deviceIds: ["0", "1"], capabilities: ["gpu"] },
+  ]);
+  assert.equal(ids.cliGpus, "device=0,1");
+});
+
+test("gpuTemplate: amd expands to the ROCm device nodes + cgroup rule", () => {
+  const amd = gpuTemplate("amd", "");
+  assert.deepEqual(amd.devices, ["/dev/kfd", "/dev/dri"]);
+  assert.deepEqual(amd.deviceCgroupRules, ["c 226:* rmw"]);
+  assert.deepEqual(amd.deployDevices, []);
+  assert.equal(amd.cliGpus, null);
+});
+
+test("gpuTemplate: none / unknown expands to nothing", () => {
+  for (const vendor of ["none", "", undefined, "bogus"]) {
+    const t = gpuTemplate(vendor, "0");
+    assert.deepEqual(t.devices, []);
+    assert.deepEqual(t.deviceCgroupRules, []);
+    assert.deepEqual(t.deployDevices, []);
+    assert.equal(t.cliGpus, null);
+  }
+});
+
+test("parseGpuIds accepts all / single / list and drops junk", () => {
+  assert.deepEqual(parseGpuIds("all"), []);
+  assert.deepEqual(parseGpuIds(""), []);
+  assert.deepEqual(parseGpuIds("0"), ["0"]);
+  assert.deepEqual(parseGpuIds("0,1"), ["0", "1"]);
+  assert.deepEqual(parseGpuIds(" 0 , 2 "), ["0", "2"]);
+  assert.deepEqual(parseGpuIds("a,1"), ["1"]);
+  assert.ok(GPU_VENDORS.includes("nvidia") && GPU_VENDORS.includes("amd") && GPU_VENDORS.includes("none"));
+});
+
+test("an nvidia container writes deploy.resources…devices (zero-regression for --gpus all)", () => {
+  const spec = containerSpec({ containerName: "s", imageName: "img", GpuVendor: "nvidia", GpuIds: "all" });
+  assert.deepEqual(spec.devices, []);
+  assert.deepEqual(spec.deployDevices, [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }]);
+  assert.equal(spec.cliGpus, "all");
+  const text = renderComposeFile(spec, { profileName: "s" });
+  assert.match(text, /deploy:/);
+  assert.match(text, /reservations:/);
+  assert.match(text, /devices:/);
+  assert.match(text, /- driver: "nvidia"/);
+  assert.match(text, /count: all/);
+  // The generated file must not carry the top-level `gpus:` shorthand.
+  assert.doesNotMatch(text, /^\s+gpus:/m);
+});
+
+test("a specific-card nvidia profile pins device_ids", () => {
+  const spec = containerSpec({ containerName: "s", imageName: "img", GpuVendor: "nvidia", GpuIds: "0,2" });
+  const text = renderComposeFile(spec, {});
+  assert.match(text, /device_ids:/);
+  assert.match(text, /- "0"/);
+  assert.match(text, /- "2"/);
+  assert.doesNotMatch(text, /count:/);
+  // The legacy docker run path mirrors it.
+  const profile = normalizeProfile({
+    type: "container",
+    imageName: "img",
+    containerName: "s",
+    GpuVendor: "nvidia",
+    GpuIds: "0,2",
+  });
+  const args = buildRunArgs("s", defaultRunParams(profile));
+  assert.ok(args.includes("--gpus") && args.includes("device=0,2"));
+});
+
+test("a migrated legacy container keeps the old --gpus all behaviour", () => {
+  const profile = normalizeProfile({ type: "container", imageName: "img", containerName: "s", ggufDir: "/m" });
+  assert.equal(profile.GpuVendor, "nvidia");
+  assert.equal(profile.GpuIds, "all");
+  const args = buildRunArgs("s", defaultRunParams(profile));
+  assert.ok(args.includes("--gpus") && args.includes("all"));
+});
+
+test("a legacy container with an empty dataDir keeps its /data named volume", () => {
+  const profile = normalizeProfile({ type: "container", imageName: "img", containerName: "strata", port: 9000 });
+  // The old recipe fell back to a `<containerName>-data` named volume.
+  assert.deepEqual(profile.VolumeBinds, ["strata-data:/data"]);
+  assert.ok(profile.environment.includes("STRATA_DATA=/data"));
+  assert.ok(profile.environment.includes("PORT=9000"));
 });

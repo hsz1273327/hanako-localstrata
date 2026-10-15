@@ -11,8 +11,10 @@ import {
   findProfile,
   validateProfile,
   makeDefaultProfile,
+  effectiveContainerFields,
 } from "../lib/strata.js";
 import { resolveDockerPath, createDockerAdapter } from "../lib/docker.js";
+import { writeComposeFile } from "../lib/compose.js";
 import { beginImagePull, getImagePullState } from "../lib/imagepull.js";
 import { buildRunningReport } from "../lib/runtime-values.js";
 
@@ -167,11 +169,28 @@ export async function saveProfile(ctx, raw) {
     ? cfg.profiles.map((p) => (p.id === profile.id ? profile : p))
     : [...cfg.profiles, profile];
   const saved = await writeProfiles(ctx, list, cfg.activeProfileId);
+
+  // A container profile owns a docker-compose.yml: saving it is what
+  // (re)generates the file from the configured fields. The file stays the
+  // runtime source of truth afterwards (hand edits survive until the next
+  // save). Best effort: a failure here must not lose the profile itself.
+  let compose = null;
+  if (profile.type === "container") {
+    try {
+      const effective = { ...profile, ...effectiveContainerFields(profile, cfg) };
+      const written = writeComposeFile(effective, { force: true });
+      compose = { written: written.written, file: written.file };
+    } catch (e) {
+      compose = { written: false, error: String(e?.message || e) };
+    }
+  }
+
   return {
     saved: true,
     profile,
     profiles: saved.profiles,
     activeProfileId: saved.activeProfileId,
+    ...(compose ? { compose } : {}),
     status: await getStatus(ctx),
   };
 }

@@ -247,15 +247,15 @@ test("localRuntimeValues never falls back to a profile for configFile", () => {
 
 // ── containerRuntimeValues ────────────────────────────────────────────────
 
-test("containerRuntimeValues reads image, name, mounts and published port", () => {
+test("containerRuntimeValues reads image, name, the model mount and published port", () => {
   const info = {
     Id: "0123456789abcdef0123456789abcdef",
     Name: "/strata",
     State: { Status: "running" },
-    Config: { Image: "strata:1.1", Env: ["PORT=8080", "GGUF_DIR=/gguf"] },
+    Config: { Image: "strata:1.1", Env: ["ENGINE_PORT=8080", "MODELS_DIR=/models"] },
     Mounts: [
       { Type: "volume", Name: "strata-data", Destination: "/data" },
-      { Type: "bind", Source: "/models/IQ3_S", Destination: "/gguf" },
+      { Type: "bind", Source: "/models/IQ3_S", Destination: "/models" },
     ],
     NetworkSettings: { Ports: { "8080/tcp": [{ HostIp: "0.0.0.0", HostPort: "18080" }] } },
   };
@@ -265,19 +265,17 @@ test("containerRuntimeValues reads image, name, mounts and published port", () =
     type: "container",
     image: "stored:old",
     containerName: "stored-name",
-    dataDir: "",
-    ggufDir: "",
-    port: 0,
+    ModelDir: "",
+    ModelsBindDir: "/models",
+    EnginePort: 0,
   };
   const { values, sources } = containerRuntimeValues(info, profile, { defaultGgufDir: "", defaultPort: 0 });
   assert.equal(values.image, "strata:1.1");
   assert.equal(sources.image, "runtime");
   assert.equal(values.containerName, "strata");
   assert.equal(sources.containerName, "runtime");
-  assert.equal(values.dataDir, "strata-data");
-  assert.equal(sources.dataDir, "runtime-volume");
-  assert.equal(values.ggufDir, "/models/IQ3_S");
-  assert.equal(sources.ggufDir, "runtime");
+  assert.equal(values.modelDir, "/models/IQ3_S");
+  assert.equal(sources.modelDir, "runtime");
   assert.equal(values.port, 18080);
   assert.equal(sources.port, "runtime");
 });
