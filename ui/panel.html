@@ -159,6 +159,11 @@
               <option value="q4_0">q4_0</option>
               <option value="k8v4">k8v4</option>
             </select>
+            <span class="field-hint muted" data-i18n="edit.kvHint">int8 / q4_0 / k8v4</span>
+            <!-- Shown, not edited: the engine knows no `--kv-streaming`, and setup
+                 writes `--kv-resident` itself on its (context, kv, RAM) rule. -->
+            <span class="field-hint cf-readonly" id="edit-kvResident"></span>
+            <span class="field-hint muted" data-i18n="edit.kvStreamHint">Decided by setup</span>
           </label>
           <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
             <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">

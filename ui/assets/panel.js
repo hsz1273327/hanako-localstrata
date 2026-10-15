@@ -95,6 +95,7 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   langSelect: document.getElementById("langSelect"),
   editForm: document.getElementById("editForm"),
+  kvResidentStatus: document.getElementById("edit-kvResident"),
   saveBtn: document.getElementById("saveBtn"),
   diffBox: document.getElementById("diffBox"),
   diffList: document.getElementById("diffList"),
@@ -1266,6 +1267,17 @@ function fmtEditValue(value) {
   return isAbsent(value) ? "—" : String(value);
 }
 
+// The KV stream switch is setup's answer, not a field: the engine knows no
+// `--kv-streaming`, and `--kv-resident` is written by setup as the literal 32768
+// on its (context, kv, RAM) rule. Saying so beats a box the user cannot keep.
+function renderKvStream(values) {
+  if (!els.kvResidentStatus) return;
+  const win = values?.kvResident;
+  const on = !isAbsent(win);
+  els.kvResidentStatus.textContent = on ? tp("edit.kvStreamOn", { n: win }) : t("edit.kvStreamOff");
+  els.kvResidentStatus.dataset.state = on ? "on" : "off";
+}
+
 // An empty editor that invites typing is how a good config gets overwritten with
 // blanks, so when there is a config file but it cannot be read (a stopped
 // container is the usual reason) the fields are locked and the reason is said
@@ -1334,6 +1346,7 @@ async function refreshConfig() {
       state.configFilled = null;
       setEditFormReadable(false, cfg);
     }
+    renderKvStream(cfg.hasConfig ? cfg.values : null);
     renderDiff();
   } catch {
     state.config = null;

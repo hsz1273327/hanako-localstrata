@@ -904,6 +904,16 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
+/* The KV stream switch: a report, not a control — setup owns it, so it must not
+ * read as something to type in. Muted while off, plain while on. */
+.cf-readonly {
+  color: var(--text-muted, #8e9196);
+}
+
+.cf-readonly[data-state="on"] {
+  color: inherit;
+}
+
 /* Header badge: the environment control in its READ-ONLY state. Same specs as the
  * picker (and as #langSelect: height / padding / border / radius / background /
  * font / cursor) but the FORM of a label: no ▾, muted text — nothing invites a

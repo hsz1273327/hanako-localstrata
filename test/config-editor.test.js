@@ -82,6 +82,8 @@ function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
           "262144",
           "--kv",
           "int8",
+          "--kv-resident",
+          "32768",
           "--expert-cache",
           "auto",
         ],
