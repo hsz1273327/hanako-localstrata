@@ -223,6 +223,17 @@ function showError(message) {
   els.error.hidden = !message;
 }
 
+// The reason line sits at the very bottom of the panel, below the logs and the
+// parameter editor — a failure reported only there is easy to miss when the
+// button you pressed is at the top. Pull it into view when it carries news.
+function revealError() {
+  try {
+    els.error.scrollIntoView({ block: "nearest" });
+  } catch {
+    /* not every host has scrollIntoView; the line is still there */
+  }
+}
+
 function paintBar(barEl, textEl, res) {
   if (!res || !Number.isFinite(res.usedGiB) || !Number.isFinite(res.totalGiB) || res.totalGiB <= 0) {
     barEl.style.width = "0%";
@@ -240,9 +251,54 @@ function paintBar(barEl, textEl, res) {
 
 let copyFeedbackTimer = null;
 
-// The clipboard paths this page actually has. The host capability is the
-// intended one (a card is a sandboxed iframe, where the browser API is usually
-// unavailable); `navigator.clipboard` is only a fallback.
+// A hidden, selected textarea. Chromium fills the clipboard from the current
+// Selection for the legacy command — and keeping the node lets the user copy by
+// hand when even that fails.
+let manualCopyHolder = null;
+
+function clearManualCopy() {
+  if (manualCopyHolder) {
+    manualCopyHolder.remove();
+    manualCopyHolder = null;
+  }
+}
+
+function mountManualCopy(text) {
+  clearManualCopy();
+  const holder = document.createElement("textarea");
+  holder.value = text;
+  holder.readOnly = true;
+  holder.style.position = "fixed";
+  holder.style.left = "-9999px";
+  holder.style.top = "0";
+  document.body.append(holder);
+  holder.select();
+  holder.setSelectionRange(0, text.length);
+  return holder;
+}
+
+// The LEGACY path, and it is the interesting one here: `execCommand("copy")`
+// needs no clipboard-write permission, only focus and a Selection. This host
+// gives every card iframe a `sandbox` attribute and NO `allow` at all, so
+// `navigator.clipboard` is refused inside the card — the legacy command is the
+// one that can still work there.
+function legacyCopy(value) {
+  const holder = mountManualCopy(value);
+  let ok = false;
+  try {
+    ok = !!(document.execCommand && document.execCommand("copy"));
+  } catch {
+    ok = false;
+  }
+  if (ok) {
+    holder.remove();
+    return;
+  }
+  manualCopyHolder = holder; // leave it selected for a manual Ctrl+C
+  throw new Error("execCommand('copy') refused");
+}
+
+// The clipboard paths this page actually has, in the order they are tried.
 function clipboardDeps() {
   return {
     hostWrite: typeof hana?.clipboard?.writeText === "function" ? (text) => hana.clipboard.writeText(text) : null,
@@ -250,6 +306,7 @@ function clipboardDeps() {
       typeof navigator !== "undefined" && navigator.clipboard?.writeText
         ? (text) => navigator.clipboard.writeText(text)
         : null,
+    legacyWrite: legacyCopy,
   };
 }
 
@@ -273,38 +330,31 @@ async function copyFailureMessage(res) {
   return tp("copy.failedUngranted", { status: status || "not_asked" });
 }
 
-function selectForManualCopy(text) {
-  const holder = document.createElement("textarea");
-  holder.value = text;
-  holder.readOnly = true;
-  holder.style.position = "fixed";
-  holder.style.left = "-9999px";
-  holder.style.top = "0";
-  document.body.append(holder);
-  holder.select();
-  holder.setSelectionRange(0, text.length);
-  window.setTimeout(() => holder.remove(), 1500);
-}
-
 async function copyWithFeedback(btn, text) {
   const label = btn.textContent;
   const res = await copyText(text);
   if (res.ok) {
     btn.textContent = t("common.copied");
+    btn.title = "";
     showError("");
   } else {
-    // Keep the manual fallback AND say why: a button that only re-labels itself
-    // reads as "nothing happened". The raw reason rides on the tooltip.
-    selectForManualCopy(text);
-    btn.textContent = t("common.selected");
+    // "已选中" read as SUCCESS, which is exactly what made the failure invisible.
+    // Now the label says failed, the tooltip carries the raw reason, the text is
+    // left selected for a manual copy, and the reason line is scrolled into view
+    // (it lives at the bottom of a long panel).
+    if (!manualCopyHolder) manualCopyHolder = mountManualCopy(text);
+    btn.textContent = t("common.copyFailed");
     btn.title = res.error || "";
     showError(await copyFailureMessage(res));
+    revealError();
   }
   btn.classList.add("copied");
   window.clearTimeout(copyFeedbackTimer);
   copyFeedbackTimer = window.setTimeout(() => {
     btn.textContent = label;
     btn.classList.remove("copied");
+    // The manual selection is only meant to survive long enough to press Ctrl+C.
+    clearManualCopy();
   }, 1500);
 }
 
@@ -1421,8 +1471,7 @@ function ensurePluginForm() {
           void copyText(text).then(async (res) => {
             if (res.ok) setPsMessage(t("common.copied"), "ok");
             else setPsMessage(await copyFailureMessage(res), "error");
-          });
-        }
+          });        }
       : null,
     openDir: canOpenPath()
       ? (path) => {

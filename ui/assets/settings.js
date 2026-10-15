@@ -19,7 +19,6 @@ import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 import { copyToClipboard } from "./clipboard.js";
-
 setLang(loadLang());
 
 async function api(path, init = {}) {
@@ -127,6 +126,27 @@ const containerFields = createContainerFields(els.profileContainerExtra, {
               typeof navigator !== "undefined" && navigator.clipboard?.writeText
                 ? (value) => navigator.clipboard.writeText(value)
                 : null,
+            // The host gives card iframes no `allow` attribute, so the async
+            // browser API is refused inside them; the legacy Selection command
+            // needs no such permission and is the one that can still work.
+            legacyWrite: (value) => {
+              const holder = document.createElement("textarea");
+              holder.value = value;
+              holder.readOnly = true;
+              holder.style.position = "fixed";
+              holder.style.left = "-9999px";
+              document.body.append(holder);
+              holder.select();
+              holder.setSelectionRange(0, value.length);
+              let ok = false;
+              try {
+                ok = !!(document.execCommand && document.execCommand("copy"));
+              } catch {
+                ok = false;
+              }
+              if (!ok) throw new Error("execCommand('copy') refused");
+              holder.remove();
+            },
           }).then(async (res) => {
             if (!res.ok) setProfileMessage(await copyFailureMessage(res), "error");
           });

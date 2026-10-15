@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { copyToClipboard, CLIPBOARD_HOST, CLIPBOARD_BROWSER, CLIPBOARD_NONE } from "../ui/assets/clipboard.js";
+import { copyToClipboard, CLIPBOARD_HOST, CLIPBOARD_BROWSER, CLIPBOARD_LEGACY, CLIPBOARD_NONE } from "../ui/assets/clipboard.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -34,6 +34,44 @@ test("a rejected host call falls back to the browser clipboard", async () => {
   });
   assert.equal(res.ok, true);
   assert.equal(res.via, CLIPBOARD_BROWSER);
+});
+
+// This is the path that can work inside the card: the host gives card iframes a
+// `sandbox` attribute and NO `allow`, so `navigator.clipboard` is refused there,
+// while `document.execCommand("copy")` needs no clipboard-write permission.
+test("the legacy Selection command is tried last — and only after the others", async () => {
+  const order = [];
+  const res = await copyToClipboard("payload", {
+    hostWrite: async () => {
+      order.push("host");
+      throw new Error("denied");
+    },
+    browserWrite: async () => {
+      order.push("browser");
+      throw new Error("NotAllowedError");
+    },
+    legacyWrite: async () => {
+      order.push("legacy");
+    },
+  });
+  assert.deepEqual(order, ["host", "browser", "legacy"]);
+  assert.deepEqual(res, { ok: true, via: CLIPBOARD_LEGACY, error: null });
+});
+
+test("when even the legacy path fails, every reason is reported", async () => {
+  const res = await copyToClipboard("payload", {
+    hostWrite: async () => {
+      throw new Error("host denied");
+    },
+    browserWrite: async () => {
+      throw new Error("browser denied");
+    },
+    legacyWrite: async () => {
+      throw new Error("execCommand refused");
+    },
+  });
+  assert.equal(res.ok, false);
+  for (const reason of ["host denied", "browser denied", "execCommand refused"]) assert.match(res.error, new RegExp(reason));
 });
 
 test("when every path fails the result says why", async () => {
@@ -97,12 +135,21 @@ test("both surfaces copy through the shared helper and report a failure", () => 
     );
     assert.match(src, /copy\.failedUngranted/, `${rel} must say why a copy failed`);
     assert.match(src, /api\("capabilities"\)/, `${rel} must ask the ledger which case this is`);
+    // Both pages must offer the legacy path: it is the only one that can work
+    // inside this host's card iframes (no `allow` attribute → the async browser
+    // API is refused).
+    assert.match(src, /execCommand\("copy"\)/, `${rel} must try the legacy copy command`);
   }
   // The panel also keeps the manual-selection fallback, with the raw reason on the
   // tooltip so a failure can be diagnosed instead of guessed at.
   const panel = read("ui/assets/panel.js");
-  assert.match(panel, /selectForManualCopy\(text\)/);
+  assert.match(panel, /mountManualCopy\(text\)/);
   assert.match(panel, /btn\.title = res\.error \|\| ""/);
+  // …and the failure must be VISIBLE: the button says failed (not a label that
+  // reads like success) and the reason line is pulled into view.
+  assert.match(panel, /btn\.textContent = t\("common\.copyFailed"\)/);
+  assert.match(panel, /revealError\(\)/);
+  assert.doesNotMatch(panel, /btn\.textContent = t\("common\.selected"\)/);
 });
 
 test("the capabilities route answers from this App's own ledger entry", () => {
@@ -116,10 +163,12 @@ test("the two failure wordings exist in all six locales and name the fix", async
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
   const fixHint = /安全|Security|Sécurité|Безопасность|セキュリティ|보안/;
   for (const lang of LANGS) {
-    for (const key of ["copy.failedUngranted", "copy.failedGranted"]) {
+    for (const key of ["copy.failedUngranted", "copy.failedGranted", "common.copyFailed"]) {
       const value = String(STRINGS[lang][key] || "");
       assert.ok(value.length > 0, `${lang} is missing ${key}`);
-      assert.match(value, /\{status\}/, `${lang}.${key} must carry the ledger status`);
+    }
+    for (const key of ["copy.failedUngranted", "copy.failedGranted"]) {
+      assert.match(String(STRINGS[lang][key]), /\{status\}/, `${lang}.${key} must carry the ledger status`);
     }
     // The un-granted case must tell the user where to fix it…
     assert.match(STRINGS[lang]["copy.failedUngranted"], fixHint, `${lang} must name the settings path`);
