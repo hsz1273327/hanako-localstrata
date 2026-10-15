@@ -96,6 +96,7 @@ const els = {
   langSelect: document.getElementById("langSelect"),
   editForm: document.getElementById("editForm"),
   kvResidentStatus: document.getElementById("edit-kvResident"),
+  lowRamMode: document.getElementById("edit-lowRamMode"),
   saveBtn: document.getElementById("saveBtn"),
   diffBox: document.getElementById("diffBox"),
   diffList: document.getElementById("diffList"),
@@ -1227,7 +1228,7 @@ const FIELD_LABEL_KEYS = {
   reasoning_effort: "edit.reasoningEffort",
   expertCache: "edit.expertCache",
   residentBudget: "edit.residentBudget",
-  lowRam: "edit.lowRam",
+  lowRamMode: "edit.lowRam",
 };
 
 function fieldLabel(key) {
@@ -1298,6 +1299,23 @@ function renderKvStream(values) {
   const on = !isAbsent(win);
   els.kvResidentStatus.textContent = on ? tp("edit.kvStreamOn", { n: win }) : t("edit.kvStreamOff");
   els.kvResidentStatus.dataset.state = on ? "on" : "off";
+}
+
+// The low-RAM expert mode is setup's translation, not a flag the engine knows: the
+// config carries `--resident-experts` / `--mmap-experts` (setup.py:5364), and
+// neither means setup's `auto` found the experts fit. So it is read out of the args
+// and reported — offering a `--low-ram` field would write a flag the engine refuses.
+function renderLowRamMode(values) {
+  if (!els.lowRamMode) return;
+  if (!values) {
+    els.lowRamMode.textContent = "";
+    delete els.lowRamMode.dataset.state;
+    return;
+  }
+  const mode = values.lowRamMode || "auto";
+  const key = `edit.lowRamMode${mode === "resident" ? "Resident" : mode === "mmap" ? "Mmap" : "Auto"}`;
+  els.lowRamMode.textContent = t(key);
+  els.lowRamMode.dataset.state = mode === "auto" ? "off" : "on";
 }
 
 // An empty editor that invites typing is how a good config gets overwritten with
@@ -1372,6 +1390,7 @@ async function refreshConfig() {
       setEditFormReadable(false, cfg);
     }
     renderKvStream(cfg.hasConfig ? cfg.values : null);
+    renderLowRamMode(cfg.hasConfig ? cfg.values : null);
     renderDiff();
   } catch {
     state.config = null;

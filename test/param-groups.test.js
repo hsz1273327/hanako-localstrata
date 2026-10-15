@@ -1,11 +1,13 @@
 // The parameter editor is a list of THEMED groups: one subject per fieldset, and a
-// subject never scattered across two of them.
+// subject never scattered across two of them. There is no "Startup" group — every
+// field here is a startup parameter, so the name said nothing.
 //
-//   Startup          context / sessionCache / mtp
-//   KV cache         --kv + the streaming report (--kv-resident / --kv-streaming)
-//   Sampling         temperature … presence_penalty
-//   Shared           max_tokens / reasoning_effort
-//   Experts & memory expert-cache / resident-budget / low-ram
+//   KV cache             --max-context (the engine's own name for it is
+//                        "KV/state capacity") / --kv / --conversation-cache-mib
+//   Experts & memory     expert-cache / resident-budget (+ the low-RAM report)
+//   Draft & speculation  --spec (MTP)
+//   Sampling             temperature … presence_penalty
+//   Shared               max_tokens / reasoning_effort
 //
 // The same shape carries to the profile forms: 视觉 is its own section on both
 // sides (the container's writable `Vision` switch, the local read-only report),
@@ -36,9 +38,11 @@ function groups() {
 
 const EXPECTED_KEYS = [
   "context",
-  "sessionCache",
-  "mtp",
   "kv",
+  "sessionCache",
+  "expertCache",
+  "residentBudget",
+  "mtp",
   "temperature",
   "top_p",
   "top_k",
@@ -46,58 +50,65 @@ const EXPECTED_KEYS = [
   "presence_penalty",
   "max_tokens",
   "reasoning_effort",
-  "expertCache",
-  "residentBudget",
-  "lowRam",
 ];
 
 test("the params form is a list of themed groups, in subject order", () => {
   const g = groups();
   assert.deepEqual(
     g.map((x) => x.legend),
-    ["edit.startupLegend", "edit.kvLegend", "edit.samplingLegend", "edit.sharedLegend", "edit.expertsLegend"],
+    ["edit.kvLegend", "edit.expertsLegend", "edit.draftLegend", "edit.samplingLegend", "edit.sharedLegend"],
     "one legend per subject",
   );
+  // No "Startup": the name had no discriminating power. (The key is gone from
+  // i18n too — it would be an orphan.)
+  assert.doesNotMatch(read("ui/panel.html"), /edit\.startupLegend/, "the startup group must be gone for good");
   // Regrouping must not lose or duplicate a field: the inventory is the same set.
   const keys = g.flatMap((x) => x.keys);
-  assert.deepEqual([...keys].sort(), [...EXPECTED_KEYS].sort(), "the same 14 editable fields, no more, no fewer");
+  assert.deepEqual([...keys].sort(), [...EXPECTED_KEYS].sort(), "the same editable fields, no more, no fewer");
   assert.equal(new Set(keys).size, keys.length, "each field appears in exactly one group");
   for (const group of g) assert.ok(group.keys.length > 0, `${group.legend} is not empty`);
 });
 
-test("the three KV flags share one group, and are not scattered", () => {
+test("context is a KV subject; the KV flags share one group and are not scattered", () => {
   const g = groups();
   const kv = g.find((x) => x.legend === "edit.kvLegend");
   assert.ok(kv, "the KV group exists");
-  // --kv (writable) …
-  assert.ok(kv.keys.includes("kv"), "--kv belongs to the KV group");
-  // … the parked-conversation budget, which is a KV subject too …
-  assert.ok(kv.keys.includes("sessionCache"), "--conversation-cache-mib is a KV-cache subject");
-  // … --kv-resident (the report line) …
+  // The engine calls --max-context "KV/state capacity" (its own --help), and
+  // --conversation-cache-mib is the parked conversations' K/V budget.
+  for (const key of ["context", "kv", "sessionCache"]) {
+    assert.ok(kv.keys.includes(key), `${key} belongs to the KV group`);
+  }
+  // … and --kv-resident (the report line) …
   assert.ok(kv.ids.includes("edit-kvResident"), "the streaming report is in the same group");
   assert.match(kv.text, /edit\.kvStreamHint/, "with the reason it cannot be edited here");
   // … and --kv-streaming, whose effect annotation is per field.
   assert.match(kv.text, /data-i18n="edit\.needsSetup"/, "the streaming row is annotated 'needs setup'");
-  assert.match(kv.text, /data-i18n="edit\.needsRestart"/, "while the level itself is annotated 'needs restart'");
+  assert.match(kv.text, /data-i18n="edit\.needsRestart"/, "while the fields themselves need a restart");
 
-  // The subject is whole: no other group mentions KV, and the startup group no
-  // longer owns the level OR the conversation cache.
-  const startup = g.find((x) => x.legend === "edit.startupLegend");
-  assert.equal(startup.keys.includes("kv"), false, "--kv left the startup group");
-  assert.equal(startup.keys.includes("sessionCache"), false, "and so did the conversation cache");
+  // The subject is whole: no other group mentions KV.
   for (const other of g.filter((x) => x !== kv)) {
-    assert.doesNotMatch(other.text, /edit\.kv|edit-kvResident|sessionCache/, `${other.legend} must not carry KV fields`);
+    assert.doesNotMatch(other.text, /edit\.kv|edit-kvResident|data-key="context"|data-key="sessionCache"/, `${other.legend} must not carry KV fields`);
+  }
+});
+
+test("MTP has its own subject, not KV and not sampling", () => {
+  const g = groups();
+  const draft = g.find((x) => x.legend === "edit.draftLegend");
+  assert.ok(draft, "draft & speculation is its own group");
+  assert.deepEqual(draft.keys, ["mtp"], "the MTP window lives there");
+  assert.match(draft.text, /edit\.mtpHint/, "and explains itself");
+  for (const other of g.filter((x) => x !== draft)) {
+    assert.doesNotMatch(other.text, /data-key="mtp"/, `${other.legend} must not carry MTP`);
   }
 });
 
 // ── "引擎默认：X" is shown, and nothing else changes ──────────────────────
 
 const DEFAULT_KEYS = {
-  mtp: "edit.mtpDefault",
   sessionCache: "edit.sessionCacheDefault",
   expertCache: "edit.expertCacheDefault",
   residentBudget: "edit.residentBudgetDefault",
-  lowRam: "edit.lowRamDefault",
+  mtp: "edit.mtpDefault",
 };
 
 test("every leave-it-empty parameter carries an engine-default line", () => {
@@ -111,7 +122,7 @@ test("every leave-it-empty parameter carries an engine-default line", () => {
   }
   // A select that cannot be empty still names its default, and so do the two
   // groups whose numbers we could not verify.
-  assert.match(form, /data-i18n="edit\.startupDefaultNote"/);
+  assert.match(form, /data-i18n="edit\.contextDefaultNote"/);
   assert.match(form, /data-i18n="edit\.samplingDefaultNote"/);
   assert.match(form, /data-i18n="edit\.sharedDefaultNote"/);
   assert.match(read("ui/assets/panel.js"), /renderDefaultHints/, "and the panel must drive them");
@@ -136,9 +147,20 @@ test("no default is ever prefilled, and the write layer is untouched", async () 
   assert.deepEqual(filled.payload, { residentBudget: 48 }, "a real value still gets written");
 });
 
+test("the read-only low-RAM report is not a parameter", () => {
+  const g = groups();
+  const experts = g.find((x) => x.legend === "edit.expertsLegend");
+  assert.ok(experts, "the experts group exists");
+  // The mode is setup's translation of its own `--low-ram` into the pair the
+  // engine knows (setup.py:5364), so it is reported, never written.
+  assert.ok(experts.ids.includes("edit-lowRamMode"), "the mode is reported in the group");
+  assert.equal(experts.keys.includes("lowRam") || /data-key="lowRam"/.test(experts.text), false, "and nothing writes it");
+  assert.match(read("ui/assets/panel.js"), /renderLowRamMode/, "the panel drives the report");
+});
+
 test("the default copy exists in six locales, and never invents a number", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
-  const keys = [...Object.values(DEFAULT_KEYS), "edit.startupDefaultNote", "edit.samplingDefaultNote", "edit.sharedDefaultNote"];
+  const keys = [...Object.values(DEFAULT_KEYS), "edit.contextDefaultNote", "edit.samplingDefaultNote", "edit.sharedDefaultNote"];
   // How each language says "we could not confirm this".
   const unconfirmed = /未确认|unconfirmed|confirm|не под|未確認|미확인/i;
   for (const lang of LANGS) {
@@ -150,7 +172,11 @@ test("the default copy exists in six locales, and never invents a number", async
     // The ones we DID verify carry the figure from the source we cite.
     assert.match(STRINGS[lang]["edit.sessionCacheDefault"], /0/, "conversation cache default is 0 (off)");
     assert.match(STRINGS[lang]["edit.residentBudgetDefault"], /24/, "RAM − 24 GB, per setup's help text");
-    assert.match(STRINGS[lang]["edit.lowRamDefault"], /auto/);
+    // The low-RAM mode is reported with three states, one key each.
+    for (const suffix of ["Resident", "Mmap", "Auto"]) {
+      assert.ok(String(STRINGS[lang][`edit.lowRamMode${suffix}`] || "").length > 0, `${lang} is missing edit.lowRamMode${suffix}`);
+    }
+    assert.match(STRINGS[lang]["edit.lowRamModeAuto"], /auto/i, "the unset state names setup's auto");
     assert.match(STRINGS[lang]["edit.expertCacheDefault"], /auto/);
   }
   // Every default key is actually used by a template (no orphan copy). Scoped to
@@ -172,8 +198,8 @@ test("no group introduces a second level of folding", () => {
 
 test("every group name is a subject, present in all six locales", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
-  const legends = ["edit.startupLegend", "edit.kvLegend", "edit.samplingLegend", "edit.sharedLegend", "edit.expertsLegend"];
-  const added = ["edit.kvLegend", "edit.kvStream", "edit.needsSetup"];
+  const legends = ["edit.kvLegend", "edit.expertsLegend", "edit.draftLegend", "edit.samplingLegend", "edit.sharedLegend"];
+  const added = ["edit.kvLegend", "edit.kvStream", "edit.needsSetup", "edit.draftLegend", "edit.mtpHint", "edit.contextDefaultNote"];
   for (const lang of LANGS) {
     for (const key of [...legends, ...added]) {
       assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
