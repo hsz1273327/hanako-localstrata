@@ -246,14 +246,14 @@ let editorReadOnly = false;
 let pendingDeleteId = "";
 
 // Why a copy failed, in words the user can act on (the same two keys the panel
-// uses): the ledger's status for `app/ui/clipboard-write` separates "never
+// uses): the ledger's status for `app/ui.clipboard-write` separates "never
 // granted" (fixable in 设置 → 安全 → 应用能力) from "granted, yet the write still
 // failed" (an environment problem). No answer → the general wording.
 async function copyFailureMessage(res) {
   let status = "";
   try {
     const caps = await api("capabilities");
-    status = caps?.capabilities?.["app/ui/clipboard-write"]?.status || "";
+    status = caps?.capabilities?.["app/ui.clipboard-write"]?.status || "";
   } catch {
     /* the generic wording is still honest */
   }

@@ -10,7 +10,7 @@
   "capabilities": [
     "app/tools.expose-to-model",
     "app/ui.open-external",
-    "app/ui/clipboard-write",
+    "app/ui.clipboard-write",
     "app/process.spawn",
     "app/resources.read"
   ],

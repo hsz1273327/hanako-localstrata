@@ -265,7 +265,7 @@ async function copyFailureMessage(res) {
   let status = "";
   try {
     const caps = await api("capabilities");
-    status = caps?.capabilities?.["app/ui/clipboard-write"]?.status || "";
+    status = caps?.capabilities?.["app/ui.clipboard-write"]?.status || "";
   } catch {
     /* the generic wording is still honest */
   }

@@ -499,7 +499,7 @@ test("settings page wires the host directory picker", () => {
   for (const cap of [
     "app/tools.expose-to-model",
     "app/ui.open-external",
-    "app/ui/clipboard-write",
+    "app/ui.clipboard-write",
     "app/process.spawn",
   ]) {
     assert.match(manifest, new RegExp(cap.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `manifest must keep ${cap}`);

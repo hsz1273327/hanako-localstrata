@@ -103,7 +103,7 @@ All four are required; none is declared "just in case":
 | `app/tools.expose-to-model` | Exposes the `strata_status` / `strata_control` tools so the Agent can read status and start/stop the service. |
 | `app/process.spawn` | Starts and stops the Strata process (`python serve/server.py`) and probes the machine: `nvidia-smi` (VRAM), `pgrep` (process detection), `git` (updater). Under Hana's v2 Node sandbox, plain `fs` / `fetch` / `child_process` are blocked, so file probes also go through external commands. **Without this the app cannot control or observe the service.** |
 | `app/ui.open-external` | The **Open web UI** button (opens Strata's own page in the browser). |
-| `app/ui/clipboard-write` | The **Copy** buttons next to the address and API Key. |
+| `app/ui.clipboard-write` | The **Copy** buttons next to the address and API Key. |
 
 **Network**: only `127.0.0.1` / `localhost` (the local Strata API) and
 `api.github.com` (version check). Nothing is sent anywhere else.
@@ -240,7 +240,7 @@ App 只访问本机 Strata API（`127.0.0.1` / `localhost`），以及用于版�
 | `app/tools.expose-to-model` | 暴露 `strata_status` / `strata_control` 两个工具，让 Agent 能读状态、启停服务。 |
 | `app/process.spawn` | 启停 Strata 进程（`python serve/server.py`），以及探测机器：`nvidia-smi`（显存）、`pgrep`（进程检测）、`git`（更新）。在 Hana v2 的 Node 沙箱下，裸 `fs` / `fetch` / `child_process` 被禁用，因此文件探测也走外部命令。**没有它，App 既无法控制也无法观测服务。** |
 | `app/ui.open-external` | **打开网页** 按钮（在浏览器里打开 Strata 自带页面）。 |
-| `app/ui/clipboard-write` | 地址与 API Key 旁的 **复制** 按钮。 |
+| `app/ui.clipboard-write` | 地址与 API Key 旁的 **复制** 按钮。 |
 
 **网络**：仅 `127.0.0.1` / `localhost`（本机 Strata API）与 `api.github.com`
 （版本检查），不向其它任何地方发送数据。
