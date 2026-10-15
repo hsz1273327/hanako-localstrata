@@ -1267,6 +1267,21 @@ function fmtEditValue(value) {
   return isAbsent(value) ? "—" : String(value);
 }
 
+// "引擎默认：X" is a DISPLAY, never a value.
+//
+// It shows only while the field is empty, so an empty field still answers "and
+// what is in effect right now?" — and the write layer is untouched: an empty field
+// still writes nothing (edit-diff's empty-on-empty rule is what keeps the two
+// layers from colliding), so the default is never committed by accident.
+function renderDefaultHints() {
+  for (const field of document.querySelectorAll("#editForm .field")) {
+    const control = field.querySelector("[data-key]");
+    const line = field.querySelector(".field-default");
+    if (!control || !line) continue;
+    line.hidden = !isAbsent(control.value);
+  }
+}
+
 // The KV stream switch is setup's answer, not a field: the engine knows no
 // `--kv-streaming`, and `--kv-resident` is written by setup as the literal 32768
 // on its (context, kv, RAM) rule. Saying so beats a box the user cannot keep.
@@ -1311,6 +1326,9 @@ function setEditFormReadable(readable, cfg) {
 
 function renderDiff() {
   const { items, cleared } = configEdits();
+  // The default-value lines follow what the inputs now hold, so they come before
+  // the diff is drawn and on every keystroke (renderDiff is the input handler).
+  renderDefaultHints();
   const readable = !!state.config?.hasConfig;
   els.diffBox.hidden = !readable || items.length === 0;
   els.diffList.replaceChildren();

@@ -153,12 +153,13 @@
               <option value="262144">262144</option>
             </select>
           </label>
-          <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
-            <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">
-          </label>
           <label class="field"><span data-i18n="edit.mtp">MTP</span>
             <input id="ed-mtp" data-key="mtp" type="number" min="0" step="1">
+            <span class="field-default" data-i18n="edit.mtpDefault" hidden></span>
           </label>
+          <!-- The engine's own --max-context default, so an empty select still
+               answers "what is in effect?" — a select has no empty option. -->
+          <span class="field-hint muted" data-i18n="edit.startupDefaultNote">Engine default</span>
         </fieldset>
 
         <!-- 主题成组：「KV cache」自己一组（--kv / --kv-resident / --kv-streaming），
@@ -173,6 +174,13 @@
               <option value="k8v4">k8v4</option>
             </select>
             <span class="field-hint muted" data-i18n="edit.kvHint">int8 / q4_0 / k8v4</span>
+          </label>
+          <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
+            <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">
+            <!-- `--conversation-cache-mib`: the RAM budget for PARKED conversations.
+                 It is a KV-cache subject (a parked conversation keeps its K/V), so it
+                 lives in this group rather than among the startup switches. -->
+            <span class="field-default" data-i18n="edit.sessionCacheDefault" hidden></span>
           </label>
           <div class="field cf-readonly-field">
             <span data-i18n="edit.kvStream">KV streaming</span>
@@ -201,6 +209,9 @@
           <label class="field">presence_penalty
             <input id="ed-presence_penalty" data-key="presence_penalty" type="number" min="0" step="0.1">
           </label>
+          <!-- The numbers are not published anywhere we could verify, so the line
+               says so instead of inventing one. -->
+          <span class="field-hint muted" data-i18n="edit.samplingDefaultNote">Engine default</span>
         </fieldset>
 
         <fieldset class="group">
@@ -216,6 +227,7 @@
               <option value="xhigh">xhigh</option>
             </select>
           </label>
+          <span class="field-hint muted" data-i18n="edit.sharedDefaultNote">App default</span>
         </fieldset>
 
         <!-- How the model's experts are held. All three are engine args, so they
@@ -226,10 +238,12 @@
           <label class="field"><span data-i18n="edit.expertCache">Expert cache</span>
             <input id="ed-expertCache" data-key="expertCache" type="text" autocomplete="off" spellcheck="false" placeholder="auto" data-i18n-placeholder="edit.expertCachePlaceholder">
             <span class="field-hint" data-i18n="edit.expertCacheHint">auto, or the number of slots</span>
+            <span class="field-default" data-i18n="edit.expertCacheDefault" hidden></span>
           </label>
           <label class="field"><span data-i18n="edit.residentBudget">Resident experts (GiB)</span>
             <input id="ed-residentBudget" data-key="residentBudget" type="number" min="1" step="1">
             <span class="field-hint" data-i18n="edit.residentBudgetHint">Only for a model whose experts do not all fit in RAM</span>
+            <span class="field-default" data-i18n="edit.residentBudgetDefault" hidden></span>
           </label>
           <label class="field"><span data-i18n="edit.lowRam">Low-RAM expert mode</span>
             <select id="ed-lowRam" data-key="lowRam">
@@ -241,6 +255,7 @@
               <option value="mmap">mmap</option>
             </select>
             <span class="field-hint" data-i18n="edit.lowRamHint">On = experts come from the pack and are not held in RAM</span>
+            <span class="field-default" data-i18n="edit.lowRamDefault" hidden></span>
           </label>
         </fieldset>
 

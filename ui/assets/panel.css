@@ -310,6 +310,13 @@ body {
   display: none;
 }
 
+/* "引擎默认：X" — shown only while its field is empty, and never written anywhere.
+ * Muted, and on its own line, so it cannot be mistaken for a value. */
+.field-default {
+  font-size: 11px;
+  color: var(--text-muted, #8e9196);
+}
+
 .net-mode {
   flex: none;
   font-size: 11px;

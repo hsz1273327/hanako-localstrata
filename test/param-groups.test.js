@@ -71,6 +71,8 @@ test("the three KV flags share one group, and are not scattered", () => {
   assert.ok(kv, "the KV group exists");
   // --kv (writable) …
   assert.ok(kv.keys.includes("kv"), "--kv belongs to the KV group");
+  // … the parked-conversation budget, which is a KV subject too …
+  assert.ok(kv.keys.includes("sessionCache"), "--conversation-cache-mib is a KV-cache subject");
   // … --kv-resident (the report line) …
   assert.ok(kv.ids.includes("edit-kvResident"), "the streaming report is in the same group");
   assert.match(kv.text, /edit\.kvStreamHint/, "with the reason it cannot be edited here");
@@ -79,11 +81,85 @@ test("the three KV flags share one group, and are not scattered", () => {
   assert.match(kv.text, /data-i18n="edit\.needsRestart"/, "while the level itself is annotated 'needs restart'");
 
   // The subject is whole: no other group mentions KV, and the startup group no
-  // longer owns the level.
+  // longer owns the level OR the conversation cache.
   const startup = g.find((x) => x.legend === "edit.startupLegend");
   assert.equal(startup.keys.includes("kv"), false, "--kv left the startup group");
+  assert.equal(startup.keys.includes("sessionCache"), false, "and so did the conversation cache");
   for (const other of g.filter((x) => x !== kv)) {
-    assert.doesNotMatch(other.text, /edit\.kv|edit-kvResident/, `${other.legend} must not carry KV fields`);
+    assert.doesNotMatch(other.text, /edit\.kv|edit-kvResident|sessionCache/, `${other.legend} must not carry KV fields`);
+  }
+});
+
+// ── "引擎默认：X" is shown, and nothing else changes ──────────────────────
+
+const DEFAULT_KEYS = {
+  mtp: "edit.mtpDefault",
+  sessionCache: "edit.sessionCacheDefault",
+  expertCache: "edit.expertCacheDefault",
+  residentBudget: "edit.residentBudgetDefault",
+  lowRam: "edit.lowRamDefault",
+};
+
+test("every leave-it-empty parameter carries an engine-default line", () => {
+  const form = read("ui/panel.html").match(/<form id="editForm"[\s\S]*?<\/form>/)[0];
+  for (const [key, i18nKey] of Object.entries(DEFAULT_KEYS)) {
+    // The line must sit in the SAME field block as its control, or the wiring in
+    // panel.js cannot tell which input it follows.
+    const block = form.match(new RegExp(`<label class="field">(?:(?!</label>)[\\s\\S])*data-key="${key}"(?:(?!</label>)[\\s\\S])*</label>`));
+    assert.ok(block, `#${key} must be inside a label.field`);
+    assert.match(block[0], new RegExp(`class="field-default" data-i18n="${i18nKey.replace(".", "\\.")}" hidden`), `${key} needs its default line, hidden`);
+  }
+  // A select that cannot be empty still names its default, and so do the two
+  // groups whose numbers we could not verify.
+  assert.match(form, /data-i18n="edit\.startupDefaultNote"/);
+  assert.match(form, /data-i18n="edit\.samplingDefaultNote"/);
+  assert.match(form, /data-i18n="edit\.sharedDefaultNote"/);
+  assert.match(read("ui/assets/panel.js"), /renderDefaultHints/, "and the panel must drive them");
+  assert.match(read("ui/assets/panel.js"), /line\.hidden = !isAbsent\(control\.value\)/, "shown only while empty");
+});
+
+test("no default is ever prefilled, and the write layer is untouched", async () => {
+  const form = read("ui/panel.html").match(/<form id="editForm"[\s\S]*?<\/form>/)[0];
+  // Display only: no control gains a value attribute, so "empty" stays empty.
+  for (const key of Object.keys(DEFAULT_KEYS)) {
+    const tag = form.match(new RegExp(`<(?:input|select)[^>]*data-key="${key}"[^>]*>`))[0];
+    assert.doesNotMatch(tag, /\svalue="/, `#${key} must not be prefilled with its default`);
+  }
+  // And behaviourally: an absent value left empty is still not an edit, while a
+  // filled one still is. (This is the rule that keeps "empty" meaning "write
+  // nothing" even though the page now names the default.)
+  const { editDiff } = await import("../ui/assets/edit-diff.js");
+  const untouched = editDiff({}, { residentBudget: "", lowRam: "" });
+  assert.deepEqual(untouched.items, [], "empty on both sides is not a change");
+  assert.deepEqual(untouched.payload, {}, "and it submits nothing");
+  const filled = editDiff({}, { residentBudget: "48" }, { residentBudget: "number" });
+  assert.deepEqual(filled.payload, { residentBudget: 48 }, "a real value still gets written");
+});
+
+test("the default copy exists in six locales, and never invents a number", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  const keys = [...Object.values(DEFAULT_KEYS), "edit.startupDefaultNote", "edit.samplingDefaultNote", "edit.sharedDefaultNote"];
+  // How each language says "we could not confirm this".
+  const unconfirmed = /未确认|unconfirmed|confirm|не под|未確認|미확인/i;
+  for (const lang of LANGS) {
+    for (const key of keys) assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
+    // The two groups we could not verify must say so rather than guess.
+    assert.match(STRINGS[lang]["edit.samplingDefaultNote"], unconfirmed, `${lang}.edit.samplingDefaultNote must admit it`);
+    assert.match(STRINGS[lang]["edit.sharedDefaultNote"], unconfirmed, `${lang}.edit.sharedDefaultNote must admit it`);
+    assert.match(STRINGS[lang]["edit.mtpDefault"], unconfirmed, `${lang}.edit.mtpDefault must admit it`);
+    // The ones we DID verify carry the figure from the source we cite.
+    assert.match(STRINGS[lang]["edit.sessionCacheDefault"], /0/, "conversation cache default is 0 (off)");
+    assert.match(STRINGS[lang]["edit.residentBudgetDefault"], /24/, "RAM − 24 GB, per setup's help text");
+    assert.match(STRINGS[lang]["edit.lowRamDefault"], /auto/);
+    assert.match(STRINGS[lang]["edit.expertCacheDefault"], /auto/);
+  }
+  // Every default key is actually used by a template (no orphan copy). Scoped to
+  // edit.* — profile.* defaults live on the settings page, not in this form.
+  const html = read("ui/panel.html");
+  for (const lang of LANGS) {
+    for (const key of Object.keys(STRINGS[lang]).filter((k) => /^edit\..*Default(Note)?$/.test(k))) {
+      assert.match(html, new RegExp(key.replace(".", "\\.")), `${key} is not used`);
+    }
   }
 });
 
