@@ -225,9 +225,11 @@ test("the container block renders the vision switch inside the advanced group", 
   assert.match(src, /Vision: visionInput\.value\.trim\(\)/);
   // The read-only local status is a real fragment both pages mount.
   assert.match(src, /export function createVisionStatus\(/);
-  assert.match(read("ui/assets/settings.js"), /createVisionStatus\(els\.profileLocalExtra/);
+  assert.match(read("ui/assets/settings.js"), /createVisionStatus\(els\.profileLocalVision/);
+  // Mounted at the TOP of the local block: a read-only report precedes the fields
+  // that can be changed (the API key keeps its own mount point below them).
+  assert.match(read("ui/assets/panel.js"), /createVisionStatus\(root\.querySelector\("#ps-local-vision"\)/);
   assert.match(read("ui/assets/settings.js"), /localVisionStatus\.render\(visionInfo\)/);
-  assert.match(read("ui/assets/panel.js"), /createVisionStatus\(root\.querySelector\("#ps-local-extra"\)/);
   assert.match(read("ui/assets/panel.js"), /pluginFormEls\.localVision\.render\(visionInfo\)/);
   // Both pages read the state from /profiles.
   for (const rel of ["ui/assets/settings.js", "ui/assets/panel.js"]) {

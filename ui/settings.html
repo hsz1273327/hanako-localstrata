@@ -100,6 +100,9 @@
         </label>
 
         <div id="pfLocalFields" class="profile-type-fields">
+          <!-- Read-only first, in its own block: what this install's vision is
+               right now (setup wrote it), then what can be edited below. -->
+          <div id="pf-local-vision"></div>
           <label class="field" for="pf-strataDir">
             <span data-i18n="field.strataDir">Strata directory</span>
             <input id="pf-strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">

@@ -62,6 +62,7 @@ const els = {
   profileContainerFields: document.getElementById("pfContainerFields"),
   profileStrataDir: document.getElementById("pf-strataDir"),
   profileLocalExtra: document.getElementById("pf-local-extra"),
+  profileLocalVision: document.getElementById("pf-local-vision"),
   profileStrataDirPick: document.getElementById("pf-strataDir-pick"),
   profilePythonPath: document.getElementById("pf-pythonPath"),
   profilePythonPathPick: document.getElementById("pf-pythonPath-pick"),
@@ -172,7 +173,10 @@ let visionInfo = null;
 // The LOCAL profile carries the same override field. It is the same fragment the
 // container block mounts, so the mask semantics and the "which key is in effect"
 // line (including the local-only "→ config file" source) cannot drift apart.
-const localVisionStatus = createVisionStatus(els.profileLocalExtra, { idPrefix: "pfl-" });
+// Its read-only 视觉 report is NOT here: it sits at the TOP of the local block
+// (see #pf-local-vision), because within a group the read-only rows come before
+// the fields that can be changed.
+const localVisionStatus = createVisionStatus(els.profileLocalVision, { idPrefix: "pfl-" });
 const localApiKeyField = createApiKeyField(els.profileLocalExtra, {
   idPrefix: "pfl-",
   apiKeySource: () => keySource,

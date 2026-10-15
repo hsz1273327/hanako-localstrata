@@ -167,6 +167,15 @@
              要改得重跑 setup。 -->
         <fieldset class="group">
           <legend><span data-i18n="edit.kvLegend">KV cache</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <!-- Read-only first: what is in effect, then what can be changed. The
+               engine knows no `--kv-streaming`, and setup writes `--kv-resident`
+               itself on its (context, kv, RAM) rule. -->
+          <div class="cf-readonly-item">
+            <span class="cf-readonly-label" data-i18n="edit.kvStream">KV streaming</span>
+            <span class="field-hint cf-readonly" id="edit-kvResident"></span>
+            <span class="note" data-i18n="edit.needsSetup">setup re-run required</span>
+            <span class="field-hint muted" data-i18n="edit.kvStreamHint">Decided by setup</span>
+          </div>
           <label class="field"><span data-i18n="edit.kv">KV quantization</span>
             <select id="ed-kv" data-key="kv">
               <option value="int8">int8</option>
@@ -182,14 +191,6 @@
                  lives in this group rather than among the startup switches. -->
             <span class="field-default" data-i18n="edit.sessionCacheDefault" hidden></span>
           </label>
-          <div class="field cf-readonly-field">
-            <span data-i18n="edit.kvStream">KV streaming</span>
-            <!-- Shown, not edited: the engine knows no `--kv-streaming`, and setup
-                 writes `--kv-resident` itself on its (context, kv, RAM) rule. -->
-            <span class="field-hint cf-readonly" id="edit-kvResident"></span>
-            <span class="note" data-i18n="edit.needsSetup">setup re-run required</span>
-            <span class="field-hint muted" data-i18n="edit.kvStreamHint">Decided by setup</span>
-          </div>
         </fieldset>
 
         <fieldset class="group">
@@ -287,6 +288,9 @@
         </label>
 
         <div id="psLocalFields" class="profile-type-fields">
+          <!-- Read-only first, in its own block: what this install's vision is
+               right now (setup wrote it), then what can be edited below. -->
+          <div id="ps-local-vision"></div>
           <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
             <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
           </label>

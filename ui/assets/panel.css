@@ -311,9 +311,31 @@ body {
 }
 
 /* "引擎默认：X" — shown only while its field is empty, and never written anywhere.
- * Muted, and on its own line, so it cannot be mistaken for a value. */
+ * Muted, and on its own line, so it cannot be mistaken for a value. It is a hint
+ * BELONGING TO an editable field ("what happens if you leave this empty"), which is
+ * why it is not .cf-readonly-item ("this value cannot be changed at all"). */
 .field-default {
   font-size: 11px;
+  color: var(--text-muted, #8e9196);
+}
+
+/* A READ-ONLY ITEM: a report, not a control. One neutral block style for every
+ * such row (the KV streaming state, the local 视觉 report), so "this cannot be
+ * pushed" is visible at a glance — a plain rule and a faint ground, no colour
+ * (colour stays reserved for state/danger), and no input inside. Within a group
+ * these come BEFORE the editable fields: what is now, then what can change. */
+.cf-readonly-item {
+  display: grid;
+  gap: 4px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--border, rgba(83, 125, 150, 0.35));
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-soft, rgba(127, 127, 127, 0.06));
+}
+
+.cf-readonly-label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted, #8e9196);
 }
 

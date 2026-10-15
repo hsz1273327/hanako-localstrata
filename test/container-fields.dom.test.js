@@ -439,6 +439,7 @@ test("the local side reports 视觉 in the same section shape, with no control",
     const host = document.createElement("div");
     const st = createVisionStatus(host, { idPrefix: "x-" });
     assert.equal(st.field.classList.contains("cf-section-vision"), true, "its own section");
+    assert.equal(st.field.classList.contains("cf-readonly-item"), true, "and the shared read-only block style");
     assert.equal(st.field.hidden, true, "hidden until the backend reports");
     assert.equal(st.field.children[0].attrs["data-i18n"], "field.vision", "named 视觉, like the container's");
     assert.equal(st.refs.line.id, "x-vision-status");

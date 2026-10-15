@@ -178,8 +178,9 @@ export function createVisionStatus(host, opts = {}) {
   // subject, not a footnote in the advanced long tail. The shape differs on
   // purpose — this side reports the block setup wrote (see above), while the
   // container side offers the image's own `Vision` switch — so they never pretend
-  // to be one control.
-  const section = make("div", { class: "cf-section cf-section-vision", attrs: { role: "group" } });
+  // to be one control. It also carries the read-only block style, because
+  // everything inside it is a report.
+  const section = make("div", { class: "cf-section cf-section-vision cf-readonly-item", attrs: { role: "group" } });
   const line = make("p", { class: "field-hint cf-readonly", id: `${p}vision-status` });
   section.replaceChildren(i18nSpan("field.vision", "cf-section-title"), line, i18nHint("vision.setupNote"));
   let lastInfo = null;

@@ -1531,7 +1531,7 @@ function ensurePluginForm() {
   });
   // The LOCAL profile's own override: the same fragment the container block
   // mounts, so the mask semantics and the "in effect" line cannot drift.
-  pluginFormEls.localVision = createVisionStatus(root.querySelector("#ps-local-extra"), { idPrefix: "psl-" });
+  pluginFormEls.localVision = createVisionStatus(root.querySelector("#ps-local-vision"), { idPrefix: "psl-" });
   pluginFormEls.localApiKey = createApiKeyField(root.querySelector("#ps-local-extra"), {
     idPrefix: "psl-",
     apiKeySource: () => keySource,
