@@ -17,7 +17,7 @@
 // page, only a mask, so an untouched masked field is discarded on save.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
-import { createContainerFields, createApiKeyField } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField, createVisionStatus } from "./profile-fields.js";
 import { copyToClipboard } from "./clipboard.js";
 setLang(loadLang());
 
@@ -165,9 +165,14 @@ const containerFields = createContainerFields(els.profileContainerExtra, {
   onChange: onGpuModelChange,
 });
 
+// The local config's vision state, refreshed from GET /profiles. READ-ONLY:
+// setup.py writes that block (encoder, GPU/CPU choice, mmproj path).
+let visionInfo = null;
+
 // The LOCAL profile carries the same override field. It is the same fragment the
 // container block mounts, so the mask semantics and the "which key is in effect"
 // line (including the local-only "→ config file" source) cannot drift apart.
+const localVisionStatus = createVisionStatus(els.profileLocalExtra, { idPrefix: "pfl-" });
 const localApiKeyField = createApiKeyField(els.profileLocalExtra, {
   idPrefix: "pfl-",
   apiKeySource: () => keySource,
@@ -893,8 +898,10 @@ async function loadProfiles() {
   keySource = data?.keySource && typeof data.keySource === "object"
     ? { file: String(data.keySource.file || ""), hasKey: !!data.keySource.hasKey }
     : { file: "", hasKey: false };
+  visionInfo = data?.vision && typeof data.vision === "object" ? data.vision : null;
   containerFields.refreshApiKeySource();
   localApiKeyField.refreshSource();
+  localVisionStatus.render(visionInfo);
   // Paint the list before the (potentially slow) status probe so the user is
   // not waiting on docker/python checks. Edit/delete keep the last known
   // running state until the probe resolves.
@@ -1214,6 +1221,7 @@ function initLangSelect() {
     // The shared container block re-renders its own static copy + option labels.
     containerFields.relocalize();
     localApiKeyField.relocalize();
+    localVisionStatus.relocalize();
     renderPresetOffer();
     if (!els.profileConfirm.hidden && pendingDeleteId) {
       const pending = profiles.find((p) => p.id === pendingDeleteId);

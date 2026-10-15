@@ -13,6 +13,7 @@ import {
   effectiveContainerFields,
   effectiveConfigFile,
   readApiKey,
+  readVisionInfo,
   gpuModelCatalog,
   mi50Catalog,
   mi50Preset,
@@ -62,6 +63,16 @@ function localKeySource(cfg) {
   if (!active || active.type !== "local") return { file: "", hasKey: false };
   const file = String(effectiveConfigFile(cfg) || "").split(/[/\\]/).pop();
   return { file, hasKey: !!readApiKey(cfg) };
+}
+
+// The local config's `vision` block, reported for display only: setup.py owns it
+// (it downloads the encoder, pins `vision.gpu` and writes the mmproj path), so the
+// UI shows the state instead of offering an edit. A container profile keeps its
+// config inside the container and gets `null` (unknown from here).
+function localVision(cfg) {
+  const active = findProfile(cfg.profiles, cfg.activeProfileId) || cfg.profiles[0] || null;
+  if (!active || active.type !== "local") return null;
+  return readVisionInfo(cfg);
 }
 
 function validationError(message, validation) {
@@ -334,6 +345,8 @@ export default function registerSettingsRoutes(app, ctx) {
         // Where a LOCAL deployment's key would come from: the selected config
         // file, whose `api_key` setup already wrote. Name + boolean only.
         keySource: localKeySource(cfg),
+        // The local config's vision state (read-only; setup owns that block).
+        vision: localVision(cfg),
       });
     } catch (e) {
       return c.json({ error: String(e?.message || e) }, 500);

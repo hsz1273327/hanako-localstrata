@@ -5,7 +5,7 @@
 // - Polls this App's GET /status route every refreshSec seconds.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
-import { createContainerFields, createApiKeyField } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField, createVisionStatus } from "./profile-fields.js";
 import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.js";
 import { copyToClipboard } from "./clipboard.js";
 
@@ -1410,6 +1410,8 @@ let presetsLoaded = false;
 // Where a local deployment's effective key would come from (name + boolean
 // only), refreshed from GET /profiles.
 let keySource = { file: "", hasKey: false };
+// The local config's vision state (read-only: setup.py owns that block).
+let visionInfo = null;
 
 async function loadPanelPresets() {
   if (presetsLoaded) return;
@@ -1488,6 +1490,7 @@ function ensurePluginForm() {
   });
   // The LOCAL profile's own override: the same fragment the container block
   // mounts, so the mask semantics and the "in effect" line cannot drift.
+  pluginFormEls.localVision = createVisionStatus(root.querySelector("#ps-local-extra"), { idPrefix: "psl-" });
   pluginFormEls.localApiKey = createApiKeyField(root.querySelector("#ps-local-extra"), {
     idPrefix: "psl-",
     apiKeySource: () => keySource,
@@ -1524,6 +1527,8 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
   // The local override (masked when set); the source line follows it.
   pluginFormEls.localApiKey.render(profile?.apiKey || "");
+  // The local config's vision state (read-only).
+  pluginFormEls.localVision.render(visionInfo);
   // The container block preserves any field it does not render (see the shared
   // module), so nothing needs to be carried here.
   pluginFormEls.container.render(profile);
@@ -1563,6 +1568,7 @@ async function openDrawer(readOnly) {
   if (keySourceFromServer && typeof keySourceFromServer === "object") {
     keySource = { file: String(keySourceFromServer.file || ""), hasKey: !!keySourceFromServer.hasKey };
   }
+  visionInfo = data?.vision && typeof data.vision === "object" ? data.vision : null;
   pluginFormEls.localApiKey.refreshSource();
   state.editingProfileId = readOnly ? null : profile.id;
   // The card-model picker needs the catalog before it can hold the profile's
@@ -2065,6 +2071,7 @@ function relocalize() {
     // The shared container block re-renders its own static copy + option labels.
     pluginFormEls.container.relocalize();
     pluginFormEls.localApiKey.relocalize();
+    pluginFormEls.localVision.relocalize();
   }
   renderDiff();
 }

@@ -21,6 +21,10 @@ import { t, tp, applyI18n } from "./i18n.js";
 
 const NVIDIA = "nvidia";
 const AMD = "amd";
+// The container's vision switch, mirroring lib/profiles.js `VISION_VALUES` (this
+// asset cannot import the Node-side model; a test keeps the two in step). The
+// image reads `VISION` from the environment and defaults it to `no`.
+export const VISION_OPTIONS = ["no", "yes", "cpu"];
 // A row cap so a paste accident cannot produce an unbounded form / config.
 const MAX_LIST = 32;
 
@@ -153,6 +157,56 @@ export function createApiKeyField(host, opts = {}) {
   return { field, refs: { input, source, dot, text }, render, value, setReadOnly, relocalize, refreshSource };
 }
 
+// ── the local vision state (read-only) ───────────────────────────────────
+//
+// A local deployment's `vision` block is written by setup.py — it downloads the
+// encoder, pins whether it runs on the GPU or the CPU, and writes the mmproj path
+// — so the app REPORTS it instead of offering an edit (that would be inventing a
+// write path setup owns). A container keeps its config inside the container and
+// passes `null`, which hides the line.
+export function createVisionStatus(host, opts = {}) {
+  const p = opts.idPrefix || "cf-";
+  const line = make("p", { class: "field-hint cf-vision-status", id: `${p}vision-status` });
+  const field = make("div", {
+    class: "field cf-vision",
+    children: [i18nSpan("field.vision"), line, i18nHint("vision.setupNote")],
+  });
+  let lastInfo = null;
+
+  function paint(info) {
+    if (!info || typeof info !== "object") {
+      field.hidden = true;
+      return;
+    }
+    field.hidden = false;
+    if (!info.available) {
+      line.textContent = t("vision.off");
+      return;
+    }
+    const parts = [t("vision.on")];
+    if (info.encoder) parts.push(tp("vision.encoder", { encoder: info.encoder }));
+    if (info.mmproj) parts.push(tp("vision.mmproj", { file: info.mmproj }));
+    line.textContent = parts.join(" · ");
+  }
+
+  const api = {
+    field,
+    refs: { line },
+    render(info) {
+      lastInfo = info;
+      applyI18n(field);
+      paint(info);
+    },
+    relocalize() {
+      applyI18n(field);
+      paint(lastInfo);
+    },
+  };
+  if (host) host.append(field);
+  field.hidden = true;
+  return api;
+}
+
 // ── the module ────────────────────────────────────────────────────────────
 
 // host: the element the fields are rendered into.
@@ -202,6 +256,7 @@ export function createContainerFields(host, opts = {}) {
     "security_opt",
     "ShmSize",
     "ApiKeyEnv",
+    "Vision",
     "apiKey",
     "DeployDir",
   ]);
@@ -370,6 +425,22 @@ export function createContainerFields(host, opts = {}) {
   const engineBindPort = numberField("engine-bind-port", "field.engineBindPort", "field.engineBindPortHint");
   const shmSize = textField("shm-size", "field.shmSize", "field.shmSizePlaceholder", "field.shmSizeHint");
   const apiKeyEnv = textField("api-key-env", "field.apiKeyEnv", "field.apiKeyEnvPlaceholder", "field.apiKeyEnvHint");
+
+  // The vision switch: a fixed set of values, never free text (the image accepts
+  // three). Empty leaves the image's own default (`no`) in place.
+  const visionInput = make("select", { id: `${p}vision` });
+  const visionField = make("label", {
+    class: "field",
+    children: [i18nSpan("field.vision"), visionInput, i18nHint("field.visionHint")],
+  });
+
+  function rebuildVisionOptions() {
+    const current = visionInput.value;
+    const options = [make("option", { value: "", text: t("field.visionPlaceholder") })];
+    for (const value of VISION_OPTIONS) options.push(make("option", { value, text: value }));
+    visionInput.replaceChildren(...options);
+    visionInput.value = VISION_OPTIONS.includes(current) ? current : "";
+  }
 
   const apiKeyField = createApiKeyField(null, { idPrefix: p, apiKeySource });
 
@@ -571,6 +642,7 @@ export function createContainerFields(host, opts = {}) {
     securityOpt,
     shmSize.field,
     apiKeyEnv.field,
+    visionField,
     apiKeyField.field,
   );
 
@@ -610,6 +682,7 @@ export function createContainerFields(host, opts = {}) {
     "security_opt",
     "ShmSize",
     "ApiKeyEnv",
+    "Vision",
     "apiKey",
   ];
 
@@ -703,6 +776,7 @@ export function createContainerFields(host, opts = {}) {
     lists.security_opt.setValues(src.security_opt);
     shmSize.input.value = src.ShmSize || "";
     apiKeyEnv.input.value = src.ApiKeyEnv || "";
+    visionInput.value = VISION_OPTIONS.includes(String(src.Vision || "").trim()) ? String(src.Vision).trim() : "";
     // May be the mask the backend returned; it round-trips as "unchanged".
     apiKeyField.render(src.apiKey || "");
     deployDir.input.value = src.DeployDir || "";
@@ -739,6 +813,7 @@ export function createContainerFields(host, opts = {}) {
       security_opt: lists.security_opt.readValues(),
       ShmSize: shmSize.input.value.trim(),
       ApiKeyEnv: apiKeyEnv.input.value.trim(),
+      Vision: visionInput.value.trim(),
       // The mask round-trips untouched: the save route reads it as "unchanged".
       apiKey: apiKeyField.value(),
       DeployDir: deployDir.input.value.trim(),
@@ -761,6 +836,7 @@ export function createContainerFields(host, opts = {}) {
     if (patch.security_opt !== undefined) lists.security_opt.setValues(patch.security_opt);
     if (patch.ShmSize !== undefined) shmSize.input.value = String(patch.ShmSize);
     if (patch.ApiKeyEnv !== undefined) apiKeyEnv.input.value = String(patch.ApiKeyEnv);
+    if (patch.Vision !== undefined) visionInput.value = VISION_OPTIONS.includes(String(patch.Vision)) ? String(patch.Vision) : "";
     if (patch.apiKey !== undefined) apiKeyField.render(patch.apiKey);
     if (patch.DeployDir !== undefined) deployDir.input.value = String(patch.DeployDir);
     applyVendorSplit();
@@ -780,6 +856,7 @@ export function createContainerFields(host, opts = {}) {
 
   function relocalize() {
     rebuildOptions();
+    rebuildVisionOptions();
     applyI18n(host);
     applyVendorSplit();
     updateAdvancedChrome();
@@ -789,6 +866,7 @@ export function createContainerFields(host, opts = {}) {
   function setCatalog(models) {
     catalog = Array.isArray(models) ? models : [];
     rebuildOptions();
+    rebuildVisionOptions();
     applyVendorSplit();
   }
 
@@ -818,6 +896,7 @@ export function createContainerFields(host, opts = {}) {
       securityOpt: lists.security_opt,
       shmSize: shmSize.input,
       apiKeyEnv: apiKeyEnv.input,
+      vision: visionInput,
       apiKey: apiKeyField.refs.input,
       apiKeySource: apiKeyField.refs.source,
       deployDir: deployDir.input,
@@ -844,4 +923,4 @@ export function createContainerFields(host, opts = {}) {
   };
 }
 
-export default { createContainerFields, createApiKeyField, gpuVendorOf, gpuIdsApplies };
+export default { createContainerFields, createApiKeyField, createVisionStatus, gpuVendorOf, gpuIdsApplies };
