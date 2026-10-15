@@ -1,7 +1,6 @@
 import {
   getConfigView,
   applyConfigEdits,
-  restartService,
   getStatus,
   readAllConfig,
   readConfig,
@@ -292,14 +291,6 @@ export default function registerSettingsRoutes(app, ctx) {
     try {
       const edits = body?.edits || {};
       const result = await applyConfigEdits(ctx, edits);
-      // `restart` stays part of the route contract, but the UI no longer sends
-      // it: the parameter editor only exists while the service is stopped, where
-      // there is nothing to restart (and `restart()` on a stopped deployment
-      // would actually START it). This is the re-entry point if running-state
-      // editing of the instant-effect params ever comes back.
-      if (body?.restart && result.saved) {
-        result.restart = await restartService(ctx);
-      }
       return c.json(result);
     } catch (e) {
       return c.json({ saved: false, error: String(e?.message || e), validation: e?.validation }, 400);

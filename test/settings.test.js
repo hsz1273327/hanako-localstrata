@@ -381,12 +381,14 @@ test("routes/settings.js refuses writes to the in-use profile only", () => {
 // and editing another profile while it runs cannot interrupt it.
 test("the profile routes never touch the service lifecycle", () => {
   const src = fs.readFileSync(path.join(ROOT, "routes/settings.js"), "utf8");
-  // \b keeps `restartService` from being read as a `startService` hit.
-  assert.doesNotMatch(src, /\b(?:startService|stopService)\b/);
-  // restartService exists for POST /settings (the config-file editor with
-  // `restart: true`) only: one import plus one call site, neither of them in a
-  // /profiles handler.
-  assert.equal((src.match(/restartService/g) || []).length, 2);
+  assert.doesNotMatch(src, /\b(?:startService|stopService|restartService)\b/);
+  // Saving parameter edits never restarts: the editor only exists while the
+  // service is stopped, where a "restart" would in fact START it. The live
+  // restart paths are elsewhere (routes/mode.js for the LAN switch, the
+  // strata_control tool for an explicit request).
+  assert.doesNotMatch(src, /body\?\.restart/);
+  const mode = fs.readFileSync(path.join(ROOT, "routes/mode.js"), "utf8");
+  assert.match(mode, /if \(body\?\.restart && result\.saved\) \{\s*result\.restart = await restartService\(ctx\);/);
 });
 
 // Layout guard for in-place profile management: the add action sits above the

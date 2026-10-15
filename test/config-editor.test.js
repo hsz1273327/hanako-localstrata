@@ -338,13 +338,19 @@ test("the parameter editor offers one save, with no button that cannot take effe
   assert.doesNotMatch(js, /save\(true\)/, "save takes no restart argument");
   assert.match(js, /els\.saveBtn\.addEventListener\("click", \(\) => save\(\)\)/);
   assert.match(js, /async function save\(\)/);
-  // …while the ROUTE keeps the capability as the recorded re-entry point for
-  // running-state editing of the instant-effect params.
-  assert.match(read("routes/settings.js"), /if \(body\?\.restart && result\.saved\)/);
-  // The service-restart overlay path is still live (the LAN mode switch uses it).
+  // …and POST /settings no longer restarts at all (the editor only exists while
+  // stopped, where a "restart" would in fact START the service).
+  assert.doesNotMatch(read("routes/settings.js"), /body\?\.restart/);
+  assert.doesNotMatch(read("routes/settings.js"), /restartService/);
+  // The genuinely-live restart paths are kept, and must not regress:
+  //   * the LAN mode switch (routes/mode.js) — a real stop+start;
+  //   * the strata_control tool's explicit "restart" action.
+  assert.match(read("routes/mode.js"), /if \(body\?\.restart && result\.saved\) \{\s*result\.restart = await restartService\(ctx\);/);
+  assert.match(read("tools/strata_control.js"), /action === "restart"\) result = await restartService\(sdk\)/);
+  // The panel's mode switch still asks for that restart, overlay and all.
+  assert.match(js, /api\("mode", \{ method: "POST", body: JSON\.stringify\(\{ mode, restart \}\) \}\)/);
   assert.match(js, /setWorking\("restart"\)/);
 });
-
 test("the removed button leaves no orphan keys, and the honest notes stay", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
   for (const lang of LANGS) {
