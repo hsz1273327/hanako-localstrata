@@ -12,6 +12,8 @@ import {
   validateProfile,
   makeDefaultProfile,
   effectiveContainerFields,
+  effectiveConfigFile,
+  readApiKey,
   gpuModelCatalog,
   mi50Catalog,
   mi50Preset,
@@ -39,6 +41,29 @@ const RUNNING_STATES = new Set(["running", "starting", "stopping", "restarting"]
 // profiles that leave the matching field empty.
 const API_KEY_MASK = "********";
 const PREFS_REFRESH_DEFAULT = 5;
+
+// A profile's own API key is a secret and must never leave the backend in the
+// clear. The host masks only TOP-LEVEL schema fields (and `profiles` is a nested
+// array — see the validator probe in the notes), so the masking has to happen at
+// this boundary. A returned mask means "unchanged" on the way back.
+function maskProfile(profile) {
+  if (!profile || typeof profile !== "object") return profile;
+  return { ...profile, apiKey: profile.apiKey ? API_KEY_MASK : "" };
+}
+function maskProfiles(profiles) {
+  return (Array.isArray(profiles) ? profiles : []).map(maskProfile);
+}
+
+// Where a LOCAL deployment's effective key would come from when the profile has
+// no override: the selected config file (a setup-generated `strata-*.json`
+// already carries `api_key`). Only the file name and a boolean are exposed —
+// never the key itself.
+function localKeySource(cfg) {
+  const active = findProfile(cfg.profiles, cfg.activeProfileId) || cfg.profiles[0] || null;
+  if (!active || active.type !== "local") return { file: "", hasKey: false };
+  const file = String(effectiveConfigFile(cfg) || "").split(/[/\\]/).pop();
+  return { file, hasKey: !!readApiKey(cfg) };
+}
 
 function validationError(message, validation) {
   const err = new Error(message);
@@ -68,8 +93,12 @@ function normalizeDefaultPort(value) {
 export async function readPrefs(ctx) {
   const autoStart = (await readConfig(ctx, "autoStart")) === true;
   const refreshSec = normalizeRefreshSec(await readConfig(ctx, "refreshSec")) ?? PREFS_REFRESH_DEFAULT;
-  const apiKey = await readConfig(ctx, "apiKey");
-  const hasApiKey = typeof apiKey === "string" && apiKey.length > 0;
+  // The global key is the FALLBACK (a profile's own key wins). Read the new key
+  // name, falling back to the legacy slot until the one-shot migration ran; the
+  // wire field stays `apiKey` (it is this page's single API-key input).
+  const stored = String((await readConfig(ctx, "defaultApiKey")) ?? "").trim();
+  const legacy = String((await readConfig(ctx, "apiKey")) ?? "").trim();
+  const hasApiKey = !!(stored || legacy);
   const defaultGgufDir = String((await readConfig(ctx, "defaultGgufDir")) ?? "").trim();
   const defaultPort = normalizeDefaultPort(await readConfig(ctx, "defaultPort")) ?? 0;
   return {
@@ -107,7 +136,8 @@ export async function writePrefs(ctx, raw) {
       throw validationError("apiKey must be a string", ["apiKey:string"]);
     }
     // The mask means the user did not touch the field; keep the stored key.
-    if (body.apiKey !== API_KEY_MASK) patch.apiKey = body.apiKey;
+    // Otherwise this is the global FALLBACK key (stored as `defaultApiKey`).
+    if (body.apiKey !== API_KEY_MASK) patch.defaultApiKey = body.apiKey;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "defaultGgufDir")) {
@@ -161,6 +191,11 @@ export async function saveProfile(ctx, raw) {
 
   const isNew = !existing;
   let proposed = raw || {};
+  // A returned mask means "the user did not touch this field": keep the stored
+  // key. An empty value is an explicit clear; anything else replaces it.
+  if (String(proposed.apiKey ?? "") === API_KEY_MASK) {
+    proposed = { ...proposed, apiKey: existing ? String(existing.apiKey || "") : "" };
+  }
   // The first profile is always named "default".
   if (isNew && !String(proposed.name || "").trim()) {
     proposed = { ...proposed, name: cfg.profiles.length === 0 ? makeDefaultProfile().name : proposed.name };
@@ -190,8 +225,9 @@ export async function saveProfile(ctx, raw) {
 
   return {
     saved: true,
-    profile,
-    profiles: saved.profiles,
+    // The stored profile carries the real key; the response must not.
+    profile: maskProfile(profile),
+    profiles: maskProfiles(saved.profiles),
     activeProfileId: saved.activeProfileId,
     ...(compose ? { compose } : {}),
     status: await getStatus(ctx),
@@ -214,7 +250,7 @@ export async function deleteProfile(ctx, id) {
   return {
     saved: true,
     deleted: id,
-    profiles: saved.profiles,
+    profiles: maskProfiles(saved.profiles),
     activeProfileId: saved.activeProfileId,
     status: await getStatus(ctx),
   };
@@ -295,8 +331,13 @@ export default function registerSettingsRoutes(app, ctx) {
     try {
       const cfg = await readAllConfig(ctx);
       return c.json({
-        profiles: cfg.profiles,
+        // The profiles carry a secret (a per-profile API key); mask it here —
+        // the host never descends into a nested array field.
+        profiles: maskProfiles(cfg.profiles),
         activeProfileId: cfg.activeProfileId,
+        // Where a LOCAL deployment's key would come from: the selected config
+        // file, whose `api_key` setup already wrote. Name + boolean only.
+        keySource: localKeySource(cfg),
       });
     } catch (e) {
       return c.json({ error: String(e?.message || e) }, 500);
@@ -339,7 +380,13 @@ export default function registerSettingsRoutes(app, ctx) {
       return c.json({ saved: false, error: "请求体必须是 JSON" }, 400);
     }
     try {
-      return c.json({ saved: true, ...(await selectProfile(ctx, body?.id)), status: await getStatus(ctx) });
+      const selected = await selectProfile(ctx, body?.id);
+      return c.json({
+        saved: true,
+        activeProfileId: selected.activeProfileId,
+        profiles: maskProfiles(selected.profiles),
+        status: await getStatus(ctx),
+      });
     } catch (e) {
       return c.json({ saved: false, error: String(e?.message || e), validation: e?.validation }, 400);
     }

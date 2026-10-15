@@ -103,12 +103,17 @@ const els = {
 // alone knows: the fetcher, the path picker, the message sink and the two
 // callbacks the module needs to resolve the compose path and react to a card
 // change (the MI50 prompt).
+// Where the effective key would come from for a local deployment (name + a
+// boolean only), refreshed from GET /profiles. `containerFields` reads it live.
+let keySource = { file: "", hasKey: false };
+
 const containerFields = createContainerFields(els.profileContainerExtra, {
   idPrefix: "pf-",
   api,
   pickPath,
   notify: setProfileMessage,
   preset: true,
+  apiKeySource: () => keySource,
   copyText:
     typeof hana?.clipboard?.writeText === "function"
       ? (text) => {
@@ -826,6 +831,12 @@ async function loadProfiles() {
   const data = await api("profiles");
   profiles = Array.isArray(data?.profiles) ? data.profiles : [];
   activeProfileId = data?.activeProfileId || profiles[0]?.id || "";
+  // The backend masks every profile's apiKey and names the local fallback
+  // source; keep it for the key field's "in effect" line.
+  keySource = data?.keySource && typeof data.keySource === "object"
+    ? { file: String(data.keySource.file || ""), hasKey: !!data.keySource.hasKey }
+    : { file: "", hasKey: false };
+  containerFields.refreshApiKeySource();
   // Paint the list before the (potentially slow) status probe so the user is
   // not waiting on docker/python checks. Edit/delete keep the last known
   // running state until the probe resolves.

@@ -1296,6 +1296,9 @@ let editorType = "local";
 // The card-model catalog (GET /presets), the same one the settings page loads.
 let gpuModels = [];
 let presetsLoaded = false;
+// Where a local deployment's effective key would come from (name + boolean
+// only), refreshed from GET /profiles.
+let keySource = { file: "", hasKey: false };
 
 async function loadPanelPresets() {
   if (presetsLoaded) return;
@@ -1352,6 +1355,7 @@ function ensurePluginForm() {
     idPrefix: "ps-",
     api,
     notify: setPsMessage,
+    apiKeySource: () => keySource,
     copyText: canCopyPath()
       ? (text) => {
           Promise.resolve(hana.clipboard.writeText(text)).catch(() => {});
@@ -1420,16 +1424,21 @@ function setProfileEditorReadOnly(readOnly) {
 async function openDrawer(readOnly) {
   if (state.working || !ensurePluginForm() || !els.profileDrawer.hidden) return;
   let profile = null;
+  let keySourceFromServer = null;
   try {
     const data = await api("profiles");
     const list = Array.isArray(data?.profiles) ? data.profiles : [];
     const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
     profile = list.find((p) => p.id === activeId) || list[0] || state.status?.profile || null;
+    keySourceFromServer = data?.keySource;
   } catch (e) {
     showError(String(e?.message || e));
     return;
   }
   if (!profile) return;
+  if (keySourceFromServer && typeof keySourceFromServer === "object") {
+    keySource = { file: String(keySourceFromServer.file || ""), hasKey: !!keySourceFromServer.hasKey };
+  }
   state.editingProfileId = readOnly ? null : profile.id;
   // The card-model picker needs the catalog before it can hold the profile's
   // value; only the stopped (editable) path ever writes it back.

@@ -64,7 +64,8 @@ test("writePrefs persists the global keys, including the general fallbacks", asy
   assert.equal(saved.apiKey, API_KEY_MASK);
   assert.equal(saved.defaultGgufDir, "/general/models");
   assert.equal(saved.defaultPort, 9000);
-  assert.equal(ctx._store.apiKey, "secret-key");
+  // The global key is stored under its new name: the FALLBACK default.
+  assert.equal(ctx._store.defaultApiKey, "secret-key");
   assert.equal(ctx._store.autoStart, true);
   assert.equal(ctx._store.refreshSec, 12);
   assert.equal(ctx._store.defaultGgufDir, "/general/models");
@@ -81,22 +82,31 @@ test("the general fallbacks can be cleared (empty dir / 0 port)", async () => {
 });
 
 test("a masked apiKey is treated as unchanged, an explicit value replaces it", async () => {
-  const ctx = makeCtx({ autoStart: false, refreshSec: 5, apiKey: "original" });
+  const ctx = makeCtx({ autoStart: false, refreshSec: 5, defaultApiKey: "original" });
   // Round-trips the masked value exactly as the page would.
   const before = await readPrefs(ctx);
   const kept = await writePrefs(ctx, { autoStart: true, refreshSec: 9, apiKey: before.apiKey });
   assert.equal(kept.hasApiKey, true);
-  assert.equal(ctx._store.apiKey, "original");
+  assert.equal(ctx._store.defaultApiKey, "original");
   assert.equal(ctx._store.autoStart, true);
   assert.equal(ctx._store.refreshSec, 9);
 
   // An explicit non-mask value (including "" to clear) is written.
   await writePrefs(ctx, { apiKey: "replaced" });
-  assert.equal(ctx._store.apiKey, "replaced");
+  assert.equal(ctx._store.defaultApiKey, "replaced");
   const cleared = await writePrefs(ctx, { apiKey: "" });
-  assert.equal(ctx._store.apiKey, "");
+  assert.equal(ctx._store.defaultApiKey, "");
   assert.equal(cleared.hasApiKey, false);
   assert.equal(cleared.apiKey, "");
+});
+
+// The global key used to live on `apiKey`; the prefs surface must still read it
+// (and report the mask) until the one-shot migration has moved it.
+test("prefs read falls back to the legacy global apiKey slot", async () => {
+  const ctx = makeCtx({ apiKey: "legacy-global" });
+  const prefs = await readPrefs(ctx);
+  assert.equal(prefs.hasApiKey, true);
+  assert.equal(prefs.apiKey, API_KEY_MASK);
 });
 
 test("writePrefs rejects invalid types and out-of-range values", async () => {

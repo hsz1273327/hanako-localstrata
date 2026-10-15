@@ -498,6 +498,73 @@ test("a collapsed group still submits, and a preset's advanced values are kept",
   }
 });
 
+// The API key field: a secret in the advanced group, plus a line saying which key
+// is actually in effect.
+test("the API key field is a password input inside the advanced group", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+
+    // What the backend returns is the MASK; it round-trips as "unchanged".
+    ctr.render({ containerName: "box", GpuModel: "nvidia", apiKey: "********" });
+    assert.equal(ctr.refs.apiKey.type, "password", "a secret input, never a text field");
+    assert.equal(inAdvancedPanel(ctr, ctr.refs.apiKey), true, "the key lives in the advanced group");
+    assert.equal(ctr.refs.apiKey.value, "********");
+    assert.equal(ctr.collect().apiKey, "********");
+
+    // Empty is an explicit clear; a real value replaces.
+    ctr.refs.apiKey.value = "";
+    assert.equal(ctr.collect().apiKey, "");
+    ctr.refs.apiKey.value = "sk-new";
+    assert.equal(ctr.collect().apiKey, "sk-new");
+
+    // The key counts toward the "already set" badge like its neighbours.
+    assert.equal(ctr.advancedSetCount(), 1);
+
+    // Read-only locks it (no write path) like every other value field.
+    ctr.setReadOnly(true);
+    assert.equal(ctr.refs.apiKey.disabled, true);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("the key field names the key that is actually in effect", () => {
+  const dom = installDom();
+  try {
+    // A local deployment: the page supplies the selected config file's name.
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, {
+      idPrefix: "t-",
+      apiKeySource: () => ({ file: "strata-a.json", hasKey: true }),
+    });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "box", GpuModel: "nvidia" });
+    assert.match(ctr.refs.apiKeySource.textContent, /strata-a\.json/, "names the config file the key would come from");
+
+    // An override switches the line to "this profile wins".
+    ctr.refs.apiKey.value = "sk-x";
+    ctr.refs.advancedPanel.dispatch("input");
+    assert.equal(ctr.refs.apiKeySource.textContent, t("field.apiKeySourceOverride"));
+
+    // Clearing it goes back to the fallback chain.
+    ctr.refs.apiKey.value = "";
+    ctr.refs.advancedPanel.dispatch("input");
+    assert.match(ctr.refs.apiKeySource.textContent, /strata-a\.json/);
+
+    // Without a config file at all (or a container profile): just the global key.
+    const host2 = document.createElement("div");
+    const ctr2 = createContainerFields(host2, { idPrefix: "u-", apiKeySource: () => ({ file: "", hasKey: false }) });
+    ctr2.setCatalog(CATALOG);
+    ctr2.render({ containerName: "box", GpuModel: "nvidia" });
+    assert.equal(ctr2.refs.apiKeySource.textContent, t("field.apiKeySourceGlobal"));
+  } finally {
+    dom.restore();
+  }
+});
+
 // A field the form does not render (the template-contributed device rules) is
 // preserved through render → collect, so an edit never drops it.
 test("collect() preserves the fields the form does not render", () => {

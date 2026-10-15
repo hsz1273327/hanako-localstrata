@@ -1,4 +1,4 @@
-import { getStatus } from "../lib/strata.js";
+import { getStatus, redactSecretsForModel } from "../lib/strata.js";
 
 export const name = "strata_status";
 export const description =
@@ -20,7 +20,9 @@ export function strataStatusTool(sdk) {
     sessionPermission,
     execute: async () => {
       const status = await getStatus(sdk);
-      return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
+      // The status object carries the effective API key (network.apiKey) and the
+      // running container's environment; a model-facing payload must not.
+      return { content: [{ type: "text", text: JSON.stringify(redactSecretsForModel(status), null, 2) }] };
     },
   };
 }

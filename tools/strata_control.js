@@ -1,4 +1,4 @@
-import { startService, stopService, restartService } from "../lib/strata.js";
+import { startService, stopService, restartService, redactSecretsForModel } from "../lib/strata.js";
 
 export const name = "strata_control";
 export const description =
@@ -32,7 +32,9 @@ export function strataControlTool(sdk) {
       else if (action === "restart") result = await restartService(sdk);
       else throw new Error(`未知 action: ${action}（应为 start / stop / restart）`);
 
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      // The lifecycle result can embed status-shaped data (the effective key, a
+      // container's environment); strip secrets before the model sees it.
+      return { content: [{ type: "text", text: JSON.stringify(redactSecretsForModel(result), null, 2) }] };
     },
   };
 }

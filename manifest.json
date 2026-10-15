@@ -34,10 +34,11 @@
           "port":       { "type": "integer", "title": "Service port (0 = use config)",   "default": 0 },
           "autoStart":  { "type": "boolean", "title": "Start with Hana",                "default": false },
           "refreshSec": { "type": "integer", "title": "Refresh interval (seconds)",     "default": 5 },
-          "apiKey":     { "type": "string",  "title": "Strata API Key",   "default": "", "sensitive": true },
+          "defaultApiKey": { "type": "string", "title": "Default Strata API Key (fallback)", "default": "", "sensitive": true, "description": "Global fallback injected/used when the active profile carries no API key of its own; a profile's own key wins. Precedence: profile.apiKey -> defaultApiKey -> (local only) the selected config file's api_key." },
+          "apiKey":     { "type": "string",  "title": "Legacy global API key (migrated)",   "default": "", "sensitive": true, "description": "Legacy: the global key used to live on this key. readAllConfig moves it into defaultApiKey once and clears this slot; kept declared so the legacy value stays readable/writable during the migration." },
           "defaultGgufDir": { "type": "string",  "title": "Default GGUF model directory", "default": "", "description": "General fallback used when a profile leaves its model directory empty (a local profile's ggufDir, or a container profile's host model directory)." },
           "defaultPort":    { "type": "integer", "title": "Default service port (0 = unset)", "default": 0, "description": "General fallback used when a profile leaves the port at 0." },
-          "profiles":   { "type": "array",   "title": "Profiles (internal)", "default": [], "description": "Internal: array of environment profiles; edit from the panel, not here." },
+          "profiles":   { "type": "array",   "title": "Profiles (internal)", "default": [], "description": "Internal: array of environment profiles; edit from the panel, not here. Each profile may carry its own `apiKey` override; because the host masks only top-level schema fields, a nested key cannot be declared sensitive and is masked at this App's own boundary instead (GET /profiles)." },
           "activeProfileId": { "type": "string", "title": "Active profile (internal)", "default": "", "description": "Internal: id of the currently selected profile." }
         }
       }
