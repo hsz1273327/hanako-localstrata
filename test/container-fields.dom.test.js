@@ -16,6 +16,7 @@ import { createContainerFields } from "../ui/assets/profile-fields.js";
 import registerSettingsRoutes, { saveProfile } from "../routes/settings.js";
 import { readAllConfig } from "../lib/strata.js";
 import { mi50Preset } from "../lib/mi50.js";
+import { t } from "../ui/assets/i18n.js";
 
 // ── minimal DOM ───────────────────────────────────────────────────────────
 
@@ -384,6 +385,119 @@ test("the previewed compose path is exactly the file the save writes", async () 
   }
 });
 
+// ── the advanced group (collapsed by default) ─────────────────────────────
+
+// Walk the stub's parent links: is `node` inside the advanced panel?
+function inAdvancedPanel(ctr, node) {
+  for (let n = node; n; n = n.parent) {
+    if (n === ctr.refs.advancedPanel) return true;
+  }
+  return false;
+}
+
+test("the advanced fields live inside the collapsed group; the common ones stay out", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "box", GpuModel: "nvidia" });
+
+    // Collapsed by default, and announced as such.
+    assert.equal(ctr.refs.advancedPanel.hidden, true, "the group starts collapsed");
+    assert.equal(ctr.refs.advancedToggle.getAttribute("aria-expanded"), "false");
+
+    const advanced = {
+      EngineBindPort: ctr.refs.engineBindPort,
+      VolumeBinds: ctr.refs.volumeBinds.rows,
+      PortBinds: ctr.refs.portBinds.rows,
+      environment: ctr.refs.environment.rows,
+      ulimits: ctr.refs.ulimits.rows,
+      security_opt: ctr.refs.securityOpt.rows,
+      ShmSize: ctr.refs.shmSize,
+      ApiKeyEnv: ctr.refs.apiKeyEnv,
+    };
+    for (const [key, node] of Object.entries(advanced)) {
+      assert.ok(inAdvancedPanel(ctr, node), `${key} must live in the advanced group`);
+    }
+    // The identity / hardware fields a normal deployment needs stay common.
+    for (const node of [
+      ctr.refs.deployDir,
+      ctr.refs.gpuModel,
+      ctr.refs.gpuIds,
+      ctr.refs.modelDir,
+      ctr.refs.modelsBindDir,
+      ctr.refs.enginePort,
+    ]) {
+      assert.equal(inAdvancedPanel(ctr, node), false, "a common field must not sit inside the advanced group");
+    }
+    // The toggle comes right after the common fields, with the panel under it.
+    const at = host.children.indexOf(ctr.refs.advancedToggle);
+    assert.ok(at > host.children.indexOf(ctr.refs.enginePort.parent), "the toggle follows the common fields");
+    assert.equal(host.children[at + 1], ctr.refs.advancedPanel);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("the group expands and collapses, with localized state copy", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ containerName: "box", GpuModel: "nvidia" });
+    assert.equal(ctr.refs.advancedState.textContent, t("field.advancedShow"));
+
+    ctr.refs.advancedToggle.dispatch("click");
+    assert.equal(ctr.refs.advancedPanel.hidden, false, "the group expands");
+    assert.equal(ctr.refs.advancedToggle.getAttribute("aria-expanded"), "true");
+    assert.equal(ctr.refs.advancedState.textContent, t("field.advancedHide"));
+
+    ctr.refs.advancedToggle.dispatch("click");
+    assert.equal(ctr.refs.advancedPanel.hidden, true, "and collapses again");
+    assert.equal(ctr.refs.advancedToggle.getAttribute("aria-expanded"), "false");
+  } finally {
+    dom.restore();
+  }
+});
+
+// Collapsing is presentation only: the inputs stay in the DOM, so a save
+// submits them — including the batch a community-image preset fills.
+test("a collapsed group still submits, and a preset's advanced values are kept", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", preset: true });
+    ctr.setCatalog(CATALOG);
+    const preset = mi50Preset({ containerName: "strata-mi50", home: "/home/u" });
+    ctr.applyPreset(preset);
+
+    assert.equal(ctr.refs.advancedPanel.hidden, true, "the preset does not force the group open");
+    const body = ctr.collect();
+    assert.deepEqual(body.VolumeBinds, preset.VolumeBinds);
+    assert.deepEqual(body.PortBinds, preset.PortBinds);
+    assert.deepEqual(body.environment, preset.environment);
+    assert.deepEqual(body.ulimits, preset.ulimits);
+    assert.deepEqual(body.security_opt, preset.security_opt);
+    assert.equal(body.ShmSize, "16g");
+    assert.equal(body.EngineBindPort, 8085);
+
+    // The badge tells the user a collapsed group is not empty (7 of the 8 carry
+    // a value; the preset leaves ApiKeyEnv alone).
+    assert.equal(ctr.advancedSetCount(), 7);
+    assert.equal(ctr.refs.advancedCount.hidden, false);
+    assert.match(ctr.refs.advancedCount.textContent, /7/);
+
+    // Editing inside the group updates the badge live.
+    ctr.refs.shmSize.value = "";
+    ctr.refs.advancedPanel.dispatch("input");
+    assert.equal(ctr.advancedSetCount(), 6);
+  } finally {
+    dom.restore();
+  }
+});
+
 // A field the form does not render (the template-contributed device rules) is
 // preserved through render → collect, so an edit never drops it.
 test("collect() preserves the fields the form does not render", () => {
@@ -494,7 +608,7 @@ test("applyPreset fills the module's fields and collect() reads them back", () =
   }
 });
 
-test("read-only disables every control the module owns", () => {
+test("read-only disables every control the module owns, but keeps the group toggle usable", () => {
   const dom = installDom();
   try {
     const host = document.createElement("div");
@@ -503,10 +617,17 @@ test("read-only disables every control the module owns", () => {
     ctr.render({ GpuModel: "nvidia" });
 
     ctr.setReadOnly(true);
+    const isToggle = (c) => c.classList && c.classList.contains("cf-adv-toggle");
     const controls = host.querySelectorAll("input, select, button");
     assert.ok(controls.length > 5);
-    assert.ok(controls.every((c) => c.disabled), "read-only disables every input/select/button");
+    assert.ok(
+      controls.filter((c) => !isToggle(c)).every((c) => c.disabled),
+      "read-only disables every input/select/button",
+    );
     assert.equal(ctr.refs.volumeBinds.add.disabled, true, "the add-row button is locked too");
+    // …but the disclosure stays clickable, so a running profile's advanced
+    // values remain viewable (it holds no value of its own).
+    assert.equal(ctr.refs.advancedToggle.disabled, false, "the group toggle stays usable in the read-only view");
 
     ctr.setReadOnly(false);
     assert.ok(host.querySelectorAll("input, select, button").every((c) => !c.disabled));
@@ -564,6 +685,9 @@ test("a container profile built by the form round-trips to storage and compose",
     };
 
     const ctx = makeCtx({});
+    // The advanced group is still collapsed at save time — its values must be
+    // submitted anyway.
+    assert.equal(ctr.refs.advancedPanel.hidden, true, "the advanced group is collapsed when saving");
     const saved = await saveProfile(ctx, body);
     assert.equal(saved.saved, true);
     assert.equal(saved.profile.GpuModel, "amd-mi50");

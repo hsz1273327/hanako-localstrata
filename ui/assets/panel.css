@@ -1129,6 +1129,38 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* The collapsed "advanced" group (ui/assets/profile-fields.js). */
+.cf-adv-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.cf-adv-count {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(83, 125, 150, 0.14);
+}
+.cf-adv-state {
+  font-size: 11px;
+  margin-left: auto;
+  opacity: 0.75;
+}
+.cf-adv-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  border-radius: 8px;
+  background: rgba(83, 125, 150, 0.04);
+}
+/* `display: grid` above would otherwise beat the user-agent [hidden] rule. */
+.cf-adv-panel[hidden] {
+  display: none;
+}
+
 /* A field and an inline action on one row (the tag + its re-pull button). */
 .field-inline {
   display: flex;

@@ -153,6 +153,10 @@ test("the retired field.dataDir key is gone and the new keys exist in all six lo
     "field.openDirFailed",
     "field.listAdd",
     "field.listRemove",
+    "field.advanced",
+    "field.advancedShow",
+    "field.advancedHide",
+    "field.advancedSet",
     "gpuModel.nvidia",
     "gpuModel.amd-mi50",
     "gpuModel.amd-7900xtx",
@@ -216,7 +220,9 @@ test("DeployDir is shown, and the compose path is resolved server-side", async (
 test("the running read-only rule reaches every new container field", () => {
   const fields = read("ui/assets/profile-fields.js");
   assert.match(fields, /function setReadOnly\(flag\)/);
-  assert.match(fields, /for \(const node of host\.querySelectorAll\("input, select, button"\)\) node\.disabled = readOnly/);
+  // Only the disclosure is exempt (a view control, no value of its own).
+  assert.match(fields, /if \(node\.classList && node\.classList\.contains\("cf-adv-toggle"\)\) continue;/);
+  assert.match(fields, /node\.disabled = readOnly;/);
   assert.match(read("ui/assets/settings.js"), /containerFields\.setReadOnly\(readOnly\)/);
   assert.match(read("ui/assets/panel.js"), /pluginFormEls\.container\.setReadOnly\(readOnly\)/);
 });

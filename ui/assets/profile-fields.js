@@ -17,7 +17,7 @@
 //
 // No docker device vocabulary ever reaches the UI: the picked card model
 // implies it and lib/gpu.js expands it.
-import { t, applyI18n } from "./i18n.js";
+import { t, tp, applyI18n } from "./i18n.js";
 
 const NVIDIA = "nvidia";
 const AMD = "amd";
@@ -459,6 +459,37 @@ export function createContainerFields(host, opts = {}) {
 
   // ── assembly ──────────────────────────────────────────────────────────
 
+  // The two common fields, then the advanced group. The divide is "does a
+  // normal deployment need to touch this?" — see ADVANCED_KEYS below; the
+  // advanced group is collapsed by default but its inputs stay in the DOM, so
+  // collapsing never affects what a save submits.
+  const advancedPanel = make("div", { class: "cf-adv-panel" });
+  advancedPanel.hidden = true;
+
+  const advTitle = i18nSpan("field.advanced", "cf-adv-title");
+  const advCount = make("span", { class: "cf-adv-count" });
+  advCount.hidden = true;
+  const advState = make("span", { class: "cf-adv-state" });
+  // A VIEW control: it stays usable in the read-only drawer so the advanced
+  // values can still be inspected while the service runs.
+  const advToggle = make("button", {
+    class: "btn small cf-adv-toggle",
+    type: "button",
+    attrs: { "aria-expanded": "false" },
+    children: [advTitle, advCount, advState],
+  });
+
+  advancedPanel.replaceChildren(
+    engineBindPort.field,
+    volumeBinds,
+    portBinds,
+    environment,
+    ulimits,
+    securityOpt,
+    shmSize.field,
+    apiKeyEnv.field,
+  );
+
   host.classList.add("cf-fields");
   host.replaceChildren(
     // The compose directory comes FIRST: it is the root of the deployment — the
@@ -475,15 +506,63 @@ export function createContainerFields(host, opts = {}) {
     modelDir.field,
     modelsBindDir.field,
     enginePort.field,
-    engineBindPort.field,
-    volumeBinds,
-    portBinds,
-    environment,
-    ulimits,
-    securityOpt,
-    shmSize.field,
-    apiKeyEnv.field,
+    advToggle,
+    advancedPanel,
   );
+
+  // ── the advanced group ───────────────────────────────────────────────
+  //
+  // The split is "would a normal deployment ever need to change this?". The
+  // fields above are the deployment's identity and hardware choices; the ones in
+  // ADVANCED_KEYS exist for community images and special situations (they carry
+  // an image's shm / seccomp / memlock needs, a passthrough list, …). Kept as
+  // data so the badge, the tests and the panel cannot drift.
+  const ADVANCED_KEYS = [
+    "EngineBindPort",
+    "VolumeBinds",
+    "PortBinds",
+    "environment",
+    "ulimits",
+    "security_opt",
+    "ShmSize",
+    "ApiKeyEnv",
+  ];
+
+  let advancedOpen = false;
+
+  // How many advanced fields carry a value — a preset fills several, and a
+  // collapsed group must not hide that silently.
+  function advancedSetCount() {
+    const body = collect();
+    let n = 0;
+    for (const key of ADVANCED_KEYS) {
+      const value = body[key];
+      if (Array.isArray(value) ? value.length > 0 : String(value ?? "").trim() !== "") n += 1;
+    }
+    return n;
+  }
+
+  function updateAdvancedChrome() {
+    advState.textContent = t(advancedOpen ? "field.advancedHide" : "field.advancedShow");
+    const n = advancedSetCount();
+    advCount.hidden = n === 0;
+    advCount.textContent = n ? tp("field.advancedSet", { n }) : "";
+  }
+
+  // Collapsing only hides the panel; its inputs stay in the DOM, so a save
+  // submits their values either way.
+  function setAdvancedOpen(open) {
+    advancedOpen = !!open;
+    advancedPanel.hidden = !advancedOpen;
+    advToggle.setAttribute("aria-expanded", advancedOpen ? "true" : "false");
+    updateAdvancedChrome();
+  }
+
+  advToggle.addEventListener("click", () => setAdvancedOpen(!advancedOpen));
+  // Keep the badge honest while the group is edited (input bubbles up from any
+  // field inside the panel).
+  advancedPanel.addEventListener("input", () => updateAdvancedChrome());
+  advancedPanel.addEventListener("change", () => updateAdvancedChrome());
 
   function modelLabel(entry) {
     const key = `gpuModel.${entry.key}`;
@@ -515,12 +594,6 @@ export function createContainerFields(host, opts = {}) {
 
   function render(profile) {
     const src = profile && typeof profile === "object" ? profile : {};
-    // Carry the keys the form does not own so a round-trip never drops them.
-    carried = {};
-    for (const [key, value] of Object.entries(src)) {
-      if (OWNED_KEYS.has(key) || PAGE_OWNED_SKIP.has(key)) continue;
-      carried[key] = Array.isArray(value) ? value.slice() : value;
-    }
     setSelectValue(src.GpuModel || "");
     gpuIds.value = src.GpuIds || "";
     modelDir.input.value = src.ModelDir || "";
@@ -535,6 +608,15 @@ export function createContainerFields(host, opts = {}) {
     shmSize.input.value = src.ShmSize || "";
     apiKeyEnv.input.value = src.ApiKeyEnv || "";
     deployDir.input.value = src.DeployDir || "";
+    // Carry the keys the form does not own so a round-trip never drops them.
+    carried = {};
+    for (const [key, value] of Object.entries(src)) {
+      if (OWNED_KEYS.has(key) || PAGE_OWNED_SKIP.has(key)) continue;
+      carried[key] = Array.isArray(value) ? value.slice() : value;
+    }
+    // Each open starts collapsed (the default), with the badge telling the user
+    // how many advanced fields a profile (or a preset) already carries.
+    setAdvancedOpen(false);
     applyVendorSplit();
     applyI18n(host);
     refreshDeployPath({ immediate: true });
@@ -581,18 +663,25 @@ export function createContainerFields(host, opts = {}) {
     if (patch.ApiKeyEnv !== undefined) apiKeyEnv.input.value = String(patch.ApiKeyEnv);
     if (patch.DeployDir !== undefined) deployDir.input.value = String(patch.DeployDir);
     applyVendorSplit();
+    updateAdvancedChrome();
     refreshDeployPath({ immediate: true });
   }
 
   function setReadOnly(flag) {
     readOnly = !!flag;
-    for (const node of host.querySelectorAll("input, select, button")) node.disabled = readOnly;
+    for (const node of host.querySelectorAll("input, select, button")) {
+      // The group toggle is a VIEW control: it stays usable so the advanced
+      // values can still be read while the service runs.
+      if (node.classList && node.classList.contains("cf-adv-toggle")) continue;
+      node.disabled = readOnly;
+    }
   }
 
   function relocalize() {
     rebuildOptions();
     applyI18n(host);
     applyVendorSplit();
+    updateAdvancedChrome();
   }
 
   function setCatalog(models) {
@@ -632,9 +721,15 @@ export function createContainerFields(host, opts = {}) {
       deployBox,
       openButton,
       copyButton,
+      advancedPanel,
+      advancedToggle: advToggle,
+      advancedState: advState,
+      advancedCount: advCount,
     },
     setCatalog,
     setReadOnly,
+    setAdvancedOpen,
+    advancedSetCount,
     render,
     collect,
     applyPreset,
