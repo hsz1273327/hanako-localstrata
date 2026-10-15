@@ -92,6 +92,17 @@
     <section class="group-box" id="configBox">
       <h2 class="group-title" data-i18n="group.config">Service</h2>
       <div id="configRows" class="kv-rows">—</div>
+      <p id="configManagedNotice" class="field-hint" data-i18n="configPick.containerManaged" hidden></p>
+    </section>
+
+    <!-- ②b 配置文件（仅本机 · 停机时可见）：选一份已有配置，或跑一次 setup 新建 -->
+    <section class="group-box" id="configPickBox" hidden>
+      <h2 class="group-title" data-i18n="configPick.title">Config file</h2>
+      <div class="config-pick">
+        <select id="configFileSelect" class="config-pick-select" aria-label="Config file" data-i18n-aria-label="configPick.selectLabel"></select>
+        <button id="configSetupBtn" class="btn small" type="button" data-i18n="configPick.new">New config…</button>
+      </div>
+      <p class="field-hint" data-i18n="configPick.hint">Choosing a config changes which setup result the service starts with.</p>
     </section>
 
     <!-- ③ 性能区 -->

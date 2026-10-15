@@ -72,6 +72,10 @@ const els = {
   profileReadOnlyHint: document.getElementById("profileReadOnlyHint"),
   versionBox: document.getElementById("versionBox"),
   configBox: document.getElementById("configBox"),
+  configManagedNotice: document.getElementById("configManagedNotice"),
+  configPickBox: document.getElementById("configPickBox"),
+  configFileSelect: document.getElementById("configFileSelect"),
+  configSetupBtn: document.getElementById("configSetupBtn"),
   speedBox: document.getElementById("speedBox"),
   resourceBox: document.getElementById("resourceBox"),
   logsBox: document.getElementById("logsBox"),
@@ -483,6 +487,37 @@ function paintConfig(s) {
   renderKvRows(els.configRows, rows);
 }
 
+// The config picker (local source, stopped only). The candidate list already
+// rides on getStatus(), so no extra backend read is needed. Selecting persists
+// the choice server-side, then the next refresh repaints every card from it.
+let configSelectKey = "";
+
+function paintConfigPick(s) {
+  const local = !isDockerMethod(s);
+  const running = RUNNING_STATES.has(s.state);
+  const show = local && !running && !SETUP_STATES.has(s.state);
+  els.configPickBox.hidden = !show;
+  if (!show) return;
+  const candidates = Array.isArray(s.configCandidates) ? s.configCandidates : [];
+  const selected = s.configFile || "";
+  const key = candidates.map((c) => `${c.file}:${c.context ?? ""}`).join("|") + `#${selected}`;
+  els.configFileSelect.disabled = state.working;
+  els.configSetupBtn.disabled = state.working;
+  if (key === configSelectKey) return;
+  configSelectKey = key;
+  els.configFileSelect.replaceChildren();
+  for (const c of candidates) {
+    const opt = document.createElement("option");
+    opt.value = c.file;
+    const parts = [];
+    if (c.quant) parts.push(c.quant);
+    if (Number.isFinite(c.context)) parts.push(tp("configPick.context", { context: c.context }));
+    opt.textContent = parts.length ? `${c.file} · ${parts.join(" · ")}` : c.file;
+    els.configFileSelect.append(opt);
+  }
+  els.configFileSelect.value = selected;
+}
+
 function paintSpeeds(m) {
   const rows = [];
   if (Number.isFinite(m?.tg)) rows.push([t("label.tg"), `${m.tg} t/s`]);
@@ -636,6 +671,7 @@ function paint(s) {
   paintPort(s);
   paintVersion(s);
   paintConfig(s);
+  paintConfigPick(s);
   paintSpeeds(s.metrics);
   paintLogs(s.log);
 
@@ -646,6 +682,9 @@ function paint(s) {
   // reads as "could not read it" when the truth is "there is nothing yet".
   els.versionBox.hidden = isSetup || !els.versionRows.children.length;
   els.configBox.hidden = isSetup || !els.configRows.children.length;
+  // Container configs are derived from the container's own env: say so instead
+  // of offering a picker that does not apply.
+  els.configManagedNotice.hidden = els.configBox.hidden || !isDockerMethod(s);
   els.speedBox.hidden = isSetup || !els.speedRows.children.length;
   // Resources are whole-machine figures (nvidia-smi / os.freemem), not this
   // service's; while it is not running they are not this page's job, so hide.
@@ -730,8 +769,8 @@ function renderFirstRunStages(p) {
   });
 }
 
-function showFirstRunOverlay(p) {
-  els.overlayText.textContent = t("firstRun.running");
+function showFirstRunOverlay(p, textKey = "firstRun.running") {
+  els.overlayText.textContent = t(textKey);
   els.overlayStep.textContent = "";
   els.overlayStep.hidden = true;
   els.overlayHint.textContent = p?.mayDownload ? t("firstRun.mayDownload") : t("firstRun.usingGguf");
@@ -1653,6 +1692,50 @@ async function selectEnv(id) {
   }
 }
 
+// Config selection: persist the pick server-side, then reload every card. The
+// backend refuses a running service, so no front-end guard is relied on.
+async function selectConfigFile(file) {
+  if (state.working || !file || file === state.status?.configFile) return;
+  state.working = true;
+  els.configFileSelect.disabled = true;
+  els.configSetupBtn.disabled = true;
+  showError("");
+  try {
+    await api("config/select", { method: "POST", body: JSON.stringify({ file }) });
+  } catch (e) {
+    showError(String(e?.message || e));
+  } finally {
+    state.working = false;
+    await refresh();
+  }
+}
+
+// Build a NEW config: the backend runs the same setup job as a first launch
+// (without the trailing start); progress is polled through GET /start, the one
+// staged-progress contract, via the shared first-run overlay.
+async function startConfigSetup() {
+  if (state.working) return;
+  state.working = true;
+  els.configFileSelect.disabled = true;
+  els.configSetupBtn.disabled = true;
+  showError("");
+  try {
+    const res = await api("config/setup", { method: "POST" });
+    if (res && res.running !== false) {
+      showFirstRunOverlay(res, "configPick.running");
+      await waitForFirstRun();
+      return;
+    }
+    endWorking();
+    await refresh();
+  } catch (e) {
+    const message = String(e?.message || e);
+    endWorking();
+    await refresh();
+    showError(message);
+  }
+}
+
 function schedule() {
   window.clearTimeout(timer);
   timer = window.setTimeout(async () => {
@@ -1666,6 +1749,19 @@ els.profileBadge.addEventListener("click", openProfileDetail);
 els.profileEditBtn.addEventListener("click", openProfileEditor);
 els.profileDrawerSave.addEventListener("click", saveProfileEdit);
 els.envSelect.addEventListener("change", () => selectEnv(els.envSelect.value));
+els.configFileSelect.addEventListener("change", () => selectConfigFile(els.configFileSelect.value));
+els.configSetupBtn.addEventListener("click", () => {
+  if (state.working) return;
+  showConfirm({
+    title: t("configPick.confirmTitle"),
+    sub: tp("firstRun.confirmSub", {
+      dir: state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
+    }),
+    confirmText: t("configPick.confirmAction"),
+    trigger: els.configSetupBtn,
+    onConfirm: startConfigSetup,
+  });
+});
 els.profileDrawerClose.addEventListener("click", closeProfileDetail);
 els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
 document.addEventListener("keydown", (e) => {

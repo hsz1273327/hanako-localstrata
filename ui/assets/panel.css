@@ -1109,3 +1109,32 @@ body {
   color: var(--text-light, #6b6f73);
   border-color: var(--border, rgba(83, 125, 150, 0.28));
 }
+
+/* Config picker (local source, stopped only): a select + a "new config" button. */
+.config-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.config-pick-select {
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border, rgba(83, 125, 150, 0.28));
+  border-radius: 6px;
+  background: var(--bg-card, #fcfaf5);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.config-pick-select:focus {
+  outline: 2px solid var(--accent, #10b981);
+  outline-offset: 1px;
+}
+.config-pick-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
