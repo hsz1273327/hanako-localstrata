@@ -60,7 +60,7 @@ test("mi50Preset fills the image, the three mounts, the env and the ports", () =
   assert.deepEqual(preset.environment, [
     "MODELS_DIR=/models",
     "DATA_DIR=/data",
-    "CONFIG=/data/config/strata.json",
+    "CONFIG=/work/strata-config.json",
     `ENGINE_PORT=${MI50_ENGINE_PORT}`,
     `WEB_PORT=${MI50_WIZARD_PORT}`,
   ]);
