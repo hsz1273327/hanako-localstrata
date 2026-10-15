@@ -133,6 +133,25 @@ test("the local block mounts the same API-key fragment on both surfaces", () => 
   assert.match(fields, /export function createApiKeyField\(/);
 });
 
+// The override marker must speak the App's existing colour language: amber is
+// already the "attention" state (the panel's starting/error dots, the warn
+// button), while green already means "running/selected" on this screen. A second
+// green here would make two different states look alike.
+test("the override marker reuses the attention amber, never a second green", () => {
+  for (const css of ["ui/assets/settings.css", "ui/assets/panel.css"]) {
+    const src = read(css);
+    const override = src.match(/\.cf-key-source\.is-override\s*\{[^}]*\}/);
+    assert.ok(override, `${css} must style the override state`);
+    assert.match(override[0], /#8a5a00/, `${css}: the existing amber text tone`);
+    assert.doesNotMatch(override[0], /10b981/, `${css}: never the accent green`);
+    const dot = src.match(/\.cf-key-dot\s*\{[^}]*\}/);
+    assert.ok(dot, `${css} must draw the state dot`);
+    assert.match(dot[0], /#d9a441/, `${css}: the same amber the panel's dot uses`);
+  }
+  // Same value as the panel's existing state dots — one amber vocabulary.
+  assert.match(read("ui/assets/panel.css"), /\.dot\.starting\s*\{[^}]*#d9a441/);
+});
+
 // ── no docker device vocabulary in the UI ────────────────────────────────
 
 test("the device vocabulary stays out of the interface", () => {

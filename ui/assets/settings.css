@@ -479,6 +479,31 @@ body {
   display: none;
 }
 
+/* The API key's "which key is in effect" line. The override state is a STATUS —
+   what is in effect is not the config's / global's key — so it uses the App's
+   existing attention amber (the panel's starting/error dots, the warn button).
+   Deliberately NOT the green accent: on this screen green already means the
+   running / selected profile. The marker is the dot plus the amber weight; the
+   other two states stay muted but lead with "not overridden", so the three read
+   as parallel facts rather than one primary and two asides. */
+.cf-key-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cf-key-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d9a441;
+  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.18);
+}
+.cf-key-source.is-override {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
 .profile-confirm {
   display: grid;
   gap: 8px;

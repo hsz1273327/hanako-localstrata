@@ -96,7 +96,10 @@ export function createApiKeyField(host, opts = {}) {
     type: "password",
     attrs: { autocomplete: "off", spellcheck: "false", "data-i18n-placeholder": "field.apiKeyPlaceholder" },
   });
-  const source = make("p", { class: "field-hint cf-key-source" });
+  const dot = make("span", { class: "cf-key-dot" });
+  dot.hidden = true;
+  const text = make("span", { class: "cf-key-text" });
+  const source = make("p", { class: "field-hint cf-key-source", children: [dot, text] });
   const field = make("label", {
     class: "field",
     children: [i18nSpan("field.apiKey"), input, source, i18nHint("field.apiKeyHint")],
@@ -105,17 +108,26 @@ export function createApiKeyField(host, opts = {}) {
   // "Which key is in effect?" — this profile's override, else the global fallback,
   // else (when the page can name one) the selected config file's `api_key`.
   // Only a file NAME ever arrives here; never a value.
+  //
+  // The override is a STATUS (what is in effect is not the config's / global's
+  // key), so it gets a state dot and the App's existing attention amber. Never the
+  // green accent: on this screen green already means the running/selected profile.
+  // The other two states carry no marker, but every variant leads with its state
+  // (overridden / not overridden) so the three read as parallel facts.
   function refreshSource() {
     const override = input.value.trim() !== "";
-    let text;
+    dot.hidden = !override;
+    if (override) source.classList.add("is-override");
+    else source.classList.remove("is-override");
+    let message;
     if (override) {
-      text = t("field.apiKeySourceOverride");
+      message = t("field.apiKeySourceOverride");
     } else {
       const src = apiKeySource ? apiKeySource() : null;
       const file = src && src.file ? String(src.file) : "";
-      text = file ? tp("field.apiKeySourceConfig", { file }) : t("field.apiKeySourceGlobal");
+      message = file ? tp("field.apiKeySourceConfig", { file }) : t("field.apiKeySourceGlobal");
     }
-    source.textContent = text;
+    text.textContent = message;
   }
 
   // `value` may be the mask the backend returned; it round-trips as "unchanged".
@@ -138,7 +150,7 @@ export function createApiKeyField(host, opts = {}) {
   input.addEventListener("change", refreshSource);
   if (host) host.append(field);
 
-  return { field, refs: { input, source }, render, value, setReadOnly, relocalize, refreshSource };
+  return { field, refs: { input, source, dot, text }, render, value, setReadOnly, relocalize, refreshSource };
 }
 
 // ── the module ────────────────────────────────────────────────────────────

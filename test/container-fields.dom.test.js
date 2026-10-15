@@ -626,6 +626,45 @@ test("the fallback wording drops the config-file clause when there is no file", 
   }
 });
 
+// The override state is a STATUS and gets a marker; the other two states read the
+// same way but carry no marker (a marker that is always on marks nothing).
+test("the override state is marked; the other two states are not", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const key = createApiKeyField(host, {
+      idPrefix: "t-",
+      apiKeySource: () => ({ file: "strata-a.json", hasKey: true }),
+    });
+
+    // Not overridden (a config file is named) → no marker, muted wording.
+    key.render("");
+    assert.equal(key.refs.dot.hidden, true, "no marker when nothing is overridden");
+    assert.equal(key.refs.source.classList.contains("is-override"), false);
+    assert.match(key.refs.source.textContent, /strata-a\.json/);
+
+    // Overridden → the state dot appears and the line takes the amber class.
+    key.render("********");
+    assert.equal(key.refs.dot.hidden, false, "the override is marked");
+    assert.equal(key.refs.source.classList.contains("is-override"), true);
+    assert.equal(key.refs.source.textContent, t("field.apiKeySourceOverride"));
+
+    // Not overridden again → the marker goes away.
+    key.render("");
+    assert.equal(key.refs.dot.hidden, true);
+    assert.equal(key.refs.source.classList.contains("is-override"), false);
+
+    // The third state (global only, no config file) also carries no marker.
+    const host2 = document.createElement("div");
+    const key2 = createApiKeyField(host2, { idPrefix: "u-" });
+    key2.render("");
+    assert.equal(key2.refs.dot.hidden, true);
+    assert.equal(key2.refs.source.textContent, t("field.apiKeySourceGlobal"));
+  } finally {
+    dom.restore();
+  }
+});
+
 // A field the form does not render (the template-contributed device rules) is
 // preserved through render → collect, so an edit never drops it.
 test("collect() preserves the fields the form does not render", () => {

@@ -1161,6 +1161,28 @@ body {
   display: none;
 }
 
+/* The API key's "which key is in effect" line (same wording and marker as the
+   settings page: one shared fragment). The override state is a STATUS — what is
+   in effect is not the config's / global's key — so it uses the App's existing
+   attention amber, never the green accent (which already means running here). */
+.cf-key-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cf-key-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #d9a441;
+  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.18);
+}
+.cf-key-source.is-override {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
 /* A field and an inline action on one row (the tag + its re-pull button). */
 .field-inline {
   display: flex;
