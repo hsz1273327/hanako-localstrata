@@ -18,6 +18,7 @@
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
+import { copyToClipboard } from "./clipboard.js";
 
 setLang(loadLang());
 
@@ -118,7 +119,17 @@ const containerFields = createContainerFields(els.profileContainerExtra, {
   copyText:
     typeof hana?.clipboard?.writeText === "function"
       ? (text) => {
-          Promise.resolve(hana.clipboard.writeText(text)).catch(() => {});
+          // Report the outcome instead of swallowing it: a copy button that does
+          // nothing silently is the worst outcome.
+          void copyToClipboard(text, {
+            hostWrite: (value) => hana.clipboard.writeText(value),
+            browserWrite:
+              typeof navigator !== "undefined" && navigator.clipboard?.writeText
+                ? (value) => navigator.clipboard.writeText(value)
+                : null,
+          }).then(async (res) => {
+            if (!res.ok) setProfileMessage(await copyFailureMessage(res), "error");
+          });
         }
       : null,
   openDir:
@@ -233,6 +244,22 @@ let editingProfileId = null;
 // disabled, the save button is hidden and only a close action remains.
 let editorReadOnly = false;
 let pendingDeleteId = "";
+
+// Why a copy failed, in words the user can act on (the same two keys the panel
+// uses): the ledger's status for `app/ui/clipboard-write` separates "never
+// granted" (fixable in 设置 → 安全 → 应用能力) from "granted, yet the write still
+// failed" (an environment problem). No answer → the general wording.
+async function copyFailureMessage(res) {
+  let status = "";
+  try {
+    const caps = await api("capabilities");
+    status = caps?.capabilities?.["app/ui/clipboard-write"]?.status || "";
+  } catch {
+    /* the generic wording is still honest */
+  }
+  if (status === "always" || status === "session") return tp("copy.failedGranted", { status });
+  return tp("copy.failedUngranted", { status: status || "not_asked" });
+}
 
 // ── Card-model catalog + the MI50 community-image preset ─────────────────
 //

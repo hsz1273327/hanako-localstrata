@@ -421,8 +421,28 @@ export default function registerSettingsRoutes(app, ctx) {
     }
   });
 
-  // ── Special-card presets ───────────────────────────────────────────────
+  // ── This App's own grant state ─────────────────────────────────────────
 
+  // Straight from the permission ledger: the host answers `app:capabilities` for
+  // the CALLING app only. The card reads it to say WHY a capability-backed action
+  // failed — "this app was never granted it" and "it is granted yet the write
+  // still failed" need different user actions, and guessing between them is how a
+  // failure turns into a mystery.
+  app.get("/capabilities", async (c) => {
+    try {
+      const reply = await ctx.bus.request("app:capabilities", {});
+      const rows = Array.isArray(reply?.capabilities) ? reply.capabilities : [];
+      const capabilities = {};
+      for (const row of rows) {
+        if (row?.capability) capabilities[row.capability] = { status: row.status, enforcement: row.enforcement };
+      }
+      return c.json({ capabilities });
+    } catch (e) {
+      return c.json({ error: String(e?.message || e) }, 500);
+    }
+  });
+
+  // ── Special-card presets ───────────────────────────────────────────────
   // The card-model catalog + the MI50 community-image constants.
   app.get("/presets", async (c) => {
     try {

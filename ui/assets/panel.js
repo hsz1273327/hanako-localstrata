@@ -7,6 +7,7 @@ import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.js";
+import { copyToClipboard } from "./clipboard.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -239,23 +240,37 @@ function paintBar(barEl, textEl, res) {
 
 let copyFeedbackTimer = null;
 
+// The clipboard paths this page actually has. The host capability is the
+// intended one (a card is a sandboxed iframe, where the browser API is usually
+// unavailable); `navigator.clipboard` is only a fallback.
+function clipboardDeps() {
+  return {
+    hostWrite: typeof hana?.clipboard?.writeText === "function" ? (text) => hana.clipboard.writeText(text) : null,
+    browserWrite:
+      typeof navigator !== "undefined" && navigator.clipboard?.writeText
+        ? (text) => navigator.clipboard.writeText(text)
+        : null,
+  };
+}
+
 async function copyText(text) {
-  // Host capability (app/ui.clipboard-write).
+  return copyToClipboard(text, clipboardDeps());
+}
+
+// Why a copy failed, in words the user can act on. The ledger's answer for
+// `app/ui.clipboard-write` separates "never granted" (fixable in
+// 设置 → 安全 → 应用能力) from "granted, yet the write still failed" (an
+// environment problem). No answer → the generic wording below, which is honest.
+async function copyFailureMessage(res) {
+  let status = "";
   try {
-    await hana.clipboard.writeText(text);
-    return true;
+    const caps = await api("capabilities");
+    status = caps?.capabilities?.["app/ui/clipboard-write"]?.status || "";
   } catch {
-    /* fall through to the browser clipboard */
+    /* the generic wording is still honest */
   }
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to manual selection */
-  }
-  return false;
+  if (status === "always" || status === "session") return tp("copy.failedGranted", { status });
+  return tp("copy.failedUngranted", { status: status || "not_asked" });
 }
 
 function selectForManualCopy(text) {
@@ -273,12 +288,17 @@ function selectForManualCopy(text) {
 
 async function copyWithFeedback(btn, text) {
   const label = btn.textContent;
-  const ok = await copyText(text);
-  if (ok) {
+  const res = await copyText(text);
+  if (res.ok) {
     btn.textContent = t("common.copied");
+    showError("");
   } else {
+    // Keep the manual fallback AND say why: a button that only re-labels itself
+    // reads as "nothing happened". The raw reason rides on the tooltip.
     selectForManualCopy(text);
     btn.textContent = t("common.selected");
+    btn.title = res.error || "";
+    showError(await copyFailureMessage(res));
   }
   btn.classList.add("copied");
   window.clearTimeout(copyFeedbackTimer);
@@ -1396,7 +1416,12 @@ function ensurePluginForm() {
     apiKeySource: () => keySource,
     copyText: canCopyPath()
       ? (text) => {
-          Promise.resolve(hana.clipboard.writeText(text)).catch(() => {});
+          // The advanced group's "copy path" button: report the outcome into the
+          // drawer's own message line instead of swallowing it.
+          void copyText(text).then(async (res) => {
+            if (res.ok) setPsMessage(t("common.copied"), "ok");
+            else setPsMessage(await copyFailureMessage(res), "error");
+          });
         }
       : null,
     openDir: canOpenPath()
