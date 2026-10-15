@@ -161,9 +161,17 @@ export function createApiKeyField(host, opts = {}) {
 //
 // A local deployment's `vision` block is written by setup.py — it downloads the
 // encoder, pins whether it runs on the GPU or the CPU, and writes the mmproj path
-// — so the app REPORTS it instead of offering an edit (that would be inventing a
-// write path setup owns). A container keeps its config inside the container and
-// passes `null`, which hides the line.
+// — so the app REPORTS it instead of offering an edit. That is not just tidiness:
+// the CPU/GPU choice is a property of the `strata-vision` BINARY setup compiled
+// (`setup.py:3229`, `-DSTRATA_VISION_CUDA=ON/OFF` for --vision gpu / anything
+// else), and the engine's args carry a per-mode `--vram-reserve-mib`
+// (`setup.py:5416`). Flipping `vision.gpu` in the config would point at a binary
+// built for the other mode, so the switch belongs to setup — the engine itself
+// says as much (`serve/server.py:2174-2181`: it tolerates a hand-edited section,
+// then prints "run setup again with --vision to write them").
+//
+// A container keeps its config inside the container and passes `null`, which
+// hides the line.
 export function createVisionStatus(host, opts = {}) {
   const p = opts.idPrefix || "cf-";
   const line = make("p", { class: "field-hint cf-vision-status", id: `${p}vision-status` });
@@ -184,7 +192,10 @@ export function createVisionStatus(host, opts = {}) {
       return;
     }
     const parts = [t("vision.on")];
-    if (info.encoder) parts.push(tp("vision.encoder", { encoder: info.encoder }));
+    // Name the mode in BOTH vocabularies: a local install spells the GPU case
+    // `gpu` (setup.py --vision gpu), the container image spells it `yes`.
+    if (info.encoder === "gpu") parts.push(t("vision.encoderGpu"));
+    else if (info.encoder === "cpu") parts.push(t("vision.encoderCpu"));
     if (info.mmproj) parts.push(tp("vision.mmproj", { file: info.mmproj }));
     line.textContent = parts.join(" · ");
   }

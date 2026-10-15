@@ -237,7 +237,7 @@ test("the container block renders the vision switch inside the advanced group", 
 
 test("the vision copy exists in all six locales", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
-  const keys = ["field.vision", "field.visionHint", "field.visionPlaceholder", "vision.on", "vision.off", "vision.encoder", "vision.mmproj", "vision.setupNote"];
+  const keys = ["field.vision", "field.visionHint", "field.visionPlaceholder", "vision.on", "vision.off", "vision.encoderCpu", "vision.encoderGpu", "vision.mmproj", "vision.setupNote"];
   for (const lang of LANGS) {
     for (const key of keys) {
       assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
@@ -246,7 +246,52 @@ test("the vision copy exists in all six locales", async () => {
     for (const value of ["no", "yes", "cpu"]) {
       assert.match(STRINGS[lang]["field.visionHint"], new RegExp(value), `${lang}.field.visionHint must mention ${value}`);
     }
-    // The read-only line says who owns it.
+    // The read-only line says who owns it, and names the exact way out.
     assert.match(STRINGS[lang]["vision.setupNote"], /setup/i, `${lang}.vision.setupNote must name setup`);
+    assert.match(STRINGS[lang]["vision.setupNote"], /--vision/, `${lang}.vision.setupNote must name the flag`);
+    // The two vocabularies are tied together, so `gpu` and `yes` do not read as
+    // two unrelated things.
+    assert.match(STRINGS[lang]["vision.encoderGpu"], /yes|VISION=yes/, `${lang}.vision.encoderGpu must name the container's spelling`);
+    assert.match(STRINGS[lang]["vision.encoderCpu"], /VISION=cpu|cpu/, `${lang}.vision.encoderCpu must name the container's spelling`);
   }
+});
+
+// ── the local side has no switch, and that is the finding ────────────────
+
+// Editing the config's `vision.gpu` is NOT a supported way to move the encoder
+// between CPU and GPU: setup COMPILES a per-mode `strata-vision`
+// (`setup.py:3229`, `-DSTRATA_VISION_CUDA=ON/OFF`) and bakes a per-mode
+// `--vram-reserve-mib` into the engine's args (`setup.py:5416`); the engine itself
+// tolerates a hand-edited section but tells you to re-run setup
+// (`serve/server.py:2174-2181`). So the app reports the state and points at
+// setup, instead of offering a switch that half-works.
+test("the local vision state stays read-only, pointing at setup", async () => {
+  const { emptyLocalProfile } = await import("../lib/profiles.js");
+  // No local vision field to write: the local model carries none.
+  assert.ok(!("Vision" in emptyLocalProfile()), "no Vision field on the local model");
+  assert.ok(!("Vision" in normalizeProfile({ type: "local", strataDir: "/s", Vision: "gpu" })), "and normalization drops one if it appears");
+  const fields = read("ui/assets/profile-fields.js");
+  const status = fields.slice(fields.indexOf("// ── the local vision state (read-only)"), fields.indexOf("// ── the module ──"));
+  assert.match(status, /function paint\(info\)/, "the fragment only paints");
+  assert.doesNotMatch(status, /addEventListener|execCommand|collect\(/, "no write path in the read-only line");
+  // …and the reason is on the record where the next reader will look.
+  assert.match(status, /setup\.py:3229/);
+  assert.match(status, /server\.py:2174/);
+});
+
+// ── the MI50 preset must not carry an env the image ignores ──────────────
+
+// Its README (xxDoman/strata-gfx906, master, "## Vision (images)") enables images
+// from the :8090 configurator, not from the environment, and ships a CPU-only
+// encoder. A `VISION` there would be a no-op that reads as if vision were on.
+test("the MI50 preset sets no VISION env (the image reads none)", async () => {
+  const { mi50Preset } = await import("../lib/mi50.js");
+  const preset = mi50Preset({ containerName: "strata-mi50", home: "/home/u" });
+  assert.ok(!("Vision" in preset), "the preset must not set the container Vision field");
+  const env = (preset.environment || []).join(" ");
+  assert.doesNotMatch(env, /VISION/i, `the preset's env: ${env}`);
+  // The reason is recorded next to the constants.
+  const src = read("lib/mi50.js");
+  assert.match(src, /does not read a `VISION` environment variable/i);
+  assert.match(src, /mi50-image-compat\.md/);
 });
