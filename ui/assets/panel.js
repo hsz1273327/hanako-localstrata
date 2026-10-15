@@ -1224,6 +1224,9 @@ const FIELD_LABEL_KEYS = {
   mtp: "edit.mtp",
   max_tokens: "edit.maxTokens",
   reasoning_effort: "edit.reasoningEffort",
+  expertCache: "edit.expertCache",
+  residentBudget: "edit.residentBudget",
+  lowRam: "edit.lowRam",
 };
 
 function fieldLabel(key) {

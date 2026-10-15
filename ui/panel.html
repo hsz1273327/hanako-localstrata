@@ -202,6 +202,32 @@
           </label>
         </fieldset>
 
+        <!-- How the model's experts are held. All three are engine args, so they
+             apply on the next start; each is optional in the config (an absent
+             flag means "the engine's default"), and the writer adds it in. -->
+        <fieldset class="group">
+          <legend><span data-i18n="edit.expertsLegend">Experts &amp; memory</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <label class="field"><span data-i18n="edit.expertCache">Expert cache</span>
+            <input id="ed-expertCache" data-key="expertCache" type="text" autocomplete="off" spellcheck="false" placeholder="auto" data-i18n-placeholder="edit.expertCachePlaceholder">
+            <span class="field-hint" data-i18n="edit.expertCacheHint">auto, or the number of slots</span>
+          </label>
+          <label class="field"><span data-i18n="edit.residentBudget">Resident experts (GiB)</span>
+            <input id="ed-residentBudget" data-key="residentBudget" type="number" min="1" step="1">
+            <span class="field-hint" data-i18n="edit.residentBudgetHint">Only for a model whose experts do not all fit in RAM</span>
+          </label>
+          <label class="field"><span data-i18n="edit.lowRam">Low-RAM expert mode</span>
+            <select id="ed-lowRam" data-key="lowRam">
+              <option value="" data-i18n="edit.lowRamUnset">— engine default (auto) —</option>
+              <option value="auto">auto</option>
+              <option value="on">on</option>
+              <option value="off">off</option>
+              <option value="resident">resident</option>
+              <option value="mmap">mmap</option>
+            </select>
+            <span class="field-hint" data-i18n="edit.lowRamHint">On = experts come from the pack and are not held in RAM</span>
+          </label>
+        </fieldset>
+
         <div id="diffBox" class="diff-box" hidden>
           <div class="diff-title" data-i18n="edit.pendingDiff">Pending changes</div>
           <ul id="diffList" class="diff-list"></ul>

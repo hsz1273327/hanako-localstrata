@@ -82,6 +82,8 @@ function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
           "262144",
           "--kv",
           "int8",
+          "--expert-cache",
+          "auto",
         ],
         cwd: dir,
         model_name: "Qwen3.8-IQ3_S",
@@ -162,6 +164,10 @@ test("a local deployment reads every parameter out of its config file", async ()
   assert.equal(view.values.temperature, 0.7);
   for (const [key, value] of Object.entries(view.values)) {
     if (key === "presence_penalty") continue; // a legitimate 0
+    // Optional by design: an absent flag IS the engine's default here, and setup
+    // only writes one when it is not the default (`--low-ram auto`), or at all
+    // (this model's experts fit, so there is no `--resident-budget-gib`).
+    if (key === "lowRam" || key === "residentBudget") continue;
     assert.ok(!isAbsent(value), `${key} must not come back empty`);
   }
   // And the summary agrees (used elsewhere).
