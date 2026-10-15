@@ -6,7 +6,7 @@
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
-import { isAbsent, editDiff } from "./edit-diff.js";
+import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -106,7 +106,8 @@ const state = {
   config: null,
   working: false,
   formFilled: false,
-  configFileFilled: null,
+  // { file, values } of the config view the form currently shows (null = none).
+  configFilled: null,
   // The profile open in the drawer for EDITING (null in the read-only view).
   editingProfileId: null,
 };
@@ -1244,16 +1245,18 @@ async function refreshConfig() {
     const cfg = await api("settings");
     state.config = cfg;
     if (cfg.hasConfig) {
-      // Refill when the selected file changes so the editor always shows the
-      // chosen config's values.
-      if (state.configFileFilled !== cfg.configFile) {
+      // Refill when the ANSWER changes — a different file OR the same file whose
+      // values were not readable before (a name-only guard left the form blank
+      // forever). Identical values are left alone, so a poll never stomps what
+      // the user is typing.
+      if (needsRefill(state.configFilled, cfg)) {
         fillEditForm(cfg.values || {});
-        state.configFileFilled = cfg.configFile;
+        state.configFilled = { file: cfg.configFile, values: valuesFingerprint(cfg.values) };
       }
       setEditFormReadable(true, cfg);
     } else {
       state.formFilled = false;
-      state.configFileFilled = null;
+      state.configFilled = null;
       setEditFormReadable(false, cfg);
     }
     renderDiff();

@@ -19,6 +19,24 @@ export function isAbsent(value) {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
+// A stable fingerprint of a config's values, so the editor can tell whether the
+// ANSWER changed rather than only whether the file NAME did.
+export function valuesFingerprint(values) {
+  return JSON.stringify(values || {});
+}
+
+// Should the editor refill its inputs from this config view?
+//
+// Keyed on the values, not just the file name: a config that was momentarily
+// unreadable (or just created) keeps its name but gains values, and a name-only
+// guard left the form permanently blank — the editor kept showing the empty
+// first answer while every other reader on the same screen showed the real one.
+// Unchanged values must NOT refill, so a poll never stomps what the user typed.
+export function needsRefill(prev, cfg) {
+  if (!cfg || !cfg.hasConfig) return false;
+  return prev?.file !== cfg.configFile || prev?.values !== valuesFingerprint(cfg.values);
+}
+
 // baseline: { key: storedValue }   raw: { key: inputValue }   types: { key: "number"|"text"|… }
 // → {
 //     items:   [{ key, old, next }]  — what "pending changes" lists
@@ -54,4 +72,4 @@ export function editDiff(baseline = {}, raw = {}, types = {}) {
   return { items, cleared, payload };
 }
 
-export default { isAbsent, editDiff };
+export default { isAbsent, valuesFingerprint, needsRefill, editDiff };

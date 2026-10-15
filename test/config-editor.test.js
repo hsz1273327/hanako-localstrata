@@ -17,7 +17,7 @@ import path from "node:path";
 import { readAllConfig, getConfigView } from "../lib/strata.js";
 import { buildConfigView, readConfigSummary } from "../lib/deployer/common.js";
 import { tarEntryText } from "../lib/docker.js";
-import { isAbsent, editDiff } from "../ui/assets/edit-diff.js";
+import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "../ui/assets/edit-diff.js";
 
 const tmpRoots = [];
 function tmpDir() {
@@ -291,12 +291,43 @@ test("an empty value that never had one is ignored, not reported as a clear", ()
   assert.deepEqual(payload, {});
 });
 
+// ── the refill guard (why the editor could stay blank) ───────────────────
+
+// The editor refills on the VALUES, not the file name: a config that was
+// momentarily unreadable keeps its name but gains values, and the old
+// name-only guard left the form showing the empty first answer forever.
+test("the editor refills when the answer changes, not only when the name does", () => {
+  const empty = { configFile: "strata-iq3_s.json", hasConfig: true, values: {} };
+  const filled = { configFile: "strata-iq3_s.json", hasConfig: true, values: { context: 262144, kv: "int8" } };
+
+  // First answer (empty) is taken, then the same file becomes readable.
+  assert.equal(needsRefill(null, empty), true, "the first answer is always taken");
+  assert.equal(
+    needsRefill({ file: "strata-iq3_s.json", values: valuesFingerprint(empty.values) }, filled),
+    true,
+    "the SAME file with values must refill — this is the bug that left the form blank",
+  );
+
+  // An unchanged answer never refills (a poll must not stomp typing).
+  assert.equal(
+    needsRefill({ file: "strata-iq3_s.json", values: valuesFingerprint(filled.values) }, filled),
+    false,
+  );
+  // A different file always refills.
+  assert.equal(needsRefill({ file: "other.json", values: valuesFingerprint(filled.values) }, filled), true);
+  // Nothing readable → nothing to fill (the caller locks the fields instead).
+  assert.equal(needsRefill(null, { configFile: "x.json", hasConfig: false, values: {} }), false);
+});
+
 // ── the panel wires the shared model (source guards) ─────────────────────
 
 test("the panel's diff and payload come from the one shared model", () => {
   const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "ui/assets/panel.js"), "utf8");
   assert.match(src, /from "\.\/edit-diff\.js"/);
   assert.match(src, /return editDiff\(state\.config\?\.values \|\| \{\}, raw, types\)/);
+  // The refill guard is value-keyed, not name-keyed.
+  assert.match(src, /if \(needsRefill\(state\.configFilled, cfg\)\)/);
+  assert.doesNotMatch(src, /configFileFilled/);
   // The old comparison (which read "no value" as a value) is gone.
   assert.doesNotMatch(src, /String\(current\[key\]\) !== String\(val\)/);
   // And the save takes its payload from the same call, refusing a cleared field.
