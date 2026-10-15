@@ -18,7 +18,8 @@ import { fileURLToPath } from "node:url";
 import registerSettingsRoutes from "../routes/settings.js";
 import { readAllConfig, normalizeProfile, validateProfile } from "../lib/strata.js";
 import { containerSpec, renderComposeFile } from "../lib/compose.js";
-import { VISION_VALUES } from "../lib/profiles.js";
+import { VISION_VALUES, emptyContainerProfile } from "../lib/profiles.js";
+import { effectiveContainerFields } from "../lib/deployer/common.js";
 import { VISION_OPTIONS } from "../ui/assets/profile-fields.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -168,6 +169,45 @@ test("vision off (no block) and a container profile report no local vision", asy
   // A container keeps its config inside the container: unknown from here.
   const box = makeCtx({ profiles: [containerProfile()], activeProfileId: "p1" });
   assert.equal((await profilesPayload(box)).vision, null);
+});
+
+// ── mmproj: NOT a second field (it rides with the model directory) ────────
+
+// The relationship, from the two authorities:
+//   * the image takes the mmproj OUT OF the model directory — setup.py:5288 is
+//     the same rule (`(Path(gguf_dir)/fam["mmproj"]).exists()`), and
+//     strata-docker-run.md:112 says it is in the same directory and not
+//     downloaded again when VISION is on;
+//   * a local install's `vision.mmproj` is a setup-written key (SetUP_VISION in
+//     setup.py), and this machine shows the file present IN the model directory
+//     (`…/models/IQ3_S/mmproj-….gguf`) with a second copy one level up that setup
+//     happened to pick.
+// So a separate "mmproj directory" field would drift from ModelDir and make the
+// user point twice. mmproj travels with ModelDir — which already has "profile
+// overrides, general default falls back".
+test("the mmproj is not a profile field; it travels with the model directory", async () => {
+  const profiles = read("lib/profiles.js");
+  assert.doesNotMatch(profiles, /mmprojDir|MMProjDir/i, "no second directory field on the model");
+  const containerKeys = Object.keys(emptyContainerProfile());
+  assert.ok(!containerKeys.some((k) => /mmproj/i.test(k)), `container fields: ${containerKeys.join(",")}`);
+  const fields = read("ui/assets/profile-fields.js");
+  assert.doesNotMatch(fields, /mmprojDir|MMProjDir/i, "no second directory field in the UI");
+  // A container gets no MMPROJ/MMPROJ environment plumbing either.
+  const spec = containerSpec(containerProfile({ ModelDir: "/own", Vision: "cpu" }));
+  assert.ok(!spec.environment.some((e) => /mmproj/i.test(e)), JSON.stringify(spec.environment));
+
+  // The ONE path that carries it is the model bind — profile value first, then the
+  // general default — so the mmproj is covered by the same fallback pattern.
+  assert.equal(effectiveContainerFields({}, { defaultGgufDir: "/general/models" }).ModelDir, "/general/models");
+  assert.equal(effectiveContainerFields({ ModelDir: "/own" }, { defaultGgufDir: "/general/models" }).ModelDir, "/own");
+  assert.equal(containerSpec(containerProfile({ ModelDir: "/own" })).modelDir, "/own");
+
+  // The UI states where the image takes it from, so the relationship is not
+  // folklore the next reader has to rediscover.
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  for (const lang of LANGS) {
+    assert.match(STRINGS[lang]["field.visionHint"], /mmproj/i, `${lang}.field.visionHint must mention mmproj`);
+  }
 });
 
 // ── the shared UI module ─────────────────────────────────────────────────
