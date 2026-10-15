@@ -17,7 +17,7 @@ import {
   mi50Preset,
 } from "../lib/strata.js";
 import { resolveDockerPath, createDockerAdapter } from "../lib/docker.js";
-import { writeComposeFile } from "../lib/compose.js";
+import { writeComposeFile, resolveDeployDir, composeFilePath } from "../lib/compose.js";
 import { beginImagePull, getImagePullState } from "../lib/imagepull.js";
 import { buildRunningReport } from "../lib/runtime-values.js";
 
@@ -342,6 +342,30 @@ export default function registerSettingsRoutes(app, ctx) {
       return c.json({ saved: true, ...(await selectProfile(ctx, body?.id)), status: await getStatus(ctx) });
     } catch (e) {
       return c.json({ saved: false, error: String(e?.message || e), validation: e?.validation }, 400);
+    }
+  });
+
+  // Where a container profile's docker-compose.yml will land. `DeployDir` is
+  // optional (empty = a stable per-profile folder under the user's home), so the
+  // resolved path is computed server-side — the browser cannot know the home
+  // directory, and the fallback rule must stay in one place (lib/compose.js).
+  // Pure: it reads no files and never writes.
+  app.post("/profiles/compose-path", async (c) => {
+    let body;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    try {
+      const deployDir = resolveDeployDir({
+        id: body?.id,
+        containerName: body?.containerName,
+        DeployDir: body?.DeployDir,
+      });
+      return c.json({ deployDir, file: composeFilePath(deployDir) });
+    } catch (e) {
+      return c.json({ error: String(e?.message || e) }, 500);
     }
   });
 

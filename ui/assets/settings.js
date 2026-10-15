@@ -17,6 +17,7 @@
 // page, only a mask, so an untouched masked field is discarded on save.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
+import { createContainerFields } from "./profile-fields.js";
 
 setLang(loadLang());
 
@@ -71,13 +72,9 @@ const els = {
   profileImagePullRow: document.getElementById("pf-image-pull-row"),
   profileImagePull: document.getElementById("pf-image-pull"),
   profileContainerName: document.getElementById("pf-containerName"),
-  profileGpuModel: document.getElementById("pf-gpu-model"),
-  profilePreset: document.getElementById("pf-preset"),
-  profilePresetText: document.getElementById("pf-preset-text"),
-  profilePresetApply: document.getElementById("pf-preset-apply"),
-  profilePresetIgnore: document.getElementById("pf-preset-ignore"),
-  profileDataDir: document.getElementById("pf-dataDir"),
-  profileDataDirPick: document.getElementById("pf-dataDir-pick"),
+  // The card model + vendor split, the model bind pair, the list fields and the
+  // compose directory: rendered by the shared field module (below).
+  profileContainerExtra: document.getElementById("pf-container-extra"),
   profileGgufDir: document.getElementById("pf-ggufDir"),
   profileGgufDirPick: document.getElementById("pf-ggufDir-pick"),
   profilePort: document.getElementById("pf-port"),
@@ -95,6 +92,41 @@ const els = {
   profileConfirmCancel: document.getElementById("profileConfirmCancel"),
   profileMessage: document.getElementById("profileMessage"),
 };
+
+// ── The shared container field block ──────────────────────────────────────
+//
+// One implementation for both this page and the panel drawer
+// (ui/assets/profile-fields.js). It owns the whole new container model — the
+// card-model picker and its NVIDIA/AMD split, the two `a:b` lists with their
+// add/remove rows, the docker passthrough lists and the compose directory — so
+// the two surfaces can never disagree about it. The page supplies only what it
+// alone knows: the fetcher, the path picker, the message sink and the two
+// callbacks the module needs to resolve the compose path and react to a card
+// change (the MI50 prompt).
+const containerFields = createContainerFields(els.profileContainerExtra, {
+  idPrefix: "pf-",
+  api,
+  pickPath,
+  notify: setProfileMessage,
+  preset: true,
+  copyText:
+    typeof hana?.clipboard?.writeText === "function"
+      ? (text) => {
+          Promise.resolve(hana.clipboard.writeText(text)).catch(() => {});
+        }
+      : null,
+  openDir:
+    typeof hana?.resources?.open === "function"
+      ? (path) => {
+          Promise.resolve(hana.resources.open({ kind: "local-file", path })).catch(() =>
+            setProfileMessage(t("field.openDirFailed"), "error"),
+          );
+        }
+      : null,
+  profileId: () => editingProfileId || "",
+  containerName: () => els.profileContainerName.value || "",
+  onChange: onGpuModelChange,
+});
 
 // ── Global preferences ───────────────────────────────────────────────────
 
@@ -192,50 +224,15 @@ let pendingDeleteId = "";
 //
 // The model picker is the detection surface: the catalog entry for the MI50
 // carries gfx906, so "is this card an MI50?" is a property of the picked model,
-// never a guess about the host (lib/mi50.js).
+// never a guess about the host (lib/mi50.js). The picker itself lives in the
+// shared container block; this page only loads the catalog and reacts to it.
 let gpuModels = [];
 let presetInfo = null; // { modelKey, gfx, imageName, imageTag, enginePort, wizardPort }
 let presetsLoaded = false;
-// Extra container fields the visible form does not own (binds, env, ports, …).
-// Captured from the opened profile so an edit never drops them, and overridden
-// by an applied preset.
-let editingExtras = {};
-let pendingPreset = null;
-// A dismissed prompt stays dismissed for this model until the editor reopens.
+// A dismissed prompt stays dismissed for this model until the editor reopens;
+// an applied preset shows a short confirmation instead of the buttons.
 let presetDismissed = false;
-
-// The container fields that have no visible input. `ModelDir` is deliberately
-// absent: the shared ggufDir field drives it, so carrying it would shadow the
-// user's edit.
-const PRESET_EXTRA_FIELDS = [
-  "VolumeBinds",
-  "PortBinds",
-  "environment",
-  "device_cgroup_rules",
-  "ulimits",
-  "security_opt",
-  "ShmSize",
-  "EnginePort",
-  "EngineBindPort",
-  "GpuIds",
-  "ApiKeyEnv",
-  "DeployDir",
-  "ModelsBindDir",
-];
-
-function pickContainerExtras(profile) {
-  const out = {};
-  if (!profile || profile.type !== "container") return out;
-  for (const key of PRESET_EXTRA_FIELDS) {
-    const value = profile[key];
-    if (Array.isArray(value)) {
-      if (value.length) out[key] = value.slice();
-    } else if (value !== undefined && value !== null && String(value).trim() !== "") {
-      out[key] = value;
-    }
-  }
-  return out;
-}
+let presetApplied = false;
 
 function gpuModelGfx(key) {
   const wanted = String(key ?? "").trim();
@@ -244,7 +241,7 @@ function gpuModelGfx(key) {
 }
 
 function isMi50Selected() {
-  return !!presetInfo && gpuModelGfx(els.profileGpuModel.value) === presetInfo.gfx;
+  return !!presetInfo && gpuModelGfx(containerFields.gpuModelValue()) === presetInfo.gfx;
 }
 
 async function loadPresets() {
@@ -255,44 +252,17 @@ async function loadPresets() {
     presetInfo = data?.mi50 || null;
     presetsLoaded = true;
   } catch {
-    // The picker stays usable (options built from the profile's own value);
-    // only the preset offer is unavailable.
+    // The picker stays usable (its catalog is simply empty); only the preset
+    // offer is unavailable.
     presetsLoaded = false;
   }
-  renderGpuModelOptions(els.profileGpuModel.value);
-}
-
-// The model picker options: a blank "choose" entry, the catalog, and the value
-// already on the profile (so an edit never loses an unlisted model).
-function renderGpuModelOptions(selected) {
-  const current = String(selected ?? "").trim();
-  els.profileGpuModel.replaceChildren();
-  const blank = document.createElement("option");
-  blank.value = "";
-  blank.textContent = t("field.gpuModelPlaceholder");
-  els.profileGpuModel.append(blank);
-  const seen = new Set([""]);
-  for (const m of gpuModels) {
-    if (seen.has(m.key)) continue;
-    seen.add(m.key);
-    const opt = document.createElement("option");
-    opt.value = m.key;
-    opt.textContent = m.label || m.key;
-    els.profileGpuModel.append(opt);
-  }
-  if (current && !seen.has(current)) {
-    const opt = document.createElement("option");
-    opt.value = current;
-    opt.textContent = current;
-    els.profileGpuModel.append(opt);
-  }
-  els.profileGpuModel.value = current;
+  containerFields.setCatalog(gpuModels);
 }
 
 // Show the community-image offer only for a gfx906 card the user has not
 // dismissed, or a short confirmation once the preset has been applied.
 function renderPresetOffer() {
-  const box = els.profilePreset;
+  const box = containerFields.refs.preset;
   if (!box) return;
   // The offer is a write action; the read-only "view" never shows it.
   if (editorReadOnly || !isMi50Selected() || presetDismissed) {
@@ -301,24 +271,25 @@ function renderPresetOffer() {
   }
   const image = presetInfo ? `${presetInfo.imageName}:${presetInfo.imageTag}` : "";
   box.hidden = false;
-  els.profilePresetText.textContent = pendingPreset
+  containerFields.refs.presetText.textContent = presetApplied
     ? tp("preset.applied", { image })
     : tp("preset.detected", { image });
-  const applied = !!pendingPreset;
-  els.profilePresetApply.hidden = applied;
-  els.profilePresetIgnore.hidden = applied;
+  containerFields.refs.presetApply.hidden = presetApplied;
+  containerFields.refs.presetIgnore.hidden = presetApplied;
 }
 
 function clearPresetOffer() {
-  if (els.profilePreset) els.profilePreset.hidden = true;
-  els.profilePresetText.textContent = "";
-  els.profilePresetApply.hidden = false;
-  els.profilePresetIgnore.hidden = false;
+  const box = containerFields.refs.preset;
+  if (!box) return;
+  box.hidden = true;
+  containerFields.refs.presetText.textContent = "";
+  containerFields.refs.presetApply.hidden = false;
+  containerFields.refs.presetIgnore.hidden = false;
 }
 
 function onGpuModelChange() {
   // A different model is a different question: drop the old answer.
-  pendingPreset = null;
+  presetApplied = false;
   presetDismissed = false;
   renderPresetOffer();
 }
@@ -331,16 +302,14 @@ async function applyMi50Preset() {
     });
     const preset = data?.preset;
     if (!preset) return;
-    // The image and the container name are visible fields; everything else
-    // rides along invisibly in pendingPreset.
+    // The image and the container name are visible fields the module does not
+    // own; everything else is now an ordinary field too, so writing it makes it
+    // visible and editable in place instead of hiding it until save.
     els.profileImageName.value = preset.imageName || "";
     els.profileImageTag.value = preset.imageTag || "";
     if (!els.profileContainerName.value.trim()) els.profileContainerName.value = "strata-mi50";
-    pendingPreset = {};
-    for (const key of PRESET_EXTRA_FIELDS) {
-      if (preset[key] !== undefined) pendingPreset[key] = preset[key];
-    }
-    pendingPreset.GpuModel = preset.GpuModel;
+    containerFields.applyPreset(preset);
+    presetApplied = true;
     renderPresetOffer();
     renderImageStatus();
     renderStartHints();
@@ -357,18 +326,26 @@ function ignoreMi50Preset() {
 
 // ── Runtime values (read-only "view" drawer) ─────────────────────────────
 
-// Which editor input renders which runtime field. `configFile` is absent on
-// purpose: the editor never displayed it.
-const FIELD_INPUTS = {
-  strataDir: () => els.profileStrataDir,
-  pythonPath: () => els.profilePythonPath,
-  gpu: () => els.profileGpu,
-  image: () => els.profileImageName,
-  containerName: () => els.profileContainerName,
-  dataDir: () => els.profileDataDir,
-  ggufDir: () => els.profileGgufDir,
-  port: () => els.profilePort,
-};
+// Which editor input renders which runtime field, per profile type — a local
+// source reports `ggufDir`, a container reports its model bind as `modelDir`
+// (`configFile` is absent on purpose: the editor never displayed it).
+function fieldInputs() {
+  if (els.profileType.value === "container") {
+    return {
+      image: () => els.profileImageName,
+      containerName: () => els.profileContainerName,
+      modelDir: () => containerFields.refs.modelDir,
+      port: () => containerFields.refs.enginePort,
+    };
+  }
+  return {
+    strataDir: () => els.profileStrataDir,
+    pythonPath: () => els.profilePythonPath,
+    gpu: () => els.profileGpu,
+    ggufDir: () => els.profileGgufDir,
+    port: () => els.profilePort,
+  };
+}
 
 // Raw profile values captured when the editor opened, so a runtime fill never
 // counts as "the profile already had a value".
@@ -391,9 +368,9 @@ function captureProfileValues(profile) {
     gpu: profile?.gpu || "",
     image: profile?.imageName || "",
     containerName: profile?.containerName || "",
-    dataDir: profile?.dataDir || "",
+    modelDir: profile?.ModelDir || "",
     ggufDir: profile?.ggufDir || "",
-    port: profile?.port ? String(profile.port) : "",
+    port: profile?.EnginePort ? String(profile.EnginePort) : profile?.port ? String(profile.port) : "",
   };
 }
 
@@ -433,7 +410,7 @@ function renderSourceAnnotations(report) {
   removeSourceSpans();
   const values = report?.values || {};
   const sources = report?.sources || {};
-  for (const [key, inputOf] of Object.entries(FIELD_INPUTS)) {
+  for (const [key, inputOf] of Object.entries(fieldInputs())) {
     const input = inputOf();
     if (!input) continue;
     if (String(profileFieldValues[key] ?? "").trim()) continue;
@@ -444,17 +421,22 @@ function renderSourceAnnotations(report) {
   }
 }
 
-// Stopped / editable view: only annotate empty ggufDir / port with the general
-// default they would fall back to, without writing the default into the field.
+// Stopped / editable view: only annotate an empty model folder / port with the
+// general default they would fall back to, without writing the default into the
+// field. A container's model folder and engine port are its own fields.
 function applyDefaultAnnotations() {
   removeSourceSpans();
   const ggufDefault = String(generalDefaults.defaultGgufDir || "").trim();
   const portDefault = Number(generalDefaults.defaultPort) > 0 ? String(generalDefaults.defaultPort) : "";
-  if (!String(profileFieldValues.ggufDir || "").trim() && ggufDefault) {
-    addSourceSpan(els.profileGgufDir, tp("profile.sourceDefaultValue", { value: ggufDefault }));
+  const container = els.profileType.value === "container";
+  const modelInput = container ? containerFields.refs.modelDir : els.profileGgufDir;
+  const portInput = container ? containerFields.refs.enginePort : els.profilePort;
+  const modelKey = container ? "modelDir" : "ggufDir";
+  if (!String(profileFieldValues[modelKey] || "").trim() && ggufDefault) {
+    addSourceSpan(modelInput, tp("profile.sourceDefaultValue", { value: ggufDefault }));
   }
   if (!String(profileFieldValues.port || "").trim() && portDefault) {
-    addSourceSpan(els.profilePort, tp("profile.sourceDefaultValue", { value: portDefault }));
+    addSourceSpan(portInput, tp("profile.sourceDefaultValue", { value: portDefault }));
   }
 }
 
@@ -751,6 +733,8 @@ function profileErrorText(error) {
   if (raw.includes("nameTaken")) return t("profile.errNameTaken");
   if (raw.includes("imageRequired")) return t("profile.errImageRequired");
   if (raw.includes("containerNameRequired")) return t("profile.errContainerNameRequired");
+  if (raw.includes("gpuModelRequired")) return t("profile.errGpuModelRequired");
+  if (raw.includes("gpuModelUnknown")) return t("profile.errGpuModelUnknown");
   if (raw.includes("portInvalid")) return t("profile.errPortInvalid");
   if (raw.includes("至少保留一套配置")) return t("profile.errLast");
   if (raw.includes("配置不存在")) return t("profile.errMissing");
@@ -916,8 +900,6 @@ function editorFields() {
     els.profileImageName,
     els.profileImageTag,
     els.profileContainerName,
-    els.profileGpuModel,
-    els.profileDataDir,
     els.profileGgufDir,
     els.profilePort,
   ];
@@ -931,14 +913,12 @@ function setEditorReadOnly(readOnly) {
   // The image pull is a write-side action: never available in read-only view.
   if (els.profileImagePull) els.profileImagePull.disabled = readOnly || imagePullBusy;
   // Pickers write into the fields, so they follow the same rule.
-  if (els.profileDataDirPick) els.profileDataDirPick.disabled = readOnly;
   if (els.profileGgufDirPick) els.profileGgufDirPick.disabled = readOnly;
   if (els.profileStrataDirPick) els.profileStrataDirPick.disabled = readOnly;
   if (els.profilePythonPathPick) els.profilePythonPathPick.disabled = readOnly;
-  // The preset prompt is a write-side action, like the image pull.
-  if (els.profileGpuModel) els.profileGpuModel.disabled = readOnly;
-  if (els.profilePresetApply) els.profilePresetApply.disabled = readOnly;
-  if (els.profilePresetIgnore) els.profilePresetIgnore.disabled = readOnly;
+  // The whole shared container block — its inputs, its pickers and its row
+  // buttons (the preset prompt's buttons included).
+  containerFields.setReadOnly(readOnly);
   els.profileReadOnlyHint.hidden = !readOnly;
   // No write path in the read-only view. The whole bottom action row is
   // hidden there because it would only repeat the top close button.
@@ -947,6 +927,7 @@ function setEditorReadOnly(readOnly) {
   els.profileSaveBtn.disabled = readOnly;
   els.profileCancelBtn.textContent = readOnly ? t("profile.close") : t("common.cancel");
   updateEditorTitle();
+  renderPresetOffer();
 }
 
 // Open / close the right-side drawer. Kept separate from the editor state so
@@ -963,10 +944,9 @@ async function openProfileEditor(profile, readOnly = false) {
   captureProfileValues(profile);
   stopImagePoll();
   imagePullBusy = false;
-  // The visible form does not own the raw container fields; remember them so an
-  // edit preserves them, and start each open with no preset applied.
-  editingExtras = pickContainerExtras(profile);
-  pendingPreset = null;
+  // The visible form does not own every container field; the shared block keeps
+  // whatever it does not render and hands it back on save.
+  presetApplied = false;
   presetDismissed = false;
   els.profileName.value = profile?.name || "";
   els.profileType.value = profile?.type === "container" ? "container" : "local";
@@ -976,16 +956,11 @@ async function openProfileEditor(profile, readOnly = false) {
   els.profileImageName.value = profile?.imageName || "";
   els.profileImageTag.value = profile?.imageTag || "";
   els.profileContainerName.value = profile?.containerName || "";
-  els.profileDataDir.value = profile?.dataDir || "";
   els.profileGgufDir.value = profile?.ggufDir || "";
-  els.profilePort.value = profile?.EnginePort
-    ? String(profile.EnginePort)
-    : profile?.port
-      ? String(profile.port)
-      : "";
-  // The model picker needs the catalog; fill it before selecting a value.
+  els.profilePort.value = profile?.port ? String(profile.port) : "";
+  // The card picker needs the catalog before it can hold the profile's value.
   await loadPresets();
-  renderGpuModelOptions(profile?.GpuModel || "");
+  containerFields.render(profile);
   setProfileEditorType(els.profileType.value);
   setDrawerOpen(true);
   setProfileMessage("");
@@ -1017,8 +992,7 @@ function closeProfileEditor() {
   imagePullBusy = false;
   clearFieldSources();
   clearStartHints();
-  editingExtras = {};
-  pendingPreset = null;
+  presetApplied = false;
   presetDismissed = false;
   clearPresetOffer();
   if (els.profileRuntimeNote) els.profileRuntimeNote.hidden = true;
@@ -1037,14 +1011,8 @@ async function saveProfile() {
     return;
   }
   const type = els.profileType.value === "container" ? "container" : "local";
-  const portRaw = els.profilePort.value.trim();
-  const port = portRaw === "" ? 0 : Number(portRaw);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    setProfileMessage(t("profile.errPortInvalid"), "error");
-    return;
-  }
 
-  const body = { name, type, port, ggufDir: els.profileGgufDir.value.trim() };
+  const body = { name, type };
   if (editingProfileId) body.id = editingProfileId;
   if (type === "container") {
     const imageName = els.profileImageName.value.trim();
@@ -1061,19 +1029,18 @@ async function saveProfile() {
     body.imageName = imageName;
     body.imageTag = imageTag;
     body.containerName = containerName;
-    body.dataDir = els.profileDataDir.value.trim();
-    body.GpuModel = els.profileGpuModel.value.trim();
-    // Fields with no visible input (binds / env / ports / …): keep what the
-    // profile had, and let an applied preset override it.
-    Object.assign(body, editingExtras, pendingPreset || {});
-    // The picker is authoritative for the model, whatever the carried extras say.
-    body.GpuModel = els.profileGpuModel.value.trim();
-    // The visible port field maps onto the container's engine port pair.
-    if (port > 0) {
-      body.EnginePort = port;
-      body.EngineBindPort = port;
-    }
+    // The whole new container model is the shared field block's; it also hands
+    // back the keys it does not render, so nothing is dropped.
+    Object.assign(body, containerFields.collect());
   } else {
+    const portRaw = els.profilePort.value.trim();
+    const port = portRaw === "" ? 0 : Number(portRaw);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      setProfileMessage(t("profile.errPortInvalid"), "error");
+      return;
+    }
+    body.ggufDir = els.profileGgufDir.value.trim();
+    body.port = port;
     body.strataDir = els.profileStrataDir.value.trim();
     body.pythonPath = els.profilePythonPath.value.trim();
     body.gpu = els.profileGpu.value.trim();
@@ -1170,7 +1137,8 @@ function initLangSelect() {
     setEditorReadOnly(editorReadOnly);
     refreshSourceAnnotations();
     renderImageStatus();
-    renderGpuModelOptions(els.profileGpuModel.value);
+    // The shared container block re-renders its own static copy + option labels.
+    containerFields.relocalize();
     renderPresetOffer();
     if (!els.profileConfirm.hidden && pendingDeleteId) {
       const pending = profiles.find((p) => p.id === pendingDeleteId);
@@ -1197,11 +1165,12 @@ els.profileType.addEventListener("change", () => {
 });
 els.profileImageName.addEventListener("input", () => renderImageStatus());
 els.profileImageTag.addEventListener("input", () => renderImageStatus());
-els.profileGpuModel.addEventListener("change", onGpuModelChange);
-els.profilePresetApply.addEventListener("click", applyMi50Preset);
-els.profilePresetIgnore.addEventListener("click", ignoreMi50Preset);
+// The preset prompt's buttons live in the shared block now.
+containerFields.refs.presetApply.addEventListener("click", applyMi50Preset);
+containerFields.refs.presetIgnore.addEventListener("click", ignoreMi50Preset);
 els.profileImagePull.addEventListener("click", pullImage);
-els.profileDataDirPick.addEventListener("click", () => pickDirectory(els.profileDataDir));
+// The resolved compose path is derived from the container name.
+els.profileContainerName.addEventListener("input", () => containerFields.refreshDeployPath());
 els.profileGgufDirPick.addEventListener("click", () => pickDirectory(els.profileGgufDir));
 els.profileStrataDirPick.addEventListener("click", () => pickDirectory(els.profileStrataDir));
 // The interpreter is a file: file mode, and the field may stay empty (the App

@@ -506,7 +506,7 @@ test("settings page wires the host directory picker", () => {
   }
 
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-dataDir-pick", "pf-ggufDir-pick"]) {
+  for (const id of ["pf-ggufDir-pick", "pf-container-extra"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
 
@@ -516,8 +516,9 @@ test("settings page wires the host directory picker", () => {
   assert.match(js, /await hana\.resources\.pick\(\{ mode \}\)/);
   assert.match(js, /field\.pickUnsupported/);
   assert.match(js, /field\.pickFailed/);
-  // The pickers are write-side actions: locked in the read-only view.
-  assert.match(js, /profileDataDirPick\.disabled\s*=\s*readOnly/);
+  // The pickers are write-side actions: locked in the read-only view. The
+  // container block's own pickers are locked by the shared module.
+  assert.match(js, /containerFields\.setReadOnly\(readOnly\)/);
   assert.match(js, /profileGgufDirPick\.disabled\s*=\s*readOnly/);
 });
 
@@ -545,7 +546,7 @@ test("the General default model directory reuses the host directory picker", () 
 // mode (it is a file, and it may stay empty or hold a bare command name).
 test("drawer path fields use the host picker with the right mode", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-strataDir-pick", "pf-pythonPath-pick", "pf-dataDir-pick", "pf-ggufDir-pick"]) {
+  for (const id of ["pf-strataDir-pick", "pf-pythonPath-pick", "pf-ggufDir-pick"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
 
@@ -555,7 +556,7 @@ test("drawer path fields use the host picker with the right mode", () => {
   // The interpreter's button names Python; the directory fields keep the
   // generic label.
   assert.match(html, /id="pf-pythonPath-pick"[^>]*data-i18n="field\.pickPython"/);
-  for (const id of ["pf-strataDir-pick", "pf-dataDir-pick", "pf-ggufDir-pick", "defaultGgufDir-pick"]) {
+  for (const id of ["pf-strataDir-pick", "pf-ggufDir-pick", "defaultGgufDir-pick"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*data-i18n="field\\.pickPath"`), `#${id} must use the generic label`);
   }
   // Directories go through directory mode; the interpreter through file mode.
@@ -567,4 +568,7 @@ test("drawer path fields use the host picker with the right mode", () => {
   // Read-only view locks every picker, the interpreter one included.
   assert.match(js, /els\.profilePythonPathPick\.disabled\s*=\s*readOnly/);
   assert.match(js, /els\.profileStrataDirPick\.disabled\s*=\s*readOnly/);
+  // The container block's path fields (host model dir, compose dir) get the
+  // same picker through the shared module — the page hands it pickPath.
+  assert.match(js, /createContainerFields\([^)]*\{[\s\S]*?pickPath,[\s\S]*?\}\)/);
 });

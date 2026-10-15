@@ -5,6 +5,7 @@
 // - Polls this App's GET /status route every refreshSec seconds.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
+import { createContainerFields } from "./profile-fields.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -1292,6 +1293,29 @@ async function save(restart) {
 
 let pluginFormEls = null;
 let editorType = "local";
+// The card-model catalog (GET /presets), the same one the settings page loads.
+let gpuModels = [];
+let presetsLoaded = false;
+
+async function loadPanelPresets() {
+  if (presetsLoaded) return;
+  try {
+    const data = await api("presets");
+    gpuModels = Array.isArray(data?.models) ? data.models : [];
+    presetsLoaded = true;
+  } catch {
+    // The picker stays usable with the profile's own value; only the catalog is
+    // missing.
+    presetsLoaded = false;
+  }
+}
+
+function canCopyPath() {
+  return typeof hana?.clipboard?.writeText === "function";
+}
+function canOpenPath() {
+  return typeof hana?.resources?.open === "function";
+}
 
 function ensurePluginForm() {
   if (pluginFormEls) return pluginFormEls;
@@ -1316,17 +1340,42 @@ function ensurePluginForm() {
     imagePull: root.querySelector("#ps-imagePull"),
     imageStatus: root.querySelector("#ps-imageStatus"),
     containerName: root.querySelector("#ps-containerName"),
-    dataDir: root.querySelector("#ps-dataDir"),
+    // The local source's model folder / port; a container owns its own pair.
     ggufDir: root.querySelector("#ps-ggufDir"),
     port: root.querySelector("#ps-port"),
     message: root.querySelector("#psMessage"),
   };
+  // The full new container model (card model + vendor split, model bind pair,
+  // list fields, compose directory) is the SAME module the settings page uses,
+  // rendered into #ps-container-extra.
+  pluginFormEls.container = createContainerFields(root.querySelector("#ps-container-extra"), {
+    idPrefix: "ps-",
+    api,
+    notify: setPsMessage,
+    copyText: canCopyPath()
+      ? (text) => {
+          Promise.resolve(hana.clipboard.writeText(text)).catch(() => {});
+        }
+      : null,
+    openDir: canOpenPath()
+      ? (path) => {
+          Promise.resolve(hana.resources.open({ kind: "local-file", path })).catch(() =>
+            setPsMessage(t("field.openDirFailed"), "error"),
+          );
+        }
+      : null,
+    profileId: () => state.editingProfileId || "",
+    containerName: () => pluginFormEls?.containerName?.value || "",
+  });
   // Switching the profile type toggles which fields apply (edit mode only; the
   // select is disabled in the read-only view).
   pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
   pluginFormEls.imagePull.addEventListener("click", panelPullImage);
   pluginFormEls.imageName.addEventListener("input", renderPanelImage);
   pluginFormEls.imageTag.addEventListener("input", renderPanelImage);
+  // The resolved compose-directory line is derived from the container name, so
+  // it must be re-probed as the user edits it.
+  pluginFormEls.containerName.addEventListener("input", () => pluginFormEls.container.refreshDeployPath());
   return pluginFormEls;
 }
 
@@ -1346,9 +1395,11 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.imageName.value = profile?.imageName || "";
   pluginFormEls.imageTag.value = profile?.imageTag || "";
   pluginFormEls.containerName.value = profile?.containerName || "";
-  pluginFormEls.dataDir.value = profile?.dataDir || "";
   pluginFormEls.ggufDir.value = profile?.ggufDir || "";
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
+  // The container block preserves any field it does not render (see the shared
+  // module), so nothing needs to be carried here.
+  pluginFormEls.container.render(profile);
   setEditorType(pluginFormEls.type.value);
 }
 
@@ -1357,6 +1408,8 @@ function setProfileEditorReadOnly(readOnly) {
   for (const el of pluginFormEls.editor.querySelectorAll("input, select")) {
     el.disabled = readOnly;
   }
+  // The module's add/remove row buttons are not inputs; toggle them too.
+  if (pluginFormEls.container) pluginFormEls.container.setReadOnly(readOnly);
   if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
   // A write-side action is never offered in the read-only view.
   if (readOnly && pluginFormEls.imagePull) pluginFormEls.imagePull.hidden = true;
@@ -1378,6 +1431,10 @@ async function openDrawer(readOnly) {
   }
   if (!profile) return;
   state.editingProfileId = readOnly ? null : profile.id;
+  // The card-model picker needs the catalog before it can hold the profile's
+  // value; only the stopped (editable) path ever writes it back.
+  await loadPanelPresets();
+  pluginFormEls.container.setCatalog(gpuModels);
   fillProfileEditorFields(profile);
   setProfileEditorReadOnly(readOnly);
   setPsMessage("");
@@ -1430,22 +1487,24 @@ function closeProfileDetail() {
 }
 
 // The drawer's fields, shaped like the save route expects (mirrors the
-// settings page's profile form).
+// settings page's profile form). The container block comes straight from the
+// shared field module; `ggufDir`/`port` belong to a local profile only (sending
+// them on a container would re-trigger the legacy flat-field migration).
 function collectProfileEdits() {
   const type = pluginFormEls.type.value === "container" ? "container" : "local";
   const body = {
     id: state.editingProfileId,
     name: pluginFormEls.name.value.trim(),
     type,
-    ggufDir: pluginFormEls.ggufDir.value.trim(),
-    port: Number(pluginFormEls.port.value) || 0,
   };
   if (type === "container") {
     body.imageName = pluginFormEls.imageName.value.trim();
     body.imageTag = pluginFormEls.imageTag.value.trim();
     body.containerName = pluginFormEls.containerName.value.trim();
-    body.dataDir = pluginFormEls.dataDir.value.trim();
+    Object.assign(body, pluginFormEls.container.collect());
   } else {
+    body.ggufDir = pluginFormEls.ggufDir.value.trim();
+    body.port = Number(pluginFormEls.port.value) || 0;
     body.strataDir = pluginFormEls.strataDir.value.trim();
     body.pythonPath = pluginFormEls.pythonPath.value.trim();
     body.gpu = pluginFormEls.gpu.value.trim();
@@ -1575,6 +1634,8 @@ const SAVE_ERROR_KEYS = {
   nameTaken: "profile.errNameTaken",
   imageRequired: "profile.errImageRequired",
   containerNameRequired: "profile.errContainerNameRequired",
+  gpuModelRequired: "profile.errGpuModelRequired",
+  gpuModelUnknown: "profile.errGpuModelUnknown",
   portInvalid: "profile.errPortInvalid",
 };
 
@@ -1866,6 +1927,8 @@ function relocalize() {
     const title = state.editingProfileId ? t("profile.editTitle") : t("profile.viewTitle");
     pluginFormEls.editorTitle.textContent = title;
     els.profileDrawerTitle.textContent = title;
+    // The shared container block re-renders its own static copy + option labels.
+    pluginFormEls.container.relocalize();
   }
   renderDiff();
 }

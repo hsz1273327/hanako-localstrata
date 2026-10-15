@@ -118,6 +118,21 @@
             <span data-i18n="field.gpu">GPU selector (optional)</span>
             <input id="pf-gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
           </label>
+          <!-- The local source's model folder and its own port. A container has
+               its own host-model / container-path / engine-port pair, rendered
+               by the shared field module into #pf-container-extra below. -->
+          <label class="field" for="pf-ggufDir">
+            <span data-i18n="field.ggufDir">GGUF model directory</span>
+            <input id="pf-ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+            <div class="field-inline">
+              <button id="pf-ggufDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+            </div>
+            <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+          </label>
+          <label class="field" for="pf-port">
+            <span data-i18n="field.port">Port (0 = auto)</span>
+            <input id="pf-port" type="number" min="0" max="65535" step="1">
+          </label>
         </div>
 
         <div id="pfContainerFields" class="profile-type-fields" hidden>
@@ -141,41 +156,12 @@
             <span data-i18n="field.containerName">Container name</span>
             <input id="pf-containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
           </label>
-          <label class="field" for="pf-gpu-model">
-            <span data-i18n="field.gpuModel">GPU model</span>
-            <select id="pf-gpu-model"></select>
-          </label>
-          <!-- Shown only when the picked card is the MI50 (gfx906): offers the
-               community image preset in one click. -->
-          <div id="pf-preset" class="preset-box" hidden>
-            <p id="pf-preset-text" class="field-hint"></p>
-            <div class="field-inline">
-              <button id="pf-preset-apply" class="btn small" type="button" data-i18n="preset.apply">Use community image</button>
-              <button id="pf-preset-ignore" class="btn small" type="button" data-i18n="preset.ignore">Ignore</button>
-            </div>
-          </div>
-          <label class="field" for="pf-dataDir">
-            <span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
-            <input id="pf-dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
-            <div class="field-inline">
-              <button id="pf-dataDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
-            </div>
-          </label>
+          <!-- Card model, the vendor-split card picker, the model bind pair, the
+               list fields and the compose output directory are rendered here by
+               the shared ui/assets/profile-fields.js module (one source for both
+               this page and the panel drawer). -->
+          <div id="pf-container-extra"></div>
         </div>
-
-        <label class="field" for="pf-ggufDir">
-          <span data-i18n="field.ggufDir">GGUF model directory</span>
-          <input id="pf-ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-          <div class="field-inline">
-            <button id="pf-ggufDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
-          </div>
-          <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
-        </label>
-
-        <label class="field" for="pf-port">
-          <span data-i18n="field.port">Port (0 = auto)</span>
-          <input id="pf-port" type="number" min="0" max="65535" step="1">
-        </label>
 
         <div id="profileEditorActions" class="settings-actions">
           <button id="profileSaveBtn" class="btn primary" type="button" data-i18n="common.save">Save</button>

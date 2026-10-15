@@ -240,6 +240,16 @@
           <label class="field"><span data-i18n="field.gpu">GPU selector (optional)</span>
             <input id="ps-gpu" data-key="gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
           </label>
+          <!-- The local source's model folder and port. A container carries its
+               own host-model / container-path / engine-port pair plus the list
+               fields, rendered into #ps-container-extra by the shared module. -->
+          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
+            <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
+            <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
+          </label>
+          <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
+            <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
+          </label>
         </div>
 
         <div id="psContainerFields" class="profile-type-fields" hidden>
@@ -256,18 +266,11 @@
           <label class="field"><span data-i18n="field.containerName">Container name</span>
             <input id="ps-containerName" data-key="containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
           </label>
-          <label class="field"><span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
-            <input id="ps-dataDir" data-key="dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
-          </label>
+          <!-- Card model, vendor-split card picker, model bind pair, list fields
+               and the compose output directory: rendered by the shared
+               ui/assets/profile-fields.js module (same source as the settings page). -->
+          <div id="ps-container-extra"></div>
         </div>
-
-        <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
-          <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-          <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
-        </label>
-        <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
-          <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
-        </label>
 
         <p id="psMessage" class="message" role="status"></p>
       </div>

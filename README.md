@@ -70,13 +70,13 @@ way to run Strata" and is either:
   `./setup.sh` (Linux) in a Strata checkout, which runs `serve/server.py` **as a
   local process**. Start/stop uses process signals, config is a writable
   `strata-*.json`, logs are files under the checkout.
-- **Container** — Strata running in a Docker container. Start/stop uses
-  `docker start` / `docker stop`, config is read from the `/data` volume (and
-  written back through `docker cp`), logs come from `docker logs` and the
-  container's writable layer. When the container does not exist yet the app
-  creates it from a generic Strata recipe (image, container name, data and GGUF
-  directories, published port); special hardware can be used by pre-creating the
-  container yourself.
+- **Container** — Strata running in a Docker container, managed through a
+  generated `docker-compose.yml` (falling back to `docker run` when the host has
+  no Compose). The profile carries the raw ingredients — image, container name,
+  the host model directory and its in-container path, the mount and port lists,
+  the engine port pair, env / ulimits / security options and the compose output
+  directory — and the picked GPU card model expands into the device request.
+  Logs come from `docker compose logs` / `docker logs`.
 
 There are no "modes" and no special cases: MI50, dual-GPU, CUDA 12 vs CUDA 13
 are all just different profiles. Both types can coexist on one machine; the
@@ -86,8 +86,8 @@ remains).
 
 **First start** is preserved for both: a local profile with no usable
 `strata-*.json` runs `setup.py --setup --gguf-dir …` to generate one, then
-starts `serve/server.py`; a container profile is started with `GGUF_DIR` +
-`STRATA_DATA` so the entrypoint performs its own setup.
+starts `serve/server.py`; a container profile performs its own setup inside the
+image, driven by the profile's environment and mounts.
 
 The app itself talks to the local Strata API (`127.0.0.1` / `localhost`) and to
 `api.github.com` for release checks. Docker is driven through the `docker` CLI,
@@ -126,7 +126,7 @@ Configured in Hana's settings page (app **Local Strata**):
 |---|---|---|
 | `strataDir` | — | Path to the Strata project (per profile; set in this settings page) |
 | `pythonPath` | — | Python interpreter; empty = auto-detect `python3` / `python.exe` |
-| `ggufDir` | — | Folder with the GGUF shards. Local: `setup.py --gguf-dir`. Container: mounted at `/gguf` + `GGUF_DIR`. Empty = first start downloads the model |
+| `ggufDir` | — | Local-profile fallback: folder with the GGUF shards (`setup.py --gguf-dir`). A container profile carries its own host-model directory / container path pair instead. Empty = first start downloads the model |
 | `configFile` | — | Optional override; empty = auto-use the newest `strata-*.json` (or generate one on first start) |
 | `gpu` | — | Optional local GPU selector passed to `serve/server.py --gpu` (e.g. `0`, `0,2`, `all`) |
 | `port` | `0` | `0` = use the port from the selected config file |
@@ -214,16 +214,19 @@ Strata** 里增删改）。一套配置就是一种运行 Strata 的方式，分
 
 - **本机（源码）** —— 在 Strata 目录里跑 `START-HERE.bat`（Windows）或
   `./setup.sh`（Linux）的那种，服务以**本地进程**形式运行 `serve/server.py`。
-- **容器** —— 跑在 Docker 容器里的 Strata。容器不存在时，App 用通用配方
-  （镜像、容器名、数据目录、GGUF 目录、端口）创建；特殊硬件可自行预先创建容器。
+- **容器** —— 跑在 Docker 容器里的 Strata，由 App 生成的 `docker-compose.yml`
+  管理（宿主没有 Compose 时退回 `docker run`）。配置里写的是原始要素：镜像、
+  容器名、宿主模型目录与其容器内路径、挂载与端口列表、引擎端口对、
+  环境变量 / ulimits / security_opt，以及 compose 落盘目录；选中的显卡型号
+  会展开成对应的设备请求。
 
 没有「模式」也没有特例：MI50、双卡、CUDA12 / CUDA13 都只是不同的配置。
 同一台机器可以有多套配置；停机页选择要启动的那套，运行中则锁定当前配置
 （不允许改 / 删，且至少保留一套）。
 
 **首次启动**在两种配置下都保留：本机配置没有可用 `strata-*.json` 时先跑
-`setup.py --setup --gguf-dir …` 生成配置再起服务；容器配置以 `GGUF_DIR` +
-`STRATA_DATA` 启动，由 entrypoint 自行 setup。
+`setup.py --setup --gguf-dir …` 生成配置再起服务；容器配置由镜像自身
+（entrypoint）完成 setup，取决于该配置的环境变量与挂载。
 
 App 只访问本机 Strata API（`127.0.0.1` / `localhost`），以及用于版本检查的
 `api.github.com`。
@@ -258,7 +261,7 @@ manifest 的 `id`。
 |---|---|---|
 | `strataDir` | — | Strata 项目目录（按配置，在本设置页填写） |
 | `pythonPath` | — | Python 解释器；留空则自动探测 `python3` / `python.exe` |
-| `ggufDir` | — | 含全部分片 GGUF 的目录。本机：`setup.py --gguf-dir`；容器：挂载到 `/gguf` 并传 `GGUF_DIR`。留空则首次启动下载模型 |
+| `ggufDir` | — | 本机配置的模型目录（`setup.py --gguf-dir`）。容器配置在界面上另填宿主模型目录 / 容器内路径。留空则首次启动下载模型 |
 | `configFile` | — | 可选覆盖；留空则自动使用最新的 `strata-*.json`（没有则在首次启动时生成） |
 | `gpu` | — | 可选的本机 GPU 选择器，传给 `serve/server.py --gpu`（如 `0`、`0,2`、`all`） |
 | `port` | `0` | `0` = 使用所选配置文件里的端口 |

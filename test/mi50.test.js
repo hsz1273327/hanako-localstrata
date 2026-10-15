@@ -236,9 +236,13 @@ test("routes/settings.js registers the preset endpoints", () => {
 });
 
 test("the settings page carries the model picker and the preset prompt", () => {
+  // The picker and the prompt are rendered by the shared field module (the same
+  // source the panel drawer uses) into the container host on this page.
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-gpu-model", "pf-preset", "pf-preset-text", "pf-preset-apply", "pf-preset-ignore"]) {
-    assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
+  assert.match(html, /id="pf-container-extra"/);
+  const fields = fs.readFileSync(path.join(ROOT, "ui/assets/profile-fields.js"), "utf8");
+  for (const id of ["gpu-model", "preset", "preset-text", "preset-apply", "preset-ignore"]) {
+    assert.match(fields, new RegExp("\\$\\{p\\}" + id), `profile-fields.js must render the ${id} control`);
   }
   const src = fs.readFileSync(path.join(ROOT, "ui/assets/settings.js"), "utf8");
   // The catalog is the detection surface; the preset is applied via the route.
@@ -246,11 +250,11 @@ test("the settings page carries the model picker and the preset prompt", () => {
   assert.match(src, /api\(\s*["']presets\/mi50["']/);
   assert.match(src, /function\s+renderPresetOffer\s*\(/);
   assert.match(src, /function\s+isMi50Selected\s*\(/);
-  // The extra fields the visible form does not own ride along on save.
-  assert.match(src, /PRESET_EXTRA_FIELDS/);
-  assert.match(src, /pendingPreset/);
-  // The picker is disabled in the read-only view.
-  assert.match(src, /els\.profileGpuModel\.disabled\s*=\s*readOnly/);
+  // The catalog and the applied preset both go through the shared field module.
+  assert.match(src, /containerFields\.setCatalog\(gpuModels\)/);
+  assert.match(src, /containerFields\.applyPreset\(preset\)/);
+  // The picker is disabled in the read-only view by the module's own switch.
+  assert.match(src, /containerFields\.setReadOnly\(readOnly\)/);
 });
 
 test("mi50 i18n keys exist and are non-empty in every locale", () => {

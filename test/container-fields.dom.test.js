@@ -1,0 +1,403 @@
+// Behavioural coverage for ui/assets/profile-fields.js without jsdom.
+//
+// The repo is dependency-free by design, so instead of pulling jsdom in we run
+// the real module against a tiny DOM stub. It is intentionally minimal: just the
+// handful of DOM calls the module makes (create/append/replaceChildren, a class
+// list, attribute → dataset, a `select` whose `.value` is set explicitly, and a
+// descendant query for the selectors the module uses). That is enough to drive
+// the two things a source guard cannot prove — the GPU vendor split and the
+// add/remove list rows — through their real code paths.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createContainerFields } from "../ui/assets/profile-fields.js";
+import { saveProfile } from "../routes/settings.js";
+import { readAllConfig } from "../lib/strata.js";
+import { mi50Preset } from "../lib/mi50.js";
+
+// ── minimal DOM ───────────────────────────────────────────────────────────
+
+function matchesSimple(node, sel) {
+  if (sel.startsWith("#")) return node.id === sel.slice(1);
+  if (sel.startsWith(".")) return node.className.split(/\s+/).includes(sel.slice(1));
+  if (sel.startsWith("[")) {
+    const name = sel.slice(1, -1).split("=")[0];
+    return Object.prototype.hasOwnProperty.call(node.attrs, name);
+  }
+  return node.tagName === sel.toUpperCase();
+}
+
+function installDom() {
+  class Node {
+    constructor(tag) {
+      this.tagName = String(tag).toUpperCase();
+      this.children = [];
+      this.parent = null;
+      this.attrs = {};
+      this.dataset = {};
+      this.listeners = {};
+      this._text = "";
+      this.className = "";
+      this.id = "";
+      this.value = "";
+      this.placeholder = "";
+      this.hidden = false;
+      this.disabled = false;
+      this.type = "";
+      this.title = "";
+      this.lang = "";
+      this.classList = {
+        add: (c) => {
+          const set = new Set(this.className.split(/\s+/).filter(Boolean));
+          set.add(c);
+          this.className = [...set].join(" ");
+        },
+        remove: (c) => {
+          this.className = this.className.split(/\s+/).filter((x) => x && x !== c).join(" ");
+        },
+        contains: (c) => this.className.split(/\s+/).includes(c),
+      };
+    }
+    get textContent() {
+      return this._text + this.children.map((c) => c.textContent).join("");
+    }
+    set textContent(v) {
+      for (const c of this.children) c.parent = null;
+      this.children = [];
+      this._text = String(v);
+    }
+    get options() {
+      return this.children.filter((c) => c.tagName === "OPTION");
+    }
+    setAttribute(name, value) {
+      this.attrs[name] = String(value);
+      if (name === "id") this.id = String(value);
+      if (name === "class") this.className = String(value);
+      if (name === "hidden") this.hidden = true;
+      if (name.startsWith("data-")) {
+        const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        this.dataset[key] = String(value);
+      }
+    }
+    getAttribute(name) {
+      return this.attrs[name];
+    }
+    append(...nodes) {
+      for (const n of nodes) {
+        if (n === undefined || n === null) continue;
+        n.parent = this;
+        this.children.push(n);
+      }
+    }
+    replaceChildren(...nodes) {
+      for (const c of this.children) c.parent = null;
+      this.children = [];
+      this._text = "";
+      this.append(...nodes);
+    }
+    remove() {
+      if (!this.parent) return;
+      const i = this.parent.children.indexOf(this);
+      if (i >= 0) this.parent.children.splice(i, 1);
+      this.parent = null;
+    }
+    addEventListener(type, fn) {
+      (this.listeners[type] || (this.listeners[type] = [])).push(fn);
+    }
+    dispatch(type) {
+      for (const fn of this.listeners[type] || []) fn({ target: this, preventDefault() {} });
+    }
+    get childElementCount() {
+      return this.children.length;
+    }
+    _walk() {
+      const out = [];
+      const rec = (n) => {
+        for (const c of n.children) {
+          out.push(c);
+          rec(c);
+        }
+      };
+      rec(this);
+      return out;
+    }
+    querySelectorAll(sel) {
+      const parts = String(sel).split(",").map((s) => s.trim()).filter(Boolean);
+      return this._walk().filter((n) => parts.some((p) => matchesSimple(n, p)));
+    }
+    querySelector(sel) {
+      return this.querySelectorAll(sel)[0] || null;
+    }
+  }
+
+  const document = {
+    documentElement: new Node("html"),
+    title: "",
+    createElement: (tag) => new Node(tag),
+  };
+  const prev = globalThis.document;
+  globalThis.document = document;
+  return { restore: () => { globalThis.document = prev; } };
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────
+
+const CATALOG = [
+  { key: "nvidia", label: "NVIDIA GeForce RTX (CUDA)", vendor: "nvidia", gfx: null },
+  { key: "amd-mi50", label: "AMD Instinct MI50 (Vega 20, gfx906)", vendor: "amd", gfx: "gfx906" },
+  { key: "amd-7900xtx", label: "AMD Radeon RX 7900 XT / XTX (RDNA3, gfx1100)", vendor: "amd", gfx: "gfx1100" },
+];
+
+// The card-model picker is built from the catalog (never a free-text field), and
+// the per-card control follows the vendor: shown for NVIDIA, hidden AND cleared
+// for AMD.
+test("the card picker renders the catalog and the vendor split works end to end", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+
+    // Options: the blank "choose" entry + the catalog, localized or verbatim.
+    assert.equal(ctr.refs.gpuModel.options.length, 1 + CATALOG.length);
+
+    ctr.render({ GpuModel: "nvidia", GpuIds: "0,1" });
+    assert.equal(ctr.refs.gpuIdsField.hidden, false, "NVIDIA shows the per-card field");
+    assert.equal(ctr.refs.gpuIds.value, "0,1");
+
+    // Switching to an AMD card hides it AND clears the residual value.
+    ctr.refs.gpuModel.value = "amd-mi50";
+    ctr.refs.gpuModel.dispatch("change");
+    assert.equal(ctr.refs.gpuIdsField.hidden, true, "AMD hides the per-card field");
+    assert.equal(ctr.refs.gpuIds.value, "", "the stale card selection is cleared");
+    assert.equal(ctr.collect().GpuIds, "", "collect() never emits GpuIds for AMD");
+    assert.equal(ctr.collect().GpuModel, "amd-mi50");
+
+    // ...and back to NVIDIA starts empty, not with the old value.
+    ctr.refs.gpuModel.value = "nvidia";
+    ctr.refs.gpuModel.dispatch("change");
+    assert.equal(ctr.refs.gpuIdsField.hidden, false);
+    assert.equal(ctr.refs.gpuIds.value, "");
+    ctr.refs.gpuIds.value = "0";
+    assert.equal(ctr.collect().GpuIds, "0");
+  } finally {
+    dom.restore();
+  }
+});
+
+// A field the form does not render (the template-contributed device rules) is
+// preserved through render → collect, so an edit never drops it.
+test("collect() preserves the fields the form does not render", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+    ctr.render({
+      GpuModel: "nvidia",
+      ModelDir: "/models",
+      device_cgroup_rules: ["c 226:* rmw"],
+      // A page-owned identity field must NOT be echoed by the block.
+      imageName: "strata",
+      containerName: "strata",
+    });
+    const body = ctr.collect();
+    assert.deepEqual(body.device_cgroup_rules, ["c 226:* rmw"]);
+    assert.equal(body.imageName, undefined, "the image identity stays the page's");
+    assert.equal(body.containerName, undefined);
+    assert.equal(body.ModelDir, "/models");
+  } finally {
+    dom.restore();
+  }
+});
+
+// The list fields are add/remove rows and read back as a clean list.
+test("the list fields add and remove rows and collect clean values", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+
+    const volumes = ctr.refs.volumeBinds;
+    // An empty list still shows one blank row, so the field is discoverable.
+    assert.equal(volumes.rows.childElementCount, 1);
+
+    volumes.setValues(["/mnt/models:/models", "/srv/data:/data:ro"]);
+    assert.equal(volumes.rows.childElementCount, 2);
+    // A blank row and a duplicate are ignored when reading back.
+    volumes.addRow("");
+    volumes.addRow("/mnt/models:/models");
+    assert.deepEqual(volumes.readValues(), ["/mnt/models:/models", "/srv/data:/data:ro"]);
+
+    // Removing a row is a real removal...
+    volumes.setValues(["/mnt/models:/models", "/srv/data:/data:ro"]);
+    volumes.rows.children[0].querySelector(".cf-list-remove").dispatch("click");
+    assert.deepEqual(volumes.readValues(), ["/srv/data:/data:ro"]);
+    assert.equal(volumes.rows.childElementCount, 1);
+
+    // ...but the last row is only cleared, never removed.
+    volumes.setValues(["/x:/y"]);
+    volumes.rows.children[0].querySelector(".cf-list-remove").dispatch("click");
+    assert.equal(volumes.rows.childElementCount, 1);
+    assert.deepEqual(volumes.readValues(), []);
+
+    // Lists are independent, and collect() reads each one back clean.
+    volumes.setValues(["/a:/b"]);
+    ctr.refs.portBinds.setValues(["1:2"]);
+    ctr.refs.environment.setValues(["KEY=value", "MODE=fast"]);
+    const body = ctr.collect();
+    assert.deepEqual(body.VolumeBinds, ["/a:/b"]);
+    assert.deepEqual(body.PortBinds, ["1:2"]);
+    assert.deepEqual(body.environment, ["KEY=value", "MODE=fast"]);
+    assert.deepEqual(body.ulimits, []);
+    assert.deepEqual(body.security_opt, []);
+  } finally {
+    dom.restore();
+  }
+});
+
+// A preset writes only the keys it supplies; everything visible then reads back
+// from the real inputs.
+test("applyPreset fills the module's fields and collect() reads them back", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", preset: true });
+    ctr.setCatalog(CATALOG);
+
+    ctr.applyPreset({
+      GpuModel: "amd-mi50",
+      VolumeBinds: ["/home/u/models:/models", "/home/u/data:/data", "/home/u/work:/work"],
+      PortBinds: ["8090:8090"],
+      EnginePort: 8085,
+      EngineBindPort: 8085,
+      environment: ["MODELS_DIR=/models", "DATA_DIR=/data"],
+      ulimits: ["memlock=-1"],
+      security_opt: ["seccomp=unconfined"],
+      ShmSize: "16g",
+    });
+
+    const body = ctr.collect();
+    assert.equal(body.GpuModel, "amd-mi50");
+    assert.equal(body.GpuIds, "", "the MI50 preset never leaves a card selection");
+    assert.deepEqual(body.VolumeBinds, ["/home/u/models:/models", "/home/u/data:/data", "/home/u/work:/work"]);
+    assert.deepEqual(body.PortBinds, ["8090:8090"]);
+    assert.equal(body.EnginePort, 8085);
+    assert.equal(body.EngineBindPort, 8085);
+    assert.equal(body.ShmSize, "16g");
+    assert.deepEqual(body.ulimits, ["memlock=-1"]);
+    // The preset box exists on the settings surface (not the panel's).
+    assert.ok(ctr.refs.preset);
+    assert.ok(ctr.refs.presetApply);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("read-only disables every control the module owns", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", preset: true });
+    ctr.setCatalog(CATALOG);
+    ctr.render({ GpuModel: "nvidia" });
+
+    ctr.setReadOnly(true);
+    const controls = host.querySelectorAll("input, select, button");
+    assert.ok(controls.length > 5);
+    assert.ok(controls.every((c) => c.disabled), "read-only disables every input/select/button");
+    assert.equal(ctr.refs.volumeBinds.add.disabled, true, "the add-row button is locked too");
+
+    ctr.setReadOnly(false);
+    assert.ok(host.querySelectorAll("input, select, button").every((c) => !c.disabled));
+  } finally {
+    dom.restore();
+  }
+});
+
+// ── the whole path: the form's body → the save route → storage → compose ──
+
+function makeCtx(values = {}) {
+  const store = { ...values };
+  return {
+    _store: store,
+    config: {
+      async get(k) {
+        return store[k];
+      },
+      async set(k, v) {
+        store[k] = v;
+      },
+      async setMany(patch) {
+        Object.assign(store, patch);
+      },
+    },
+    network: { fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) },
+    log: { info() {}, warn() {}, error() {} },
+  };
+}
+
+// The MI50 preset applied through the module must read back into the exact body
+// the save route expects, persist the new fields, and land a docker-compose.yml
+// that carries the card's device request plus the image's own facts. This is the
+// one test that runs the real form → route → storage → compose chain.
+test("a container profile built by the form round-trips to storage and compose", async () => {
+  const dom = installDom();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strata-uifields-"));
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-", preset: true });
+    ctr.setCatalog(CATALOG);
+
+    const preset = mi50Preset({ containerName: "strata-mi50", home: "/home/tester" });
+    // The identity fields are the page's, not the module's; the rest goes in.
+    ctr.applyPreset(preset);
+    ctr.refs.deployDir.value = dir;
+
+    const body = {
+      name: "mi50box",
+      type: "container",
+      imageName: preset.imageName,
+      imageTag: preset.imageTag,
+      containerName: "strata-mi50",
+      ...ctr.collect(),
+    };
+
+    const ctx = makeCtx({});
+    const saved = await saveProfile(ctx, body);
+    assert.equal(saved.saved, true);
+    assert.equal(saved.profile.GpuModel, "amd-mi50");
+    assert.equal(saved.profile.GpuIds, "", "AMD never stores a card selection");
+
+    const cfg = await readAllConfig(ctx);
+    const stored = cfg.profiles.find((p) => p.id === saved.profile.id);
+    assert.equal(stored.GpuModel, "amd-mi50");
+    assert.equal(stored.EnginePort, 8085);
+    assert.equal(stored.ShmSize, "16g");
+    assert.deepEqual(stored.ulimits, ["memlock=-1"]);
+    assert.deepEqual(stored.security_opt, ["seccomp=unconfined"]);
+    assert.equal(stored.VolumeBinds.length, 3);
+    assert.ok(stored.VolumeBinds.every((b) => /:\/\w+$/.test(b)), "each mount is host:container");
+
+    const file = path.join(dir, "docker-compose.yml");
+    assert.equal(saved.compose.written, true);
+    assert.equal(saved.compose.file, file);
+    const yml = fs.readFileSync(file, "utf8");
+    // The card's device request comes from the model template, not the form.
+    assert.match(yml, /"\/dev\/kfd:\/dev\/kfd"/);
+    assert.match(yml, /"\/dev\/dri:\/dev\/dri"/);
+    assert.match(yml, /"c 226:\* rmw"/);
+    // The image's own facts come from the preset.
+    assert.match(yml, /shm_size: "16g"/);
+    assert.match(yml, /"8090:8090"/);
+    assert.match(yml, /"8085:8085"/);
+    assert.match(yml, /MODELS_DIR=\/models/);
+    assert.match(yml, /memlock:/);
+  } finally {
+    dom.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

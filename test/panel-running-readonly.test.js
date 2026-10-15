@@ -356,6 +356,8 @@ test(
     fs.writeFileSync(path.join(tmp, "sdk.js"), STUB_SDK);
     fs.copyFileSync(path.join(ROOT, "ui/assets/panel.js"), path.join(tmp, "panel.js"));
     fs.copyFileSync(path.join(ROOT, "ui/assets/i18n.js"), path.join(tmp, "i18n.js"));
+    // panel.js now renders the container block from the shared field module.
+    fs.copyFileSync(path.join(ROOT, "ui/assets/profile-fields.js"), path.join(tmp, "profile-fields.js"));
 
     const saved = ["window", "document", "navigator", "localStorage", "HTMLElement", "Event", "KeyboardEvent", "MouseEvent"];
     const restore = {};

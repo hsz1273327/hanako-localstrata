@@ -407,6 +407,46 @@ body {
   gap: 10px;
 }
 
+/* ── Shared container field block (ui/assets/profile-fields.js) ─────────
+   Both the settings drawer and the panel drawer render it, so the row/list
+   and the compose-path line are styled once per surface. */
+.cf-fields {
+  display: grid;
+  gap: 10px;
+}
+.cf-list {
+  display: grid;
+  gap: 6px;
+}
+.cf-list-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cf-list-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cf-list-remove {
+  line-height: 1;
+  font-size: 14px;
+  padding: 4px 8px;
+}
+.cf-deploy-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cf-deploy-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(83, 125, 150, 0.1);
+  overflow-wrap: anywhere;
+}
+
 .profile-confirm {
   display: grid;
   gap: 8px;

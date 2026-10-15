@@ -260,7 +260,7 @@ test("the settings pull entry acquires a missing image", () => {
 // promises: local source vs container.
 test("settings page profile editor exposes type-specific fields", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image-name", "pf-image-tag", "pf-containerName", "pf-dataDir", "pf-ggufDir", "pf-port"]) {
+  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image-name", "pf-image-tag", "pf-containerName", "pf-container-extra", "pf-ggufDir", "pf-port"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
   // Delete still goes through an explicit confirmation step.
