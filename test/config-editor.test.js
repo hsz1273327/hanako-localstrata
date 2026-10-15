@@ -14,10 +14,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { readAllConfig, getConfigView } from "../lib/strata.js";
 import { buildConfigView, readConfigSummary } from "../lib/deployer/common.js";
 import { tarEntryText } from "../lib/docker.js";
 import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "../ui/assets/edit-diff.js";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
 const tmpRoots = [];
 function tmpDir() {
@@ -319,10 +323,47 @@ test("the editor refills when the answer changes, not only when the name does", 
   assert.equal(needsRefill(null, { configFile: "x.json", hasConfig: false, values: {} }), false);
 });
 
+// ── one save button, because a stopped deployment has nothing to restart ──
+
+// The editor is only visible while stopped, and the old "save & restart" did not
+// merely no-op: `restart()` fails its stop phase, waits 3 s and then STARTS the
+// service — so the label said "restart" while the effect was "start".
+test("the parameter editor offers one save, with no button that cannot take effect", () => {
+  const html = read("ui/panel.html");
+  const js = read("ui/assets/panel.js");
+  assert.doesNotMatch(html, /id="saveRestartBtn"/, "no second save button in the editor");
+  assert.doesNotMatch(js, /saveRestartBtn/);
+  // The panel never asks the route to restart…
+  assert.doesNotMatch(js, /restart:\s*true/, "no restart request from the panel");
+  assert.doesNotMatch(js, /save\(true\)/, "save takes no restart argument");
+  assert.match(js, /els\.saveBtn\.addEventListener\("click", \(\) => save\(\)\)/);
+  assert.match(js, /async function save\(\)/);
+  // …while the ROUTE keeps the capability as the recorded re-entry point for
+  // running-state editing of the instant-effect params.
+  assert.match(read("routes/settings.js"), /if \(body\?\.restart && result\.saved\)/);
+  // The service-restart overlay path is still live (the LAN mode switch uses it).
+  assert.match(js, /setWorking\("restart"\)/);
+});
+
+test("the removed button leaves no orphan keys, and the honest notes stay", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  for (const lang of LANGS) {
+    assert.equal(STRINGS[lang]["common.saveRestart"], undefined, `${lang} still carries common.saveRestart`);
+    assert.equal(STRINGS[lang]["edit.savingRestart"], undefined, `${lang} still carries edit.savingRestart`);
+    // Kept: the legend note (params that need a restart) and the result copy.
+    assert.ok(STRINGS[lang]["edit.needsRestart"], `${lang} lost the restart-required note`);
+    assert.ok(STRINGS[lang]["edit.restartRequired"], `${lang} lost the restart-required result copy`);
+    assert.ok(STRINGS[lang]["overlay.restart"], `${lang} lost the service-restart overlay copy`);
+  }
+  for (const rel of ["ui/panel.html", "ui/assets/panel.js", "ui/assets/settings.js"]) {
+    assert.doesNotMatch(read(rel), /saveRestart|savingRestart/, `${rel} still references the removed copy`);
+  }
+});
+
 // ── the panel wires the shared model (source guards) ─────────────────────
 
 test("the panel's diff and payload come from the one shared model", () => {
-  const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "ui/assets/panel.js"), "utf8");
+  const src = read("ui/assets/panel.js");
   assert.match(src, /from "\.\/edit-diff\.js"/);
   assert.match(src, /return editDiff\(state\.config\?\.values \|\| \{\}, raw, types\)/);
   // The refill guard is value-keyed, not name-keyed.

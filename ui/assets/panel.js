@@ -95,7 +95,6 @@ const els = {
   langSelect: document.getElementById("langSelect"),
   editForm: document.getElementById("editForm"),
   saveBtn: document.getElementById("saveBtn"),
-  saveRestartBtn: document.getElementById("saveRestartBtn"),
   diffBox: document.getElementById("diffBox"),
   diffList: document.getElementById("diffList"),
   editMessage: document.getElementById("editMessage"),
@@ -1282,7 +1281,22 @@ function applySaveResult(result) {
   }
 }
 
-async function save(restart) {
+// Save the parameter edits.
+//
+// There is deliberately no "save & restart" button: this editor is only visible
+// while the service is STOPPED (`els.settingsBox.hidden = isSetup || running`),
+// so there is nothing to restart. The old button did not simply no-op —
+// `restart()` on a stopped deployment fails its stop phase, waits 3 s and then
+// STARTS the service, so "save & restart" quietly meant "save & start". Plain
+// save is also what the params want: every edited field is restart-gated, so it
+// takes effect at the next start (the success message says so via
+// `edit.restartRequired`).
+//
+// If running-state editing of the instant-effect params ever returns, the way
+// back is already in place on the backend: POST /settings still accepts a
+// restart flag alongside the edits and runs restartService after a successful
+// save (the panel itself no longer sends one).
+async function save() {
   if (state.working) return;
   const { payload: edits, cleared } = configEdits();
   if (cleared.length) {
@@ -1295,26 +1309,11 @@ async function save(restart) {
     return;
   }
 
-  if (restart) {
-    setWorking("restart");
-    setMessage(t("edit.savingRestart"), "info");
-    try {
-      const result = await api("settings", { method: "POST", body: JSON.stringify({ edits, restart: true }) });
-      applySaveResult(result);
-      await waitForStable();
-    } catch (e) {
-      setMessage(String(e?.message || e), "error");
-      endWorking();
-      await refresh();
-    }
-    return;
-  }
-
   state.working = true;
   paint(state.status || { state: "stopped" });
   setMessage(t("edit.saving"), "info");
   try {
-    const result = await api("settings", { method: "POST", body: JSON.stringify({ edits, restart: false }) });
+    const result = await api("settings", { method: "POST", body: JSON.stringify({ edits }) });
     applySaveResult(result);
   } catch (e) {
     setMessage(String(e?.message || e), "error");
@@ -1952,8 +1951,7 @@ els.confirmCancel.addEventListener("click", () => closeConfirm());
 els.confirmPopover.addEventListener("pointerenter", confirmPause);
 els.confirmPopover.addEventListener("pointerleave", confirmResume);
 els.overlayLogBtn.addEventListener("click", () => toggleUpdateLog());
-els.saveBtn.addEventListener("click", () => save(false));
-els.saveRestartBtn.addEventListener("click", () => save(true));
+els.saveBtn.addEventListener("click", () => save());
 els.editForm.addEventListener("input", () => renderDiff());
 window.addEventListener("beforeunload", () => window.clearTimeout(timer));
 
