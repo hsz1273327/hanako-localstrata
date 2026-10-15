@@ -6,6 +6,7 @@
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
+import { isAbsent, editDiff } from "./edit-diff.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -1158,20 +1159,22 @@ function fieldLabel(key) {
 
 const editFields = [...document.querySelectorAll("#editForm [data-key]")];
 
-function collectEdits() {
-  const edits = {};
+// The inputs' raw values + their types, shaped for `editDiff`.
+function editInputs() {
+  const raw = {};
+  const types = {};
   for (const el of editFields) {
-    const key = el.dataset.key;
-    const raw = el.value;
-    if (el.type === "number") {
-      if (raw === "") continue;
-      const n = Number(raw);
-      if (Number.isFinite(n)) edits[key] = n;
-    } else {
-      edits[key] = raw;
-    }
+    raw[el.dataset.key] = el.value;
+    types[el.dataset.key] = el.type;
   }
-  return edits;
+  return { raw, types };
+}
+
+// What the editor currently shows vs what the config file holds. The diff list and
+// the save payload both come from here, so they cannot disagree.
+function configEdits() {
+  const { raw, types } = editInputs();
+  return editDiff(state.config?.values || {}, raw, types);
 }
 
 function fillEditForm(values) {
@@ -1182,26 +1185,52 @@ function fillEditForm(values) {
   state.formFilled = true;
 }
 
-function renderDiff() {
-  if (!state.config?.hasConfig) {
-    els.diffBox.hidden = true;
-    els.diffList.replaceChildren();
+// "—" for a value that is not there (as opposed to the literal empty string).
+function fmtEditValue(value) {
+  return isAbsent(value) ? "—" : String(value);
+}
+
+// An empty editor that invites typing is how a good config gets overwritten with
+// blanks, so when there is a config file but it cannot be read (a stopped
+// container is the usual reason) the fields are locked and the reason is said
+// out loud. Readable again on the next refresh.
+function setEditFormReadable(readable, cfg) {
+  for (const el of editFields) el.disabled = !readable;
+  if (readable) {
+    if (state.unreadableNotice) {
+      state.unreadableNotice = false;
+      setMessage("");
+    }
     return;
   }
-  const current = state.config?.values || {};
-  const edits = collectEdits();
-  const items = [];
-  for (const [key, val] of Object.entries(edits)) {
-    if (String(current[key]) !== String(val)) {
-      items.push({ key, old: current[key], new: val });
-    }
+  const file = cfg?.configFile || cfg?.files?.main || "";
+  state.unreadableNotice = true;
+  if (!file) {
+    // No config file at all — the panel's own setup notice / config picker says
+    // what to do about that; here it just must not look editable.
+    setMessage(t("state.noConfig"), "warn");
+    return;
   }
-  els.diffBox.hidden = items.length === 0;
+  setMessage(tp("edit.configUnreadable", { file }), "warn");
+}
+
+function renderDiff() {
+  const { items, cleared } = configEdits();
+  const readable = !!state.config?.hasConfig;
+  els.diffBox.hidden = !readable || items.length === 0;
   els.diffList.replaceChildren();
   for (const it of items) {
     const li = document.createElement("li");
-    li.textContent = `${fieldLabel(it.key)}: ${it.old ?? "—"} → ${it.new ?? "—"}`;
+    li.textContent = `${fieldLabel(it.key)}: ${fmtEditValue(it.old)} → ${fmtEditValue(it.next)}`;
     els.diffList.append(li);
+  }
+  // A field the user emptied is a change worth showing, but it cannot be written:
+  // say so instead of dropping it silently (the save is held back — see save()).
+  if (readable && cleared.length) {
+    const note = document.createElement("li");
+    note.className = "diff-note";
+    note.textContent = t("edit.clearUnsupported");
+    els.diffList.append(note);
   }
 }
 
@@ -1221,9 +1250,11 @@ async function refreshConfig() {
         fillEditForm(cfg.values || {});
         state.configFileFilled = cfg.configFile;
       }
+      setEditFormReadable(true, cfg);
     } else {
       state.formFilled = false;
       state.configFileFilled = null;
+      setEditFormReadable(false, cfg);
     }
     renderDiff();
   } catch {
@@ -1250,7 +1281,12 @@ function applySaveResult(result) {
 
 async function save(restart) {
   if (state.working) return;
-  const edits = collectEdits();
+  const { payload: edits, cleared } = configEdits();
+  if (cleared.length) {
+    // Never send an empty value: the writer rewrites flags, it cannot remove them.
+    setMessage(t("edit.clearUnsupported"), "warn");
+    return;
+  }
   if (!Object.keys(edits).length) {
     setMessage(t("edit.noEdits"), "warn");
     return;

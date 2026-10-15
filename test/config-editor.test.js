@@ -1,0 +1,305 @@
+// The config parameter editor: reading the values, and what counts as a change.
+//
+// Two faults are pinned here, both reported from a real UI session:
+//   1. every parameter field came out EMPTY, and
+//   2. "pending changes" listed a wall of phantom edits (`context: — → --`) the
+//      moment the editor opened.
+//
+// (2) had two independent causes: the comparison treated "no value" as a value
+// (`String(undefined) !== String("")`), and the field collector let empty SELECT
+// values into the payload while skipping empty numbers — so exactly the three
+// selects (context / kv / reasoning_effort) showed up.
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { readAllConfig, getConfigView } from "../lib/strata.js";
+import { buildConfigView, readConfigSummary } from "../lib/deployer/common.js";
+import { tarEntryText } from "../lib/docker.js";
+import { isAbsent, editDiff } from "../ui/assets/edit-diff.js";
+
+const tmpRoots = [];
+function tmpDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strata-editor-"));
+  tmpRoots.push(dir);
+  return dir;
+}
+after(() => {
+  for (const dir of tmpRoots) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+});
+
+function makeCtx(values = {}) {
+  const store = { ...values };
+  return {
+    _store: store,
+    config: {
+      async get(k) {
+        return store[k];
+      },
+      async set(k, v) {
+        store[k] = v;
+      },
+      async setMany(patch) {
+        Object.assign(store, patch);
+      },
+    },
+    network: { fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) },
+    log: { info() {}, warn() {}, error() {} },
+  };
+}
+
+// A config file with the REAL shape (an `args` array + a `sampling` block, as
+// setup.py writes it) plus its sibling shared-settings file.
+function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
+  fs.writeFileSync(
+    path.join(dir, `strata-${tag}.json`),
+    JSON.stringify(
+      {
+        host: "0.0.0.0",
+        sampling: { temperature: 0.7, top_p: 0.9, top_k: 40, min_p: 0.05, presence_penalty: 0 },
+        exe: "strata",
+        args: [
+          "--pack",
+          "/data/packs/iq3_s",
+          "--native",
+          "/data/models/IQ3_S/a.gguf",
+          "--spec",
+          "4",
+          "--conversation-cache-mib",
+          "8192",
+          "--max-context",
+          "262144",
+          "--kv",
+          "int8",
+        ],
+        cwd: dir,
+        model_name: "Qwen3.8-IQ3_S",
+        log: "strata-iq3_s.log",
+        lib_dirs: [],
+        port,
+        gpu: "0",
+      },
+      null,
+      2,
+    ),
+  );
+  fs.writeFileSync(
+    path.join(dir, `strata-${tag}.shared-settings.json`),
+    JSON.stringify({ max_tokens: 4096, reasoning_effort: "medium" }, null, 2),
+  );
+}
+
+const localProfile = (over = {}) => ({
+  id: "p1",
+  name: "default",
+  type: "local",
+  strataDir: "",
+  pythonPath: "",
+  gpu: "",
+  ggufDir: "",
+  port: 0,
+  apiKey: "",
+  ...over,
+});
+
+const containerProfile = (over = {}) => ({
+  id: "p2",
+  name: "box",
+  type: "container",
+  imageName: "strata",
+  imageTag: "latest",
+  image: "strata:latest",
+  containerName: "strata",
+  GpuModel: "nvidia",
+  ApiKeyEnv: "",
+  apiKey: "",
+  DeployDir: "",
+  VolumeBinds: [],
+  PortBinds: [],
+  environment: [],
+  ulimits: [],
+  security_opt: [],
+  device_cgroup_rules: [],
+  ...over,
+});
+
+// ── ① a stopped deployment reads the real config values ───────────────────
+
+test("a local deployment reads every parameter out of its config file", async () => {
+  const dir = tmpDir();
+  writeRealConfig(dir);
+  const ctx = makeCtx({
+    strataDir: dir,
+    configFile: "strata-iq3_s.json",
+    profiles: [localProfile({ strataDir: dir })],
+    activeProfileId: "p1",
+  });
+  const cfg = await readAllConfig(ctx);
+  const view = await getConfigView(ctx, { platform: "linux" });
+
+  assert.equal(view.hasConfig, true, "a readable config is a selected config");
+  assert.equal(view.configFile, "strata-iq3_s.json");
+  assert.equal(view.errors.main, null);
+  // The values the form is filled from — none of them may be empty.
+  assert.equal(view.values.context, 262144);
+  assert.equal(view.values.kv, "int8");
+  assert.equal(view.values.sessionCache, 8192);
+  assert.equal(view.values.mtp, 4);
+  assert.equal(view.values.port, 8080);
+  assert.equal(view.values.max_tokens, 4096, "from the shared-settings file");
+  assert.equal(view.values.reasoning_effort, "medium");
+  assert.equal(view.values.temperature, 0.7);
+  for (const [key, value] of Object.entries(view.values)) {
+    if (key === "presence_penalty") continue; // a legitimate 0
+    assert.ok(!isAbsent(value), `${key} must not come back empty`);
+  }
+  // And the summary agrees (used elsewhere).
+  assert.equal(readConfigSummary(cfg).context, 262144);
+});
+
+test("a container whose config cannot be read reports hasConfig=false", async () => {
+  // `docker exec cat` against a stopped container yields "" — that is not a config.
+  const docker = {
+    available: () => true,
+    compose: { available: () => false },
+    inspect: () => ({ Name: "/strata", Config: { Image: "strata:latest", Env: ["PORT=8080", "MODEL=IQ3_S"] }, State: { Status: "exited" } }),
+    exec: () => "",
+    catFile: () => null,
+  };
+  const ctx = makeCtx({
+    profiles: [containerProfile()],
+    activeProfileId: "p2",
+  });
+  const view = await getConfigView(ctx, { docker, platform: "linux" });
+
+  assert.equal(view.hasConfig, false, "an unreadable config must NOT claim to be a config");
+  assert.equal(view.configFile, "strata-iq3_s.json", "the name is still reported (it comes from the container env)");
+  assert.ok(view.errors.main, "and the read failure is reported");
+  // Every value is absent — which is why the editor used to open blank.
+  for (const [key, value] of Object.entries(view.values)) {
+    assert.ok(isAbsent(value), `${key} must be absent`);
+  }
+  // The payload for that state is what the editor now guards on.
+  assert.equal(buildConfigView({ configFile: "x.json", mainName: "x.json", sharedName: "y.json", mainText: "", sharedText: "" }).hasConfig, false);
+});
+
+// ── the tar a `docker cp … -` hands back ─────────────────────────────────
+
+// `docker cp` writes a tar archive to stdout, never the bare file. The old
+// `catFile` returned that stream as-is, so the caller got a blob whose first
+// bytes are the file NAME — non-empty, not JSON, and therefore "a config that
+// reads as empty".
+function tarOf(name, content) {
+  const body = Buffer.from(content, "utf8");
+  const header = Buffer.alloc(512);
+  header.write(name, 0, "utf8");
+  header.write("0000644\0", 100, "utf8");
+  header.write("0000000\0", 108, "utf8");
+  header.write("0000000\0", 116, "utf8");
+  header.write(`${body.length.toString(8).padStart(11, "0")}\0`, 124, "utf8");
+  header.write("00000000000\0", 136, "utf8");
+  header.write("        ", 148, "utf8");
+  header.write("0", 156, "utf8");
+  const padded = Buffer.alloc(Math.ceil(body.length / 512) * 512);
+  body.copy(padded);
+  return Buffer.concat([header, padded, Buffer.alloc(1024)]).toString("utf8");
+}
+
+test("the docker-cp tar stream is decoded to the file it carries", () => {
+  const json = '{\n  "port": 8080,\n  "args": ["--max-context", "262144"]\n}';
+  const tar = tarOf("strata-iq3_s.json", json);
+  assert.ok(tar.startsWith("strata-iq3_s.json"), "the raw stream starts with the file name");
+  assert.equal(tarEntryText(tar), json, "and the decoded entry is the file, byte for byte");
+  // The decoded text is what the config reader expects.
+  assert.equal(parseOf(tarEntryText(tar)).port, 8080);
+  // Not a tar → nothing to hand back (never a half-decoded blob).
+  assert.equal(tarEntryText("not a tar"), null);
+  assert.equal(tarEntryText(""), null);
+  assert.equal(tarEntryText(null), null);
+});
+
+function parseOf(text) {
+  return JSON.parse(text);
+}
+
+test("a raw tar blob is not mistaken for a config", () => {
+  const tar = tarOf("strata-iq3_s.json", '{"port": 8080}');
+  const view = buildConfigView({ configFile: "strata-iq3_s.json", mainName: "strata-iq3_s.json", sharedName: "s.json", mainText: tar, sharedText: null });
+  assert.equal(view.hasConfig, false, "the header garbage must not claim to be a config");
+  assert.ok(view.errors.main, "and the failure is reported");
+
+  // The decoded text IS a config.
+  const good = buildConfigView({ configFile: "strata-iq3_s.json", mainName: "strata-iq3_s.json", sharedName: "s.json", mainText: tarEntryText(tar), sharedText: null });
+  assert.equal(good.hasConfig, true);
+  assert.equal(good.values.port, 8080);
+});
+
+// ── ②③ what counts as a change ───────────────────────────────────────────
+
+const TYPES = { context: "number", kv: "text", sessionCache: "number", reasoning_effort: "text" };
+
+test("nothing vs nothing is not a change (the phantom diff)", () => {
+  // Exactly the reported case: the config was unreadable, so every baseline value
+  // is absent AND the form is empty.
+  const { items, payload, cleared } = editDiff({}, { context: "", kv: "", reasoning_effort: "" }, TYPES);
+  assert.deepEqual(items, [], "an empty form over an unreadable config is not a change");
+  assert.deepEqual(payload, {}, "and it must never be sent");
+  assert.deepEqual(cleared, []);
+});
+
+test("an untouched readable config is not a change either", () => {
+  const baseline = { context: 262144, kv: "int8", sessionCache: 8192, reasoning_effort: "medium" };
+  const raw = { context: "262144", kv: "int8", sessionCache: "8192", reasoning_effort: "medium" };
+  const { items, payload } = editDiff(baseline, raw, TYPES);
+  assert.deepEqual(items, []);
+  assert.deepEqual(payload, {});
+});
+
+test("a real edit is a change, typed by the field", () => {
+  const baseline = { context: 262144, kv: "int8" };
+  const { items, payload } = editDiff(baseline, { context: "131072", kv: "q4_0" }, TYPES);
+  assert.equal(items.length, 2);
+  assert.deepEqual(payload, { context: 131072, kv: "q4_0" });
+});
+
+test("a field the user emptied IS a change, but is not sent", () => {
+  const baseline = { sessionCache: 8192, context: 262144 };
+  const { items, payload, cleared } = editDiff(baseline, { sessionCache: "", context: "262144" }, TYPES);
+  assert.equal(items.length, 1, "clearing a field shows up");
+  assert.deepEqual(items[0], { key: "sessionCache", old: 8192, next: null });
+  assert.deepEqual(cleared, [{ key: "sessionCache", old: 8192 }], "and is reported as a clear");
+  assert.deepEqual(payload, {}, "an empty value is not writable — the writer rewrites flags, it cannot remove them");
+});
+
+test("a half-typed number is not an edit yet", () => {
+  const { items, payload } = editDiff({ context: 262144 }, { context: "-" }, TYPES);
+  assert.deepEqual(items, []);
+  assert.deepEqual(payload, {});
+});
+
+test("an empty value that never had one is ignored, not reported as a clear", () => {
+  const { items, cleared, payload } = editDiff({ context: 262144 }, { context: "262144", mtp: "" }, TYPES);
+  assert.deepEqual(items, []);
+  assert.deepEqual(cleared, [], "there was nothing to clear");
+  assert.deepEqual(payload, {});
+});
+
+// ── the panel wires the shared model (source guards) ─────────────────────
+
+test("the panel's diff and payload come from the one shared model", () => {
+  const src = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "ui/assets/panel.js"), "utf8");
+  assert.match(src, /from "\.\/edit-diff\.js"/);
+  assert.match(src, /return editDiff\(state\.config\?\.values \|\| \{\}, raw, types\)/);
+  // The old comparison (which read "no value" as a value) is gone.
+  assert.doesNotMatch(src, /String\(current\[key\]\) !== String\(val\)/);
+  // And the save takes its payload from the same call, refusing a cleared field.
+  assert.match(src, /const \{ payload: edits, cleared \} = configEdits\(\)/);
+  assert.match(src, /if \(cleared\.length\)/);
+});
