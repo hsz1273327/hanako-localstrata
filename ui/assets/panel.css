@@ -305,6 +305,11 @@ body {
   color: #c14b39;
 }
 
+/* An empty report line (before the config is read) must not leave a blank row. */
+.field-hint:empty {
+  display: none;
+}
+
 .net-mode {
   flex: none;
   font-size: 11px;
@@ -912,6 +917,20 @@ body {
 
 .cf-readonly[data-state="on"] {
   color: inherit;
+}
+
+/* A themed section (a subject, not a control): 视觉 does not belong in the
+ * advanced drawer, and each side names it the same way. */
+.cf-section {
+  display: grid;
+  gap: 6px;
+}
+
+.cf-section-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-light, #6b6f73);
+  letter-spacing: 0.02em;
 }
 
 /* Header badge: the environment control in its READ-ONLY state. Same specs as the

@@ -1270,9 +1270,16 @@ function fmtEditValue(value) {
 // The KV stream switch is setup's answer, not a field: the engine knows no
 // `--kv-streaming`, and `--kv-resident` is written by setup as the literal 32768
 // on its (context, kv, RAM) rule. Saying so beats a box the user cannot keep.
+// With no readable config there is nothing to report, and claiming "off" would be
+// a statement about a file we could not read.
 function renderKvStream(values) {
   if (!els.kvResidentStatus) return;
-  const win = values?.kvResident;
+  if (!values) {
+    els.kvResidentStatus.textContent = "";
+    delete els.kvResidentStatus.dataset.state;
+    return;
+  }
+  const win = values.kvResident;
   const on = !isAbsent(win);
   els.kvResidentStatus.textContent = on ? tp("edit.kvStreamOn", { n: win }) : t("edit.kvStreamOff");
   els.kvResidentStatus.dataset.state = on ? "on" : "off";

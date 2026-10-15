@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createContainerFields, createApiKeyField } from "../ui/assets/profile-fields.js";
+import { createContainerFields, createApiKeyField, createVisionStatus } from "../ui/assets/profile-fields.js";
 import registerSettingsRoutes, { saveProfile } from "../routes/settings.js";
 import { readAllConfig } from "../lib/strata.js";
 import { mi50Preset } from "../lib/mi50.js";
@@ -394,6 +394,67 @@ function inAdvancedPanel(ctr, node) {
   }
   return false;
 }
+
+// ── 视觉 has its own section (image input is a subject) ────────────────────
+
+test("the container's vision switch sits in its own section, outside the drawer", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const ctr = createContainerFields(host, { idPrefix: "t-" });
+    ctr.setCatalog(CATALOG);
+
+    // Not in the advanced drawer: a collapsed drawer must not hide a normal
+    // deployment choice.
+    assert.equal(inAdvancedPanel(ctr, ctr.refs.vision), false, "not inside the drawer");
+    const section = host.children.find((c) => c.classList.contains("cf-section-vision"));
+    assert.ok(section, "the section exists in the form");
+    let inside = false;
+    for (let n = ctr.refs.vision; n; n = n.parent) if (n === section) inside = true;
+    assert.equal(inside, true, "the select lives inside the section");
+    // …and it stays before the toggle, so it is visible while the drawer is shut.
+    assert.ok(
+      host.children.indexOf(section) > host.children.indexOf(ctr.refs.enginePort.parent),
+      "the section follows the common fields",
+    );
+    assert.equal(
+      host.children.indexOf(section) + 1,
+      host.children.indexOf(ctr.refs.advancedToggle),
+      "and comes right before the drawer toggle",
+    );
+
+    // Setting it is not an advanced value, so it must not count toward the badge.
+    ctr.refs.vision.value = "yes";
+    assert.equal(ctr.advancedSetCount(), 0, "the vision switch is not an advanced field");
+    assert.equal(ctr.refs.advancedCount.hidden, true, "and the badge stays away");
+    assert.equal(ctr.collect().Vision, "yes", "while still being submitted");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("the local side reports 视觉 in the same section shape, with no control", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const st = createVisionStatus(host, { idPrefix: "x-" });
+    assert.equal(st.field.classList.contains("cf-section-vision"), true, "its own section");
+    assert.equal(st.field.hidden, true, "hidden until the backend reports");
+    assert.equal(st.field.children[0].attrs["data-i18n"], "field.vision", "named 视觉, like the container's");
+    assert.equal(st.refs.line.id, "x-vision-status");
+
+    st.render({ available: true, encoder: "gpu", mmproj: "/m/mmproj.gguf" });
+    assert.equal(st.field.hidden, false, "shown once there is something to say");
+    assert.match(st.refs.line.textContent, /mmproj\.gguf/, "the encoder block is named");
+    // The shape follows the semantics: a local install's vision is setup's, so
+    // there is nothing to type in here.
+    assert.equal(st.field.querySelectorAll("input, select, textarea").length, 0, "no control at all");
+    st.render(null);
+    assert.equal(st.field.hidden, true, "a container hides the line");
+  } finally {
+    dom.restore();
+  }
+});
 
 test("the advanced fields live inside the collapsed group; the common ones stay out", () => {
   const dom = installDom();

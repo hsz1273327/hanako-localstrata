@@ -125,6 +125,29 @@ body {
   display: none;
 }
 
+/* A themed section (a subject, not a control): the container's 视觉 belongs in
+ * the form, not in the advanced drawer. */
+.cf-section {
+  display: grid;
+  gap: 6px;
+}
+
+.cf-section-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-light, #6b6f73);
+  letter-spacing: 0.02em;
+}
+
+/* Read-only report: muted, so it never reads as something to type in. */
+.cf-readonly {
+  color: var(--text-muted, #8e9196);
+}
+
+.cf-readonly[data-state="on"] {
+  color: inherit;
+}
+
 /* A start-required field that is still empty — fill it before the profile can
  * run. Distinct from a save error, which uses .message.error. */
 .field-required-hint {

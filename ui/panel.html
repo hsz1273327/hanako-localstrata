@@ -153,6 +153,19 @@
               <option value="262144">262144</option>
             </select>
           </label>
+          <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
+            <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">
+          </label>
+          <label class="field"><span data-i18n="edit.mtp">MTP</span>
+            <input id="ed-mtp" data-key="mtp" type="number" min="0" step="1">
+          </label>
+        </fieldset>
+
+        <!-- 主题成组：「KV cache」自己一组（--kv / --kv-resident / --kv-streaming），
+             不散在启动参数里。组内标注：量化改后重启；流式那行是 setup 的答案，
+             要改得重跑 setup。 -->
+        <fieldset class="group">
+          <legend><span data-i18n="edit.kvLegend">KV cache</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
           <label class="field"><span data-i18n="edit.kv">KV quantization</span>
             <select id="ed-kv" data-key="kv">
               <option value="int8">int8</option>
@@ -160,17 +173,15 @@
               <option value="k8v4">k8v4</option>
             </select>
             <span class="field-hint muted" data-i18n="edit.kvHint">int8 / q4_0 / k8v4</span>
+          </label>
+          <div class="field cf-readonly-field">
+            <span data-i18n="edit.kvStream">KV streaming</span>
             <!-- Shown, not edited: the engine knows no `--kv-streaming`, and setup
                  writes `--kv-resident` itself on its (context, kv, RAM) rule. -->
             <span class="field-hint cf-readonly" id="edit-kvResident"></span>
+            <span class="note" data-i18n="edit.needsSetup">setup re-run required</span>
             <span class="field-hint muted" data-i18n="edit.kvStreamHint">Decided by setup</span>
-          </label>
-          <label class="field"><span data-i18n="edit.sessionCache">Session cache (MB)</span>
-            <input id="ed-sessionCache" data-key="sessionCache" type="number" min="0" step="1">
-          </label>
-          <label class="field"><span data-i18n="edit.mtp">MTP</span>
-            <input id="ed-mtp" data-key="mtp" type="number" min="0" step="1">
-          </label>
+          </div>
         </fieldset>
 
         <fieldset class="group">

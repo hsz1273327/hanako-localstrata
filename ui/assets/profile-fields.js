@@ -174,19 +174,22 @@ export function createApiKeyField(host, opts = {}) {
 // hides the line.
 export function createVisionStatus(host, opts = {}) {
   const p = opts.idPrefix || "cf-";
-  const line = make("p", { class: "field-hint cf-vision-status", id: `${p}vision-status` });
-  const field = make("div", {
-    class: "field cf-vision",
-    children: [i18nSpan("field.vision"), line, i18nHint("vision.setupNote")],
-  });
+  // 视觉 is its own section on BOTH sides, under the same name: image input is a
+  // subject, not a footnote in the advanced long tail. The shape differs on
+  // purpose — this side reports the block setup wrote (see above), while the
+  // container side offers the image's own `Vision` switch — so they never pretend
+  // to be one control.
+  const section = make("div", { class: "cf-section cf-section-vision", attrs: { role: "group" } });
+  const line = make("p", { class: "field-hint cf-readonly", id: `${p}vision-status` });
+  section.replaceChildren(i18nSpan("field.vision", "cf-section-title"), line, i18nHint("vision.setupNote"));
   let lastInfo = null;
 
   function paint(info) {
     if (!info || typeof info !== "object") {
-      field.hidden = true;
+      section.hidden = true;
       return;
     }
-    field.hidden = false;
+    section.hidden = false;
     if (!info.available) {
       line.textContent = t("vision.off");
       return;
@@ -201,20 +204,20 @@ export function createVisionStatus(host, opts = {}) {
   }
 
   const api = {
-    field,
+    field: section,
     refs: { line },
     render(info) {
       lastInfo = info;
-      applyI18n(field);
+      applyI18n(section);
       paint(info);
     },
     relocalize() {
-      applyI18n(field);
+      applyI18n(section);
       paint(lastInfo);
     },
   };
-  if (host) host.append(field);
-  field.hidden = true;
+  if (host) host.append(section);
+  section.hidden = true;
   return api;
 }
 
@@ -439,11 +442,17 @@ export function createContainerFields(host, opts = {}) {
 
   // The vision switch: a fixed set of values, never free text (the image accepts
   // three). Empty leaves the image's own default (`no`) in place.
+  //
+  // It sits in its own 视觉 section, NOT in the advanced drawer: image input is a
+  // subject, so it must not be buried among the image's shm / seccomp / passthrough
+  // needs. The local side uses the same section name to report what setup wrote.
   const visionInput = make("select", { id: `${p}vision` });
   const visionField = make("label", {
     class: "field",
     children: [i18nSpan("field.vision"), visionInput, i18nHint("field.visionHint")],
   });
+  const visionSection = make("div", { class: "cf-section cf-section-vision", attrs: { role: "group" } });
+  visionSection.replaceChildren(visionField);
 
   function rebuildVisionOptions() {
     const current = visionInput.value;
@@ -624,10 +633,10 @@ export function createContainerFields(host, opts = {}) {
 
   // ── assembly ──────────────────────────────────────────────────────────
 
-  // The two common fields, then the advanced group. The divide is "does a
-  // normal deployment need to touch this?" — see ADVANCED_KEYS below; the
-  // advanced group is collapsed by default but its inputs stay in the DOM, so
-  // collapsing never affects what a save submits.
+  // The two common fields, then the 视觉 section, then the advanced group. The
+  // divide is "does a normal deployment need to touch this?" — see ADVANCED_KEYS
+  // below; the advanced group is collapsed by default but its inputs stay in the
+  // DOM, so collapsing never affects what a save submits.
   const advancedPanel = make("div", { class: "cf-adv-panel" });
   advancedPanel.hidden = true;
 
@@ -653,7 +662,6 @@ export function createContainerFields(host, opts = {}) {
     securityOpt,
     shmSize.field,
     apiKeyEnv.field,
-    visionField,
     apiKeyField.field,
   );
 
@@ -673,6 +681,10 @@ export function createContainerFields(host, opts = {}) {
     modelDir.field,
     modelsBindDir.field,
     enginePort.field,
+    // 视觉 is its own section, right after the deployment's identity and hardware
+    // choices: it is a subject (image input) and a normal choice, not an
+    // advanced one. Placed before the drawer so a collapsed drawer never hides it.
+    visionSection,
     advToggle,
     advancedPanel,
   );
@@ -693,7 +705,6 @@ export function createContainerFields(host, opts = {}) {
     "security_opt",
     "ShmSize",
     "ApiKeyEnv",
-    "Vision",
     "apiKey",
   ];
 
