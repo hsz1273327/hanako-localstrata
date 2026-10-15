@@ -12,6 +12,9 @@ import {
   validateProfile,
   makeDefaultProfile,
   effectiveContainerFields,
+  gpuModelCatalog,
+  mi50Catalog,
+  mi50Preset,
 } from "../lib/strata.js";
 import { resolveDockerPath, createDockerAdapter } from "../lib/docker.js";
 import { writeComposeFile } from "../lib/compose.js";
@@ -217,6 +220,22 @@ export async function deleteProfile(ctx, id) {
   };
 }
 
+// ── Special-card presets ─────────────────────────────────────────────────
+//
+// The card-model catalog the settings page renders the model picker from, plus
+// the MI50 community-image preset. Detection lives in the catalog: the MI50 *is*
+// the gfx906 entry, so the page never string-matches a model key (lib/mi50.js).
+// The preset is pure data; the concrete host directories depend on the profile's
+// container name, so they are computed on request and the page can apply them
+// without knowing any storage layout.
+export function readPresets() {
+  return { models: gpuModelCatalog(), mi50: mi50Catalog() };
+}
+
+export function readMi50Preset({ containerName = "" } = {}) {
+  return { preset: mi50Preset({ containerName }) };
+}
+
 export default function registerSettingsRoutes(app, ctx) {
   app.get("/settings", async (c) => {
     try {
@@ -330,6 +349,32 @@ export default function registerSettingsRoutes(app, ctx) {
   app.get("/profiles/running", async (c) => {
     try {
       return c.json(await buildRunningReport(ctx));
+    } catch (e) {
+      return c.json({ error: String(e?.message || e) }, 500);
+    }
+  });
+
+  // ── Special-card presets ───────────────────────────────────────────────
+
+  // The card-model catalog + the MI50 community-image constants.
+  app.get("/presets", async (c) => {
+    try {
+      return c.json(readPresets());
+    } catch (e) {
+      return c.json({ error: String(e?.message || e) }, 500);
+    }
+  });
+
+  // The concrete MI50 preset for a container name (host directories filled in).
+  app.post("/presets/mi50", async (c) => {
+    let body;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    try {
+      return c.json(readMi50Preset({ containerName: body?.containerName }));
     } catch (e) {
       return c.json({ error: String(e?.message || e) }, 500);
     }

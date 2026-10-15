@@ -152,6 +152,19 @@ body {
   color: #c14b39;
 }
 
+/* The MI50 community-image offer, shown under the card-model picker only when
+ * that model is a gfx906 card. Reads as an inline prompt, not a section. */
+.preset-box {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.preset-box .field-hint {
+  margin: 0 0 6px;
+}
+
 .profile-runtime-note {
   margin: 0;
   padding: 6px 8px;

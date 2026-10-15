@@ -71,6 +71,11 @@ const els = {
   profileImagePullRow: document.getElementById("pf-image-pull-row"),
   profileImagePull: document.getElementById("pf-image-pull"),
   profileContainerName: document.getElementById("pf-containerName"),
+  profileGpuModel: document.getElementById("pf-gpu-model"),
+  profilePreset: document.getElementById("pf-preset"),
+  profilePresetText: document.getElementById("pf-preset-text"),
+  profilePresetApply: document.getElementById("pf-preset-apply"),
+  profilePresetIgnore: document.getElementById("pf-preset-ignore"),
   profileDataDir: document.getElementById("pf-dataDir"),
   profileDataDirPick: document.getElementById("pf-dataDir-pick"),
   profileGgufDir: document.getElementById("pf-ggufDir"),
@@ -182,6 +187,173 @@ let editingProfileId = null;
 // disabled, the save button is hidden and only a close action remains.
 let editorReadOnly = false;
 let pendingDeleteId = "";
+
+// ── Card-model catalog + the MI50 community-image preset ─────────────────
+//
+// The model picker is the detection surface: the catalog entry for the MI50
+// carries gfx906, so "is this card an MI50?" is a property of the picked model,
+// never a guess about the host (lib/mi50.js).
+let gpuModels = [];
+let presetInfo = null; // { modelKey, gfx, imageName, imageTag, enginePort, wizardPort }
+let presetsLoaded = false;
+// Extra container fields the visible form does not own (binds, env, ports, …).
+// Captured from the opened profile so an edit never drops them, and overridden
+// by an applied preset.
+let editingExtras = {};
+let pendingPreset = null;
+// A dismissed prompt stays dismissed for this model until the editor reopens.
+let presetDismissed = false;
+
+// The container fields that have no visible input. `ModelDir` is deliberately
+// absent: the shared ggufDir field drives it, so carrying it would shadow the
+// user's edit.
+const PRESET_EXTRA_FIELDS = [
+  "VolumeBinds",
+  "PortBinds",
+  "environment",
+  "device_cgroup_rules",
+  "ulimits",
+  "security_opt",
+  "ShmSize",
+  "EnginePort",
+  "EngineBindPort",
+  "GpuIds",
+  "ApiKeyEnv",
+  "DeployDir",
+  "ModelsBindDir",
+];
+
+function pickContainerExtras(profile) {
+  const out = {};
+  if (!profile || profile.type !== "container") return out;
+  for (const key of PRESET_EXTRA_FIELDS) {
+    const value = profile[key];
+    if (Array.isArray(value)) {
+      if (value.length) out[key] = value.slice();
+    } else if (value !== undefined && value !== null && String(value).trim() !== "") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function gpuModelGfx(key) {
+  const wanted = String(key ?? "").trim();
+  if (!wanted) return "";
+  return gpuModels.find((m) => m.key === wanted)?.gfx || "";
+}
+
+function isMi50Selected() {
+  return !!presetInfo && gpuModelGfx(els.profileGpuModel.value) === presetInfo.gfx;
+}
+
+async function loadPresets() {
+  if (presetsLoaded) return;
+  try {
+    const data = await api("presets");
+    gpuModels = Array.isArray(data?.models) ? data.models : [];
+    presetInfo = data?.mi50 || null;
+    presetsLoaded = true;
+  } catch {
+    // The picker stays usable (options built from the profile's own value);
+    // only the preset offer is unavailable.
+    presetsLoaded = false;
+  }
+  renderGpuModelOptions(els.profileGpuModel.value);
+}
+
+// The model picker options: a blank "choose" entry, the catalog, and the value
+// already on the profile (so an edit never loses an unlisted model).
+function renderGpuModelOptions(selected) {
+  const current = String(selected ?? "").trim();
+  els.profileGpuModel.replaceChildren();
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = t("field.gpuModelPlaceholder");
+  els.profileGpuModel.append(blank);
+  const seen = new Set([""]);
+  for (const m of gpuModels) {
+    if (seen.has(m.key)) continue;
+    seen.add(m.key);
+    const opt = document.createElement("option");
+    opt.value = m.key;
+    opt.textContent = m.label || m.key;
+    els.profileGpuModel.append(opt);
+  }
+  if (current && !seen.has(current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = current;
+    els.profileGpuModel.append(opt);
+  }
+  els.profileGpuModel.value = current;
+}
+
+// Show the community-image offer only for a gfx906 card the user has not
+// dismissed, or a short confirmation once the preset has been applied.
+function renderPresetOffer() {
+  const box = els.profilePreset;
+  if (!box) return;
+  // The offer is a write action; the read-only "view" never shows it.
+  if (editorReadOnly || !isMi50Selected() || presetDismissed) {
+    box.hidden = true;
+    return;
+  }
+  const image = presetInfo ? `${presetInfo.imageName}:${presetInfo.imageTag}` : "";
+  box.hidden = false;
+  els.profilePresetText.textContent = pendingPreset
+    ? tp("preset.applied", { image })
+    : tp("preset.detected", { image });
+  const applied = !!pendingPreset;
+  els.profilePresetApply.hidden = applied;
+  els.profilePresetIgnore.hidden = applied;
+}
+
+function clearPresetOffer() {
+  if (els.profilePreset) els.profilePreset.hidden = true;
+  els.profilePresetText.textContent = "";
+  els.profilePresetApply.hidden = false;
+  els.profilePresetIgnore.hidden = false;
+}
+
+function onGpuModelChange() {
+  // A different model is a different question: drop the old answer.
+  pendingPreset = null;
+  presetDismissed = false;
+  renderPresetOffer();
+}
+
+async function applyMi50Preset() {
+  try {
+    const data = await api("presets/mi50", {
+      method: "POST",
+      body: JSON.stringify({ containerName: els.profileContainerName.value.trim() }),
+    });
+    const preset = data?.preset;
+    if (!preset) return;
+    // The image and the container name are visible fields; everything else
+    // rides along invisibly in pendingPreset.
+    els.profileImageName.value = preset.imageName || "";
+    els.profileImageTag.value = preset.imageTag || "";
+    if (!els.profileContainerName.value.trim()) els.profileContainerName.value = "strata-mi50";
+    pendingPreset = {};
+    for (const key of PRESET_EXTRA_FIELDS) {
+      if (preset[key] !== undefined) pendingPreset[key] = preset[key];
+    }
+    pendingPreset.GpuModel = preset.GpuModel;
+    renderPresetOffer();
+    renderImageStatus();
+    renderStartHints();
+    setProfileMessage(tp("preset.applied", { image: `${preset.imageName}:${preset.imageTag}` }), "ok");
+  } catch (e) {
+    setProfileMessage(profileErrorText(e?.message || e), "error");
+  }
+}
+
+function ignoreMi50Preset() {
+  presetDismissed = true;
+  renderPresetOffer();
+}
 
 // ── Runtime values (read-only "view" drawer) ─────────────────────────────
 
@@ -744,6 +916,7 @@ function editorFields() {
     els.profileImageName,
     els.profileImageTag,
     els.profileContainerName,
+    els.profileGpuModel,
     els.profileDataDir,
     els.profileGgufDir,
     els.profilePort,
@@ -762,6 +935,10 @@ function setEditorReadOnly(readOnly) {
   if (els.profileGgufDirPick) els.profileGgufDirPick.disabled = readOnly;
   if (els.profileStrataDirPick) els.profileStrataDirPick.disabled = readOnly;
   if (els.profilePythonPathPick) els.profilePythonPathPick.disabled = readOnly;
+  // The preset prompt is a write-side action, like the image pull.
+  if (els.profileGpuModel) els.profileGpuModel.disabled = readOnly;
+  if (els.profilePresetApply) els.profilePresetApply.disabled = readOnly;
+  if (els.profilePresetIgnore) els.profilePresetIgnore.disabled = readOnly;
   els.profileReadOnlyHint.hidden = !readOnly;
   // No write path in the read-only view. The whole bottom action row is
   // hidden there because it would only repeat the top close button.
@@ -779,13 +956,18 @@ function setDrawerOpen(open) {
   els.profileDrawerScrim.hidden = !open;
 }
 
-function openProfileEditor(profile, readOnly = false) {
+async function openProfileEditor(profile, readOnly = false) {
   editingProfileId = profile ? profile.id : "";
   // Drop any provenance tag / runtime-filled value from the previous profile.
   clearFieldSources();
   captureProfileValues(profile);
   stopImagePoll();
   imagePullBusy = false;
+  // The visible form does not own the raw container fields; remember them so an
+  // edit preserves them, and start each open with no preset applied.
+  editingExtras = pickContainerExtras(profile);
+  pendingPreset = null;
+  presetDismissed = false;
   els.profileName.value = profile?.name || "";
   els.profileType.value = profile?.type === "container" ? "container" : "local";
   els.profileStrataDir.value = profile?.strataDir || "";
@@ -796,7 +978,14 @@ function openProfileEditor(profile, readOnly = false) {
   els.profileContainerName.value = profile?.containerName || "";
   els.profileDataDir.value = profile?.dataDir || "";
   els.profileGgufDir.value = profile?.ggufDir || "";
-  els.profilePort.value = profile?.port ? String(profile.port) : "";
+  els.profilePort.value = profile?.EnginePort
+    ? String(profile.EnginePort)
+    : profile?.port
+      ? String(profile.port)
+      : "";
+  // The model picker needs the catalog; fill it before selecting a value.
+  await loadPresets();
+  renderGpuModelOptions(profile?.GpuModel || "");
   setProfileEditorType(els.profileType.value);
   setDrawerOpen(true);
   setProfileMessage("");
@@ -812,6 +1001,7 @@ function openProfileEditor(profile, readOnly = false) {
     applyDefaultAnnotations();
   }
   renderStartHints();
+  renderPresetOffer();
   // Paint the image state (status line + whether the pull entry applies) from
   // the current value and the last known local list, then refresh that list
   // when this profile can even have an image.
@@ -827,6 +1017,10 @@ function closeProfileEditor() {
   imagePullBusy = false;
   clearFieldSources();
   clearStartHints();
+  editingExtras = {};
+  pendingPreset = null;
+  presetDismissed = false;
+  clearPresetOffer();
   if (els.profileRuntimeNote) els.profileRuntimeNote.hidden = true;
   // Reset read-only state so the next open starts editable.
   setEditorReadOnly(false);
@@ -868,6 +1062,17 @@ async function saveProfile() {
     body.imageTag = imageTag;
     body.containerName = containerName;
     body.dataDir = els.profileDataDir.value.trim();
+    body.GpuModel = els.profileGpuModel.value.trim();
+    // Fields with no visible input (binds / env / ports / …): keep what the
+    // profile had, and let an applied preset override it.
+    Object.assign(body, editingExtras, pendingPreset || {});
+    // The picker is authoritative for the model, whatever the carried extras say.
+    body.GpuModel = els.profileGpuModel.value.trim();
+    // The visible port field maps onto the container's engine port pair.
+    if (port > 0) {
+      body.EnginePort = port;
+      body.EngineBindPort = port;
+    }
   } else {
     body.strataDir = els.profileStrataDir.value.trim();
     body.pythonPath = els.profilePythonPath.value.trim();
@@ -965,6 +1170,8 @@ function initLangSelect() {
     setEditorReadOnly(editorReadOnly);
     refreshSourceAnnotations();
     renderImageStatus();
+    renderGpuModelOptions(els.profileGpuModel.value);
+    renderPresetOffer();
     if (!els.profileConfirm.hidden && pendingDeleteId) {
       const pending = profiles.find((p) => p.id === pendingDeleteId);
       if (pending) els.profileConfirmTitle.textContent = tp("profile.deleteConfirm", { name: pending.name || pending.id });
@@ -990,6 +1197,9 @@ els.profileType.addEventListener("change", () => {
 });
 els.profileImageName.addEventListener("input", () => renderImageStatus());
 els.profileImageTag.addEventListener("input", () => renderImageStatus());
+els.profileGpuModel.addEventListener("change", onGpuModelChange);
+els.profilePresetApply.addEventListener("click", applyMi50Preset);
+els.profilePresetIgnore.addEventListener("click", ignoreMi50Preset);
 els.profileImagePull.addEventListener("click", pullImage);
 els.profileDataDirPick.addEventListener("click", () => pickDirectory(els.profileDataDir));
 els.profileGgufDirPick.addEventListener("click", () => pickDirectory(els.profileGgufDir));

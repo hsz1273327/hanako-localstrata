@@ -141,6 +141,19 @@
             <span data-i18n="field.containerName">Container name</span>
             <input id="pf-containerName" type="text" autocomplete="off" spellcheck="false" placeholder="strata">
           </label>
+          <label class="field" for="pf-gpu-model">
+            <span data-i18n="field.gpuModel">GPU model</span>
+            <select id="pf-gpu-model"></select>
+          </label>
+          <!-- Shown only when the picked card is the MI50 (gfx906): offers the
+               community image preset in one click. -->
+          <div id="pf-preset" class="preset-box" hidden>
+            <p id="pf-preset-text" class="field-hint"></p>
+            <div class="field-inline">
+              <button id="pf-preset-apply" class="btn small" type="button" data-i18n="preset.apply">Use community image</button>
+              <button id="pf-preset-ignore" class="btn small" type="button" data-i18n="preset.ignore">Ignore</button>
+            </div>
+          </div>
           <label class="field" for="pf-dataDir">
             <span data-i18n="field.dataDir">Data directory (STRATA_DATA)</span>
             <input id="pf-dataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/srv/strata">
