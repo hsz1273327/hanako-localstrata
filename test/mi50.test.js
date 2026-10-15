@@ -19,7 +19,7 @@ import {
   applyMi50Preset,
   mi50Catalog,
 } from "../lib/mi50.js";
-import { gpuModelInfo, gpuModelCatalog } from "../lib/gpu.js";
+import { gpuModelInfo, gpuTemplate, gpuModelCatalog } from "../lib/gpu.js";
 import { normalizeProfile, emptyContainerProfile } from "../lib/profiles.js";
 import { containerSpec, renderComposeFile, dedupeMounts } from "../lib/compose.js";
 import { readPresets, readMi50Preset } from "../routes/settings.js";
@@ -79,6 +79,28 @@ test("the preset never restates the card template's docker vocabulary", () => {
   assert.ok(!preset.environment.some((e) => e.startsWith("LD_LIBRARY_PATH")));
   // ApiKeyEnv is deliberately left for the image's wizard — not set here.
   assert.ok(!("ApiKeyEnv" in preset));
+});
+
+test("the preset leaves GpuIds unset (an AMD card is not selected by index)", () => {
+  const preset = mi50Preset({ containerName: "c", home: "/home/u" });
+  assert.ok(!("GpuIds" in preset));
+  assert.equal(gpuModelInfo(preset.GpuModel).vendor, "amd");
+  // And the AMD template ignores GpuIds anyway: the device nodes are the whole
+  // request, whatever the value. A user who carries a stale "0" changes nothing.
+  const bare = gpuTemplate("amd-mi50", "");
+  const seeded = gpuTemplate("amd-mi50", "0,1");
+  assert.deepEqual(seeded.devices, bare.devices);
+  assert.deepEqual(seeded.deviceCgroupRules, bare.deviceCgroupRules);
+  assert.deepEqual(seeded.deployDevices, []);
+  assert.equal(seeded.cliGpus, null);
+});
+
+test("other AMD models carry neither the cgroup rule nor the HSA override", () => {
+  for (const key of ["amd-7900xtx", "amd-9060xt", "amd-9070xt", "amd"]) {
+    const t = gpuTemplate(key, "");
+    assert.deepEqual(t.deviceCgroupRules, [], `${key} must not carry a cgroup rule`);
+    assert.deepEqual(t.env, [], `${key} must not carry HSA_OVERRIDE/LD_LIBRARY_PATH`);
+  }
 });
 
 test("a non-MI50 model gets no defaults at all", () => {
