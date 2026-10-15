@@ -150,6 +150,9 @@ test("both surfaces copy through the shared helper and report a failure", () => 
   assert.match(panel, /btn\.textContent = t\("common\.copyFailed"\)/);
   assert.match(panel, /revealError\(\)/);
   assert.doesNotMatch(panel, /btn\.textContent = t\("common\.selected"\)/);
+  // The raw per-path reasons reach the visible line, not only the tooltip.
+  assert.match(panel, /tp\("copy\.failedGranted", \{ status, error \}\)/);
+  assert.match(read("ui/assets/settings.js"), /tp\("copy\.failedGranted", \{ status, error \}\)/);
 });
 
 test("the capabilities route answers from this App's own ledger entry", () => {
@@ -169,6 +172,12 @@ test("the two failure wordings exist in all six locales and name the fix", async
     }
     for (const key of ["copy.failedUngranted", "copy.failedGranted"]) {
       assert.match(String(STRINGS[lang][key]), /\{status\}/, `${lang}.${key} must carry the ledger status`);
+      // …and the per-path failure reasons, so the next report is diagnostic
+      // instead of another guess.
+      assert.match(String(STRINGS[lang][key]), /\{error\}/, `${lang}.${key} must carry the raw failure reason`);
+      // …and the manual shortcut, because selecting the text is only useful if
+      // the user knows what to press.
+      assert.match(String(STRINGS[lang][key]), /Ctrl\+C/, `${lang}.${key} must name the copy shortcut`);
     }
     // The un-granted case must tell the user where to fix it…
     assert.match(STRINGS[lang]["copy.failedUngranted"], fixHint, `${lang} must name the settings path`);

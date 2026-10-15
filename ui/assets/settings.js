@@ -273,12 +273,13 @@ async function copyFailureMessage(res) {
   let status = "";
   try {
     const caps = await api("capabilities");
-    status = caps?.capabilities?.["app/ui.clipboard-write"]?.status || "";
+    status = caps?.capabilities?.["app/ui/clipboard-write"]?.status || "";
   } catch {
     /* the generic wording is still honest */
   }
-  if (status === "always" || status === "session") return tp("copy.failedGranted", { status });
-  return tp("copy.failedUngranted", { status: status || "not_asked" });
+  const error = String(res?.error || "").slice(0, 300);
+  if (status === "always" || status === "session") return tp("copy.failedGranted", { status, error });
+  return tp("copy.failedUngranted", { status: status || "not_asked", error });
 }
 
 // ── Card-model catalog + the MI50 community-image preset ─────────────────

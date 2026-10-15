@@ -326,8 +326,11 @@ async function copyFailureMessage(res) {
   } catch {
     /* the generic wording is still honest */
   }
-  if (status === "always" || status === "session") return tp("copy.failedGranted", { status });
-  return tp("copy.failedUngranted", { status: status || "not_asked" });
+  // The per-path reasons go INTO the message, not only the tooltip: a tooltip is
+  // not discoverable, and "which path failed with what" is the whole diagnosis.
+  const error = String(res?.error || "").slice(0, 300);
+  if (status === "always" || status === "session") return tp("copy.failedGranted", { status, error });
+  return tp("copy.failedUngranted", { status: status || "not_asked", error });
 }
 
 async function copyWithFeedback(btn, text) {
