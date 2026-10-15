@@ -74,6 +74,73 @@ export function gpuIdsApplies(models, key) {
   return gpuVendorOf(models, key) === NVIDIA;
 }
 
+// ── the API key control (shared by BOTH profile types) ────────────────────
+//
+// A local profile and a container profile carry the same override field, and the
+// page has the same three questions for either: what is set, does it come back
+// masked, and WHICH key is actually in effect. So the control is one factory that
+// either surface mounts:
+//   * createContainerFields puts it in its advanced group;
+//   * the local block mounts it straight into its own host (see the pages).
+// The type never enters here — the only difference is whether the page can name a
+// config file, which shows up as the third line below (a local-only thing).
+//
+// `host` is optional: pass it to mount immediately, or take `.field` and place it
+// yourself.
+export function createApiKeyField(host, opts = {}) {
+  const p = opts.idPrefix || "cf-";
+  const apiKeySource = typeof opts.apiKeySource === "function" ? opts.apiKeySource : null;
+
+  const input = make("input", {
+    id: `${p}api-key`,
+    type: "password",
+    attrs: { autocomplete: "off", spellcheck: "false", "data-i18n-placeholder": "field.apiKeyPlaceholder" },
+  });
+  const source = make("p", { class: "field-hint cf-key-source" });
+  const field = make("label", {
+    class: "field",
+    children: [i18nSpan("field.apiKey"), input, source, i18nHint("field.apiKeyHint")],
+  });
+
+  // "Which key is in effect?" — this profile's override, else the global fallback,
+  // else (when the page can name one) the selected config file's `api_key`.
+  // Only a file NAME ever arrives here; never a value.
+  function refreshSource() {
+    const override = input.value.trim() !== "";
+    let text;
+    if (override) {
+      text = t("field.apiKeySourceOverride");
+    } else {
+      const src = apiKeySource ? apiKeySource() : null;
+      const file = src && src.file ? String(src.file) : "";
+      text = file ? tp("field.apiKeySourceConfig", { file }) : t("field.apiKeySourceGlobal");
+    }
+    source.textContent = text;
+  }
+
+  // `value` may be the mask the backend returned; it round-trips as "unchanged".
+  function render(value) {
+    input.value = value === undefined || value === null ? "" : String(value);
+    refreshSource();
+  }
+  function value() {
+    return input.value.trim();
+  }
+  function setReadOnly(flag) {
+    input.disabled = !!flag;
+  }
+  function relocalize() {
+    applyI18n(field);
+    refreshSource();
+  }
+
+  input.addEventListener("input", refreshSource);
+  input.addEventListener("change", refreshSource);
+  if (host) host.append(field);
+
+  return { field, refs: { input, source }, render, value, setReadOnly, relocalize, refreshSource };
+}
+
 // ── the module ────────────────────────────────────────────────────────────
 
 // host: the element the fields are rendered into.
@@ -292,23 +359,7 @@ export function createContainerFields(host, opts = {}) {
   const shmSize = textField("shm-size", "field.shmSize", "field.shmSizePlaceholder", "field.shmSizeHint");
   const apiKeyEnv = textField("api-key-env", "field.apiKeyEnv", "field.apiKeyEnvPlaceholder", "field.apiKeyEnvHint");
 
-  // The key CONTENT (ApiKeyEnv above names the address it is injected into). A
-  // secret: masked on the way in, and a returned mask means "unchanged".
-  function secretField(key, labelKey, placeholderKey, hintKey) {
-    const input = make("input", {
-      id: `${p}${key}`,
-      type: "password",
-      attrs: { autocomplete: "off", spellcheck: "false", "data-i18n-placeholder": placeholderKey },
-    });
-    const source = make("p", { class: "field-hint cf-key-source" });
-    const field = make("label", {
-      class: "field",
-      children: [i18nSpan(labelKey), input, source, i18nHint(hintKey)],
-    });
-    return { field, input, source };
-  }
-
-  const apiKeyField = secretField("api-key", "field.apiKey", "field.apiKeyPlaceholder", "field.apiKeyHint");
+  const apiKeyField = createApiKeyField(null, { idPrefix: p, apiKeySource });
 
   // ── list fields (add / remove rows) ───────────────────────────────────
 
@@ -578,22 +629,6 @@ export function createContainerFields(host, opts = {}) {
     advCount.textContent = n ? tp("field.advancedSet", { n }) : "";
   }
 
-  // "Where does the effective key come from?" — the profile's own override wins;
-  // otherwise the global key, then (local only) the selected config file, whose
-  // name the page supplies. Only a file name ever reaches here, never a value.
-  function updateApiKeySource() {
-    const override = apiKeyField.input.value.trim() !== "";
-    let text;
-    if (override) {
-      text = t("field.apiKeySourceOverride");
-    } else {
-      const src = typeof apiKeySource === "function" ? apiKeySource() : null;
-      const file = src && src.file ? String(src.file) : "";
-      text = file ? tp("field.apiKeySourceConfig", { file }) : t("field.apiKeySourceGlobal");
-    }
-    apiKeyField.source.textContent = text;
-  }
-
   // Collapsing only hides the panel; its inputs stay in the DOM, so a save
   // submits their values either way.
   function setAdvancedOpen(open) {
@@ -608,11 +643,9 @@ export function createContainerFields(host, opts = {}) {
   // (input bubbles up from any field inside the panel).
   advancedPanel.addEventListener("input", () => {
     updateAdvancedChrome();
-    updateApiKeySource();
   });
   advancedPanel.addEventListener("change", () => {
     updateAdvancedChrome();
-    updateApiKeySource();
   });
 
   function modelLabel(entry) {
@@ -659,7 +692,7 @@ export function createContainerFields(host, opts = {}) {
     shmSize.input.value = src.ShmSize || "";
     apiKeyEnv.input.value = src.ApiKeyEnv || "";
     // May be the mask the backend returned; it round-trips as "unchanged".
-    apiKeyField.input.value = src.apiKey || "";
+    apiKeyField.render(src.apiKey || "");
     deployDir.input.value = src.DeployDir || "";
     // Carry the keys the form does not own so a round-trip never drops them.
     carried = {};
@@ -670,7 +703,6 @@ export function createContainerFields(host, opts = {}) {
     // Each open starts collapsed (the default), with the badge telling the user
     // how many advanced fields a profile (or a preset) already carries.
     setAdvancedOpen(false);
-    updateApiKeySource();
     applyVendorSplit();
     applyI18n(host);
     refreshDeployPath({ immediate: true });
@@ -696,7 +728,7 @@ export function createContainerFields(host, opts = {}) {
       ShmSize: shmSize.input.value.trim(),
       ApiKeyEnv: apiKeyEnv.input.value.trim(),
       // The mask round-trips untouched: the save route reads it as "unchanged".
-      apiKey: apiKeyField.input.value.trim(),
+      apiKey: apiKeyField.value(),
       DeployDir: deployDir.input.value.trim(),
     };
   }
@@ -717,11 +749,10 @@ export function createContainerFields(host, opts = {}) {
     if (patch.security_opt !== undefined) lists.security_opt.setValues(patch.security_opt);
     if (patch.ShmSize !== undefined) shmSize.input.value = String(patch.ShmSize);
     if (patch.ApiKeyEnv !== undefined) apiKeyEnv.input.value = String(patch.ApiKeyEnv);
-    if (patch.apiKey !== undefined) apiKeyField.input.value = String(patch.apiKey);
+    if (patch.apiKey !== undefined) apiKeyField.render(patch.apiKey);
     if (patch.DeployDir !== undefined) deployDir.input.value = String(patch.DeployDir);
     applyVendorSplit();
     updateAdvancedChrome();
-    updateApiKeySource();
     refreshDeployPath({ immediate: true });
   }
 
@@ -740,7 +771,7 @@ export function createContainerFields(host, opts = {}) {
     applyI18n(host);
     applyVendorSplit();
     updateAdvancedChrome();
-    updateApiKeySource();
+    apiKeyField.relocalize();
   }
 
   function setCatalog(models) {
@@ -775,8 +806,8 @@ export function createContainerFields(host, opts = {}) {
       securityOpt: lists.security_opt,
       shmSize: shmSize.input,
       apiKeyEnv: apiKeyEnv.input,
-      apiKey: apiKeyField.input,
-      apiKeySource: apiKeyField.source,
+      apiKey: apiKeyField.refs.input,
+      apiKeySource: apiKeyField.refs.source,
       deployDir: deployDir.input,
       deployPath,
       deployBox,
@@ -791,7 +822,7 @@ export function createContainerFields(host, opts = {}) {
     setReadOnly,
     setAdvancedOpen,
     advancedSetCount,
-    refreshApiKeySource: updateApiKeySource,
+    refreshApiKeySource: () => apiKeyField.refreshSource(),
     render,
     collect,
     applyPreset,
@@ -801,4 +832,4 @@ export function createContainerFields(host, opts = {}) {
   };
 }
 
-export default { createContainerFields, gpuVendorOf, gpuIdsApplies };
+export default { createContainerFields, createApiKeyField, gpuVendorOf, gpuIdsApplies };

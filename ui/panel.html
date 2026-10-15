@@ -250,6 +250,9 @@
           <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
             <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
           </label>
+          <!-- The local profile's API-key override, mounted by the shared
+               fragment (same control the container side uses). -->
+          <div id="ps-local-extra"></div>
         </div>
 
         <div id="psContainerFields" class="profile-type-fields" hidden>

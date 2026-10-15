@@ -5,7 +5,7 @@
 // - Polls this App's GET /status route every refreshSec seconds.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
-import { createContainerFields } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -1371,6 +1371,12 @@ function ensurePluginForm() {
     profileId: () => state.editingProfileId || "",
     containerName: () => pluginFormEls?.containerName?.value || "",
   });
+  // The LOCAL profile's own override: the same fragment the container block
+  // mounts, so the mask semantics and the "in effect" line cannot drift.
+  pluginFormEls.localApiKey = createApiKeyField(root.querySelector("#ps-local-extra"), {
+    idPrefix: "psl-",
+    apiKeySource: () => keySource,
+  });
   // Switching the profile type toggles which fields apply (edit mode only; the
   // select is disabled in the read-only view).
   pluginFormEls.type.addEventListener("change", () => setEditorType(pluginFormEls.type.value));
@@ -1401,6 +1407,8 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.containerName.value = profile?.containerName || "";
   pluginFormEls.ggufDir.value = profile?.ggufDir || "";
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
+  // The local override (masked when set); the source line follows it.
+  pluginFormEls.localApiKey.render(profile?.apiKey || "");
   // The container block preserves any field it does not render (see the shared
   // module), so nothing needs to be carried here.
   pluginFormEls.container.render(profile);
@@ -1414,6 +1422,7 @@ function setProfileEditorReadOnly(readOnly) {
   }
   // The module's add/remove row buttons are not inputs; toggle them too.
   if (pluginFormEls.container) pluginFormEls.container.setReadOnly(readOnly);
+  if (pluginFormEls.localApiKey) pluginFormEls.localApiKey.setReadOnly(readOnly);
   if (pluginFormEls.message) pluginFormEls.message.hidden = readOnly;
   // A write-side action is never offered in the read-only view.
   if (readOnly && pluginFormEls.imagePull) pluginFormEls.imagePull.hidden = true;
@@ -1439,6 +1448,7 @@ async function openDrawer(readOnly) {
   if (keySourceFromServer && typeof keySourceFromServer === "object") {
     keySource = { file: String(keySourceFromServer.file || ""), hasKey: !!keySourceFromServer.hasKey };
   }
+  pluginFormEls.localApiKey.refreshSource();
   state.editingProfileId = readOnly ? null : profile.id;
   // The card-model picker needs the catalog before it can hold the profile's
   // value; only the stopped (editable) path ever writes it back.
@@ -1517,6 +1527,8 @@ function collectProfileEdits() {
     body.strataDir = pluginFormEls.strataDir.value.trim();
     body.pythonPath = pluginFormEls.pythonPath.value.trim();
     body.gpu = pluginFormEls.gpu.value.trim();
+    // The local override: the mask round-trips as "unchanged", empty clears.
+    body.apiKey = pluginFormEls.localApiKey.value();
   }
   return body;
 }
@@ -1938,6 +1950,7 @@ function relocalize() {
     els.profileDrawerTitle.textContent = title;
     // The shared container block re-renders its own static copy + option labels.
     pluginFormEls.container.relocalize();
+    pluginFormEls.localApiKey.relocalize();
   }
   renderDiff();
 }

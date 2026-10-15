@@ -17,7 +17,7 @@
 // page, only a mask, so an untouched masked field is discarded on save.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
-import { createContainerFields } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 
 setLang(loadLang());
 
@@ -61,6 +61,7 @@ const els = {
   profileLocalFields: document.getElementById("pfLocalFields"),
   profileContainerFields: document.getElementById("pfContainerFields"),
   profileStrataDir: document.getElementById("pf-strataDir"),
+  profileLocalExtra: document.getElementById("pf-local-extra"),
   profileStrataDirPick: document.getElementById("pf-strataDir-pick"),
   profilePythonPath: document.getElementById("pf-pythonPath"),
   profilePythonPathPick: document.getElementById("pf-pythonPath-pick"),
@@ -131,6 +132,14 @@ const containerFields = createContainerFields(els.profileContainerExtra, {
   profileId: () => editingProfileId || "",
   containerName: () => els.profileContainerName.value || "",
   onChange: onGpuModelChange,
+});
+
+// The LOCAL profile carries the same override field. It is the same fragment the
+// container block mounts, so the mask semantics and the "which key is in effect"
+// line (including the local-only "→ config file" source) cannot drift apart.
+const localApiKeyField = createApiKeyField(els.profileLocalExtra, {
+  idPrefix: "pfl-",
+  apiKeySource: () => keySource,
 });
 
 // ── Global preferences ───────────────────────────────────────────────────
@@ -837,6 +846,7 @@ async function loadProfiles() {
     ? { file: String(data.keySource.file || ""), hasKey: !!data.keySource.hasKey }
     : { file: "", hasKey: false };
   containerFields.refreshApiKeySource();
+  localApiKeyField.refreshSource();
   // Paint the list before the (potentially slow) status probe so the user is
   // not waiting on docker/python checks. Edit/delete keep the last known
   // running state until the probe resolves.
@@ -928,8 +938,9 @@ function setEditorReadOnly(readOnly) {
   if (els.profileStrataDirPick) els.profileStrataDirPick.disabled = readOnly;
   if (els.profilePythonPathPick) els.profilePythonPathPick.disabled = readOnly;
   // The whole shared container block — its inputs, its pickers and its row
-  // buttons (the preset prompt's buttons included).
+  // buttons (the preset prompt's buttons included) — and the local key control.
   containerFields.setReadOnly(readOnly);
+  localApiKeyField.setReadOnly(readOnly);
   els.profileReadOnlyHint.hidden = !readOnly;
   // No write path in the read-only view. The whole bottom action row is
   // hidden there because it would only repeat the top close button.
@@ -969,6 +980,8 @@ async function openProfileEditor(profile, readOnly = false) {
   els.profileContainerName.value = profile?.containerName || "";
   els.profileGgufDir.value = profile?.ggufDir || "";
   els.profilePort.value = profile?.port ? String(profile.port) : "";
+  // The local override (masked when set); the source line follows it.
+  localApiKeyField.render(profile?.apiKey || "");
   // The card picker needs the catalog before it can hold the profile's value.
   await loadPresets();
   containerFields.render(profile);
@@ -1055,6 +1068,8 @@ async function saveProfile() {
     body.strataDir = els.profileStrataDir.value.trim();
     body.pythonPath = els.profilePythonPath.value.trim();
     body.gpu = els.profileGpu.value.trim();
+    // The local override: the mask round-trips as "unchanged", empty clears.
+    body.apiKey = localApiKeyField.value();
   }
 
   working = true;
@@ -1150,6 +1165,7 @@ function initLangSelect() {
     renderImageStatus();
     // The shared container block re-renders its own static copy + option labels.
     containerFields.relocalize();
+    localApiKeyField.relocalize();
     renderPresetOffer();
     if (!els.profileConfirm.hidden && pendingDeleteId) {
       const pending = profiles.find((p) => p.id === pendingDeleteId);

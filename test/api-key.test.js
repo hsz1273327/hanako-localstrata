@@ -225,6 +225,31 @@ test("the effective key reaches .env / docker run, never the shareable compose f
   assert.ok(params.env.includes("STRATA_KEY=PROFILE-KEY"), `expected the injected env, got ${JSON.stringify(params.env)}`);
 });
 
+// The local side has the same override field as the container side; saving it
+// through the route must persist, mask, and drive the effective key.
+test("a local profile's override saves, masks and drives the effective key", async () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, "strata-a.json"), JSON.stringify({ port: 8080, api_key: "FILEKEY" }));
+  const ctx = makeCtx({ strataDir: dir, configFile: "strata-a.json", profiles: [localProfile({ strataDir: dir })], activeProfileId: "p2" });
+  const call = routesFor(ctx);
+
+  // With no override the config file supplies the key.
+  assert.equal(resolveApiKey(await readAllConfig(ctx)), "FILEKEY");
+
+  // The local form now saves an override like the container one.
+  const saved = await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: "LOCAL-OVERRIDE" });
+  assert.equal(findProfile((await readAllConfig(ctx)).profiles, "p2").apiKey, "LOCAL-OVERRIDE");
+  assert.equal(saved.profile.apiKey, API_KEY_MASK, "masked on the way back");
+  assert.equal(resolveApiKey(await readAllConfig(ctx)), "LOCAL-OVERRIDE", "the override beats the config file");
+
+  // The mask keeps it; empty clears it and the config file takes over again.
+  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: API_KEY_MASK });
+  assert.equal(resolveApiKey(await readAllConfig(ctx)), "LOCAL-OVERRIDE");
+  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: "" });
+  assert.equal(findProfile((await readAllConfig(ctx)).profiles, "p2").apiKey, "");
+  assert.equal(resolveApiKey(await readAllConfig(ctx)), "FILEKEY", "back to the config file");
+});
+
 // ── the local key-source gap fix ──────────────────────────────────────────
 
 test("readApiKey resolves the newest config when no file is explicitly selected", async () => {

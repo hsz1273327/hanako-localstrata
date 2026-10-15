@@ -133,6 +133,10 @@
             <span data-i18n="field.port">Port (0 = auto)</span>
             <input id="pf-port" type="number" min="0" max="65535" step="1">
           </label>
+          <!-- The local profile's own API-key override, mounted by the shared
+               fragment (ui/assets/profile-fields.js) — same semantics as the
+               container side, plus the local-only "→ config file" source line. -->
+          <div id="pf-local-extra"></div>
         </div>
 
         <div id="pfContainerFields" class="profile-type-fields" hidden>

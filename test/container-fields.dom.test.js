@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createContainerFields } from "../ui/assets/profile-fields.js";
+import { createContainerFields, createApiKeyField } from "../ui/assets/profile-fields.js";
 import registerSettingsRoutes, { saveProfile } from "../routes/settings.js";
 import { readAllConfig } from "../lib/strata.js";
 import { mi50Preset } from "../lib/mi50.js";
@@ -546,12 +546,12 @@ test("the key field names the key that is actually in effect", () => {
 
     // An override switches the line to "this profile wins".
     ctr.refs.apiKey.value = "sk-x";
-    ctr.refs.advancedPanel.dispatch("input");
+    ctr.refs.apiKey.dispatch("input");
     assert.equal(ctr.refs.apiKeySource.textContent, t("field.apiKeySourceOverride"));
 
     // Clearing it goes back to the fallback chain.
     ctr.refs.apiKey.value = "";
-    ctr.refs.advancedPanel.dispatch("input");
+    ctr.refs.apiKey.dispatch("input");
     assert.match(ctr.refs.apiKeySource.textContent, /strata-a\.json/);
 
     // Without a config file at all (or a container profile): just the global key.
@@ -560,6 +560,67 @@ test("the key field names the key that is actually in effect", () => {
     ctr2.setCatalog(CATALOG);
     ctr2.render({ containerName: "box", GpuModel: "nvidia" });
     assert.equal(ctr2.refs.apiKeySource.textContent, t("field.apiKeySourceGlobal"));
+  } finally {
+    dom.restore();
+  }
+});
+
+// ── the shared API-key fragment (the LOCAL side mounts it directly) ───────
+
+// Both profile types carry the same override. The container block puts this
+// control in its advanced group; a local profile has no such group, so the page
+// mounts the SAME fragment into its own host — one implementation, no second
+// password-input logic.
+test("the shared key fragment mounts standalone (the local side's path)", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const key = createApiKeyField(host, {
+      idPrefix: "pfl-",
+      apiKeySource: () => ({ file: "strata-iq3_s.json", hasKey: true }),
+    });
+    // It mounted itself: a secret input, with its label in the shared copy.
+    assert.equal(host.children[0], key.field);
+    assert.equal(key.refs.input.type, "password");
+    assert.equal(key.refs.input.id, "pfl-api-key");
+    key.relocalize();
+    assert.equal(key.field.children[0].textContent, t("field.apiKey"), "the label is localized");
+
+    // The local-only third source is visible: the selected config file.
+    key.render("");
+    assert.match(key.refs.source.textContent, /strata-iq3_s\.json/);
+
+    // Mask round-trip: what the backend returned goes back out unchanged…
+    key.render("********");
+    assert.equal(key.value(), "********");
+    // …an override is reported as an override…
+    key.render("sk-own");
+    assert.equal(key.value(), "sk-own");
+    assert.equal(key.refs.source.textContent, t("field.apiKeySourceOverride"));
+    // …and empty means an explicit clear.
+    key.render("");
+    assert.equal(key.value(), "");
+
+    // Read-only locks the value but keeps the source line readable.
+    key.setReadOnly(true);
+    assert.equal(key.refs.input.disabled, true);
+    assert.ok(key.refs.source.textContent.length > 0);
+    key.setReadOnly(false);
+    assert.equal(key.refs.input.disabled, false);
+  } finally {
+    dom.restore();
+  }
+});
+
+// Without a config file to name (a container profile, or a host that supplied
+// none) the line drops the config clause and says "global fallback" only.
+test("the fallback wording drops the config-file clause when there is no file", () => {
+  const dom = installDom();
+  try {
+    const host = document.createElement("div");
+    const key = createApiKeyField(host, { idPrefix: "x-" }); // no apiKeySource at all
+    key.render("");
+    assert.equal(key.refs.source.textContent, t("field.apiKeySourceGlobal"));
   } finally {
     dom.restore();
   }

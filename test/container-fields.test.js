@@ -103,6 +103,36 @@ test("both surfaces carry a host element, not a hand-rolled second form", () => 
   assert.match(panel, /pluginFormEls\.container\.collect\(\)/);
 });
 
+// The LOCAL side carries the same override field, mounted from the same fragment
+// (it has no "advanced" group, so it mounts into its own host).
+test("the local block mounts the same API-key fragment on both surfaces", () => {
+  for (const [html, host] of [
+    ["ui/settings.html", "pf-local-extra"],
+    ["ui/panel.html", "ps-local-extra"],
+  ]) {
+    assert.match(read(html), new RegExp(`id="${host}"`), `${html} must carry #${host}`);
+  }
+  const settings = read("ui/assets/settings.js");
+  const panel = read("ui/assets/panel.js");
+  // Mounted from the shared factory — never a second password input.
+  assert.match(settings, /createApiKeyField\(els\.profileLocalExtra/);
+  assert.match(settings, /idPrefix: "pfl-"/);
+  assert.match(panel, /createApiKeyField\(root\.querySelector\("#ps-local-extra"\)/);
+  assert.match(panel, /idPrefix: "psl-"/);
+  // Rendered on open, submitted on save, locked when read-only, re-localized.
+  assert.match(settings, /localApiKeyField\.render\(profile\?\.apiKey/);
+  assert.match(settings, /body\.apiKey = localApiKeyField\.value\(\)/);
+  assert.match(settings, /localApiKeyField\.setReadOnly\(readOnly\)/);
+  assert.match(settings, /localApiKeyField\.relocalize\(\)/);
+  assert.match(panel, /pluginFormEls\.localApiKey\.render\(profile\?\.apiKey/);
+  assert.match(panel, /body\.apiKey = pluginFormEls\.localApiKey\.value\(\)/);
+  assert.match(panel, /pluginFormEls\.localApiKey\.setReadOnly\(readOnly\)/);
+  // One password-input implementation in the whole UI module.
+  const fields = read("ui/assets/profile-fields.js");
+  assert.equal((fields.match(/type: "password"/g) || []).length, 1, "the key control must not be duplicated");
+  assert.match(fields, /export function createApiKeyField\(/);
+});
+
 // ── no docker device vocabulary in the UI ────────────────────────────────
 
 test("the device vocabulary stays out of the interface", () => {
