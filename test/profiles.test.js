@@ -35,8 +35,8 @@ import {
 } from "../lib/strata.js";
 import { saveProfile, deleteProfile } from "../routes/settings.js";
 import { defaultRunParams, buildRunArgs } from "../lib/deployer/docker.js";
-import { gpuTemplate, parseGpuIds, GPU_VENDORS } from "../lib/gpu.js";
-import { containerSpec, renderComposeFile } from "../lib/compose.js";
+import { gpuTemplate, parseGpuIds, GPU_MODELS, GPU_MODEL_KEYS, GPU_VENDORS, gpuModelCatalog, gpuModelInfo } from "../lib/gpu.js";
+import { containerSpec, renderComposeFile, mergeEnv } from "../lib/compose.js";
 
 const tmpRoots = [];
 
@@ -189,10 +189,17 @@ test("validateProfile enforces name uniqueness and container fields", () => {
   ]);
   assert.deepEqual(
     validateProfile({ type: "container", name: "c" }, { profiles: list, isNew: true }).errors,
-    ["imageRequired", "containerNameRequired"],
+    ["gpuModelRequired", "imageRequired", "containerNameRequired"],
+  );
+  assert.deepEqual(
+    validateProfile(
+      { type: "container", name: "c", image: "strata", containerName: "strata", GpuModel: "bogus" },
+      { profiles: list, isNew: true },
+    ).errors,
+    ["gpuModelUnknown"],
   );
   const ok = validateProfile(
-    { type: "container", name: "c", image: "strata", containerName: "strata" },
+    { type: "container", name: "c", image: "strata", containerName: "strata", GpuModel: "nvidia" },
     { profiles: list, isNew: true },
   );
   assert.deepEqual(ok.errors, []);
@@ -439,7 +446,7 @@ test("patchActiveProfile updates one field on the active profile only", async ()
 
 test("saveProfile creates a profile, then updates it in place", async () => {
   const ctx = makeCtx({});
-  const created = await saveProfile(ctx, { name: "second", type: "container", image: "strata", containerName: "strata" });
+  const created = await saveProfile(ctx, { name: "second", type: "container", image: "strata", containerName: "strata", GpuModel: "nvidia" });
   assert.equal(created.saved, true);
   assert.equal(created.profile.type, "container");
   const cfg = await readAllConfig(ctx);
@@ -697,7 +704,7 @@ test("container start uses docker compose up and writes the compose file", async
     VolumeBinds: ["/srv/data:/data"],
     EnginePort: 8085,
     EngineBindPort: 8085,
-    GpuVendor: "amd",
+    GpuModel: "amd-mi50",
     device_cgroup_rules: ["c 227:* rmw"],
     ulimits: ["memlock=-1"],
     security_opt: ["seccomp=unconfined"],
@@ -747,13 +754,17 @@ test("container start uses docker compose up and writes the compose file", async
   assert.match(text, /- "8085:8085"/);
   assert.match(text, /- "\/models\/UD:\/models"/);
   assert.match(text, /- "\/srv\/data:\/data"/);
-  // AMD vendor template: the ROCm device nodes + its cgroup rule, unioned with
-  // the user's own rule.
-  assert.match(text, /- "\/dev\/kfd"/);
-  assert.match(text, /- "\/dev\/dri"/);
+  // AMD MI50 model template: the ROCm device nodes + its cgroup rule (unioned
+  // with the user's own rule) + the two envs the model requires, none typed by
+  // the user.
+  assert.match(text, /- "\/dev\/kfd:\/dev\/kfd"/);
+  assert.match(text, /- "\/dev\/dri:\/dev\/dri"/);
   assert.match(text, /device_cgroup_rules:/);
   assert.match(text, /- "c 226:\* rmw"/);
   assert.match(text, /- "c 227:\* rmw"/);
+  assert.match(text, /- "HSA_OVERRIDE_GFX_VERSION=9\.0\.6"/);
+  assert.match(text, /- "LD_LIBRARY_PATH=\/opt\/rocm\/lib"/);
+  assert.match(text, /- "MODELS_DIR=\/models"/);
   assert.match(text, /memlock: -1/);
   assert.match(text, /- "seccomp=unconfined"/);
   // The API key is interpolated from .env, never baked into the shareable file.
@@ -763,17 +774,31 @@ test("container start uses docker compose up and writes the compose file", async
 // ── GPU vendor template (lib/gpu.js) ──────────────────────────────────────
 //
 // The docker vocabulary (device reservations / --gpus / device nodes) is a
-// template the user never types: only the vendor (+ optional card ids) is
-// entered. Every branch is pinned so the compose writer and the legacy
+// ── GPU card-model catalog (lib/gpu.js) ───────────────────────────────────
+//
+// The docker vocabulary (device reservations / --gpus / device nodes / model
+// env) is a template the user never types: they pick one card model (+ optional
+// card ids). Every branch is pinned so the compose writer and the legacy
 // `docker run` path cannot drift.
+
+test("the catalog has no `none`, and every model maps to nvidia or amd", () => {
+  assert.deepEqual(GPU_VENDORS, ["nvidia", "amd"]);
+  assert.ok(GPU_MODEL_KEYS.includes("nvidia") && GPU_MODEL_KEYS.includes("amd-mi50"));
+  for (const m of gpuModelCatalog()) {
+    assert.ok(GPU_VENDORS.includes(m.vendor), `${m.key} has a bad vendor`);
+    assert.equal(typeof m.label, "string");
+  }
+  assert.equal(gpuModelInfo("nope"), null);
+});
 
 test("gpuTemplate: nvidia expands to a device reservation and --gpus", () => {
   const all = gpuTemplate("nvidia", "all");
   assert.deepEqual(all.devices, []);
+  assert.deepEqual(all.env, []);
   assert.deepEqual(all.deployDevices, [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }]);
   assert.equal(all.cliGpus, "all");
 
-  // Empty ids behave like "all" (picking the vendor without picking cards).
+  // Empty ids behave like "all" (picking the model without picking cards).
   assert.deepEqual(gpuTemplate("nvidia", "").deployDevices, [
     { driver: "nvidia", count: "all", capabilities: ["gpu"] },
   ]);
@@ -785,19 +810,32 @@ test("gpuTemplate: nvidia expands to a device reservation and --gpus", () => {
   assert.equal(ids.cliGpus, "device=0,1");
 });
 
-test("gpuTemplate: amd expands to the ROCm device nodes + cgroup rule", () => {
-  const amd = gpuTemplate("amd", "");
-  assert.deepEqual(amd.devices, ["/dev/kfd", "/dev/dri"]);
-  assert.deepEqual(amd.deviceCgroupRules, ["c 226:* rmw"]);
-  assert.deepEqual(amd.deployDevices, []);
-  assert.equal(amd.cliGpus, null);
+test("gpuTemplate: amd-mi50 carries the ROCm nodes + cgroup rule + its two envs", () => {
+  const mi50 = gpuTemplate("amd-mi50", "");
+  assert.deepEqual(mi50.devices, ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"]);
+  assert.deepEqual(mi50.deviceCgroupRules, ["c 226:* rmw"]);
+  assert.deepEqual(mi50.env, ["HSA_OVERRIDE_GFX_VERSION=9.0.6", "LD_LIBRARY_PATH=/opt/rocm/lib"]);
+  assert.deepEqual(mi50.deployDevices, []);
+  assert.equal(mi50.cliGpus, null);
 });
 
-test("gpuTemplate: none / unknown expands to nothing", () => {
-  for (const vendor of ["none", "", undefined, "bogus"]) {
-    const t = gpuTemplate(vendor, "0");
+test("gpuTemplate: other AMD models expose the device nodes but need no env", () => {
+  for (const key of ["amd-7900xtx", "amd-9060xt", "amd-9070xt", "amd"]) {
+    const t = gpuTemplate(key, "");
+    assert.deepEqual(t.devices, ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"]);
+    assert.deepEqual(t.env, []);
+    assert.deepEqual(t.deployDevices, []);
+    assert.equal(t.cliGpus, null);
+  }
+});
+
+test("gpuTemplate: unknown / empty model expands to nothing", () => {
+  for (const model of ["", undefined, "bogus", "none"]) {
+    const t = gpuTemplate(model, "0");
+    assert.equal(t.known, false);
     assert.deepEqual(t.devices, []);
     assert.deepEqual(t.deviceCgroupRules, []);
+    assert.deepEqual(t.env, []);
     assert.deepEqual(t.deployDevices, []);
     assert.equal(t.cliGpus, null);
   }
@@ -810,26 +848,52 @@ test("parseGpuIds accepts all / single / list and drops junk", () => {
   assert.deepEqual(parseGpuIds("0,1"), ["0", "1"]);
   assert.deepEqual(parseGpuIds(" 0 , 2 "), ["0", "2"]);
   assert.deepEqual(parseGpuIds("a,1"), ["1"]);
-  assert.ok(GPU_VENDORS.includes("nvidia") && GPU_VENDORS.includes("amd") && GPU_VENDORS.includes("none"));
+});
+
+test("mergeEnv: the user's environment wins on a key conflict", () => {
+  const merged = mergeEnv(["HSA_OVERRIDE_GFX_VERSION=9.0.6", "LD_LIBRARY_PATH=/opt/rocm/lib"], [
+    "HSA_OVERRIDE_GFX_VERSION=11.0.0",
+    "MODELS_DIR=/models",
+  ]);
+  // The user's value is kept once; the untouched template key is added after.
+  assert.deepEqual(merged, [
+    "HSA_OVERRIDE_GFX_VERSION=11.0.0",
+    "MODELS_DIR=/models",
+    "LD_LIBRARY_PATH=/opt/rocm/lib",
+  ]);
 });
 
 test("an nvidia container writes deploy.resources…devices (zero-regression for --gpus all)", () => {
-  const spec = containerSpec({ containerName: "s", imageName: "img", GpuVendor: "nvidia", GpuIds: "all" });
+  const spec = containerSpec({ containerName: "s", imageName: "img", GpuModel: "nvidia", GpuIds: "all" });
   assert.deepEqual(spec.devices, []);
   assert.deepEqual(spec.deployDevices, [{ driver: "nvidia", count: "all", capabilities: ["gpu"] }]);
   assert.equal(spec.cliGpus, "all");
   const text = renderComposeFile(spec, { profileName: "s" });
   assert.match(text, /deploy:/);
   assert.match(text, /reservations:/);
-  assert.match(text, /devices:/);
   assert.match(text, /- driver: "nvidia"/);
   assert.match(text, /count: all/);
   // The generated file must not carry the top-level `gpus:` shorthand.
   assert.doesNotMatch(text, /^\s+gpus:/m);
 });
 
+test("an MI50 container writes the ROCm nodes + both model envs without the user typing them", () => {
+  const profile = normalizeProfile({
+    type: "container",
+    imageName: "xxdoman/strata-mi50",
+    containerName: "strata-mi50",
+    GpuModel: "amd-mi50",
+  });
+  const text = renderComposeFile(containerSpec(profile), { profileName: "mi50" });
+  assert.match(text, /- "\/dev\/kfd:\/dev\/kfd"/);
+  assert.match(text, /- "\/dev\/dri:\/dev\/dri"/);
+  assert.match(text, /- "c 226:\* rmw"/);
+  assert.match(text, /- "HSA_OVERRIDE_GFX_VERSION=9\.0\.6"/);
+  assert.match(text, /- "LD_LIBRARY_PATH=\/opt\/rocm\/lib"/);
+});
+
 test("a specific-card nvidia profile pins device_ids", () => {
-  const spec = containerSpec({ containerName: "s", imageName: "img", GpuVendor: "nvidia", GpuIds: "0,2" });
+  const spec = containerSpec({ containerName: "s", imageName: "img", GpuModel: "nvidia", GpuIds: "0,2" });
   const text = renderComposeFile(spec, {});
   assert.match(text, /device_ids:/);
   assert.match(text, /- "0"/);
@@ -840,7 +904,7 @@ test("a specific-card nvidia profile pins device_ids", () => {
     type: "container",
     imageName: "img",
     containerName: "s",
-    GpuVendor: "nvidia",
+    GpuModel: "nvidia",
     GpuIds: "0,2",
   });
   const args = buildRunArgs("s", defaultRunParams(profile));
@@ -849,8 +913,7 @@ test("a specific-card nvidia profile pins device_ids", () => {
 
 test("a migrated legacy container keeps the old --gpus all behaviour", () => {
   const profile = normalizeProfile({ type: "container", imageName: "img", containerName: "s", ggufDir: "/m" });
-  assert.equal(profile.GpuVendor, "nvidia");
-  assert.equal(profile.GpuIds, "all");
+  assert.equal(profile.GpuModel, "nvidia");
   const args = buildRunArgs("s", defaultRunParams(profile));
   assert.ok(args.includes("--gpus") && args.includes("all"));
 });
