@@ -2154,12 +2154,26 @@ els.configSetupBtn.addEventListener("click", () => {
   fillBackupAs();
   setBackupError("");
   fillSetupGguf();
-  // The GGUF folder for THIS run: empty is the normal case (the general default
-  // below is what setup will use). The hint says which folder that is, and the
-  // server checks that a folder the user does name really exists.
-}
+  showConfirm({
+    title: t("configPick.confirmTitle"),
+    // Its own copy, not the first-launch one: this run rebuilds an EXISTING
+    // config, so it must say what that means (measured against setup's own
+    // writer: hand-added engine options are dropped and the file is kept as
+    // .bak; top-level settings like sampling are carried over).
+    sub: tp("configPick.setupSub", {
+      dir: state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
+    }),
+    confirmText: t("configPick.confirmAction"),
+    trigger: els.configSetupBtn,
+    body: els.setupParams,
+    onConfirm: startConfigSetup,
+  });
+});
 
 function fillSetupGguf() {
+  // The GGUF folder for THIS run: empty is the normal case (the general default
+  // named under the field is what setup will use). The server checks that a
+  // folder the user does name really exists.
   const ggufEl = document.getElementById("sp-ggufDir");
   if (ggufEl) ggufEl.value = "";
   renderSetupGgufDefault();
@@ -2184,21 +2198,7 @@ function setGgufError(message) {
   el.textContent = message || "";
   el.hidden = !message;
 }
-  showConfirm({
-    title: t("configPick.confirmTitle"),
-    // Its own copy, not the first-launch one: this run rebuilds an EXISTING
-    // config, so it must say what that means (measured against setup's own
-    // writer: hand-added engine options are dropped and the file is kept as
-    // .bak; top-level settings like sampling are carried over).
-    sub: tp("configPick.setupSub", {
-      dir: state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
-    }),
-    confirmText: t("configPick.confirmAction"),
-    trigger: els.configSetupBtn,
-    body: els.setupParams,
-    onConfirm: startConfigSetup,
-  });
-});
+
 els.profileDrawerClose.addEventListener("click", closeProfileDetail);
 els.profileDrawerScrim.addEventListener("click", closeProfileDetail);
 document.addEventListener("keydown", (e) => {
