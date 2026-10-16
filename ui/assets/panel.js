@@ -2053,14 +2053,41 @@ function collectSetupParams() {
   return params;
 }
 
+// The optional backup name ("当前设置备份为"). Empty = no backup. Kept out of the
+// pass-through parameter set: it is not a setup argument, it is a file we copy
+// BEFORE the run (setup.py takes no name — see routes/config.js).
+const BACKUP_NAME_RE = /^strata-[A-Za-z0-9._-]+\.json$/;
+
+function collectBackupAs() {
+  const el = document.getElementById("sp-backupAs");
+  return String(el?.value || "").trim();
+}
+
+// Shown under the field itself: the dialog's scrim covers the panel, so a message
+// in #error would sit where nobody can see it.
+function setBackupError(message) {
+  const el = document.getElementById("sp-backupError");
+  if (!el) return;
+  el.textContent = message || "";
+  el.hidden = !message;
+}
+
 async function startConfigSetup() {
   if (state.working) return;
+  // A name that cannot become a config the picker shows is refused here, so the
+  // user sees a translated message instead of a failed job.
+  const backupAs = collectBackupAs();
+  if (backupAs && !BACKUP_NAME_RE.test(backupAs)) {
+    setBackupError(t("configPick.backupBadName"));
+    return;
+  }
+  setBackupError("");
   state.working = true;
   els.configFileSelect.disabled = true;
   els.configSetupBtn.disabled = true;
   showError("");
   try {
-    const res = await api("config/setup", { method: "POST", body: JSON.stringify({ setup: collectSetupParams() }) });
+    const res = await api("config/setup", { method: "POST", body: JSON.stringify({ setup: collectSetupParams(), backupAs }) });
     if (res && res.running !== false) {
       showFirstRunOverlay(res, "configPick.running");
       await waitForFirstRun();
@@ -2098,6 +2125,7 @@ els.configSetupBtn.addEventListener("click", () => {
   const current = currentSetupValues();
   for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
   renderSetupTarget();
+  setBackupError("");
   showConfirm({
     title: t("configPick.confirmTitle"),
     // Its own copy, not the first-launch one: this run rebuilds an EXISTING

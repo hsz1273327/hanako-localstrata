@@ -335,7 +335,7 @@ test("the panel wires the two config routes without a second progress contract",
   assert.match(js, /api\("config\/select", \{ method: "POST", body: JSON\.stringify\(\{ file \}\) \}\)/);
   // "Run setup" reuses the shared first-run overlay + GET /start polling, and
   // carries the parameters the user asked to change (the popover's form).
-  assert.match(js, /api\("config\/setup", \{ method: "POST", body: JSON\.stringify\(\{ setup: collectSetupParams\(\) \}\) \}\)/);
+  assert.match(js, /api\("config\/setup", \{ method: "POST", body: JSON\.stringify\(\{ setup: collectSetupParams\(\), backupAs \}\) \}\)/);
   assert.match(js, /showFirstRunOverlay\(res, "configPick\.running"\)/);
   assert.match(js, /await waitForFirstRun\(\)/);
   // No bespoke progress route was introduced.
@@ -451,5 +451,131 @@ test("the target copy exists in six locales and states both cases", async () => 
     // writes a NEW file.
     assert.match(STRINGS[lang]["configPick.targetRule"], /strata-/, `${lang}.targetRule must show the name shape`);
     assert.match(STRINGS[lang]["configPick.targetRule"], /setup/, `${lang}.targetRule must name who derives it`);
+  }
+});
+
+// ── the optional pre-setup backup ─────────────────────────────────────────
+
+import { backupTargetName, backupCurrentConfig } from "../routes/config.js";
+
+test("the backup name shape is the one the config picker can list", () => {
+  // `^strata-....json$` is exactly lib/deployer/common.js listConfigFiles' filter,
+  // so anything we accept stays selectable — and anything else is refused.
+  assert.deepEqual(backupTargetName("strata-iq3_s-vision.json", "strata-iq3_s.json"), {
+    name: "strata-iq3_s-vision.json",
+    error: null,
+  });
+  assert.deepEqual(backupTargetName("  strata-a_b.c-1.json ", "current.json"), { name: "strata-a_b.c-1.json", error: null });
+  // Empty = no backup (the behaviour we had before this field existed).
+  assert.deepEqual(backupTargetName("", "strata-iq3_s.json"), { name: null, error: null });
+  assert.deepEqual(backupTargetName(null, "strata-iq3_s.json"), { name: null, error: null });
+  // The current name is a no-op, not an error.
+  assert.deepEqual(backupTargetName("strata-iq3_s.json", "strata-iq3_s.json"), { name: null, error: null });
+  // No path separators, no other extension, no leading dot, must keep the prefix.
+  // (A trailing space is trimmed, so it lands on a valid name rather than an error.)
+  for (const bad of ["../escape.json", "sub/dir.json", "strata-x.txt", "backup.json", ".strata-x.json", "strata a.json", "strata-"]) {
+    assert.equal(backupTargetName(bad, "c.json").error, "backupNameShape", `${bad} must be refused`);
+  }
+  assert.equal(backupTargetName(" strata-x.json  ", "c.json").name, "strata-x.json", "whitespace is trimmed, not a failure");
+});
+
+test("a pre-setup backup copies the config AND its shared-settings sibling", async () => {
+  const dir = makeLocalDir();
+  fs.writeFileSync(path.join(dir, "strata-a.shared-settings.json"), JSON.stringify({ max_tokens: 4096 }));
+  const ctx = localCtx(dir);
+  // A name that already exists is refused: never overwrite a file the user has.
+  fs.writeFileSync(path.join(dir, "strata-taken.json"), "{}");
+  await assert.rejects(() => backupCurrentConfig(ctx, { backupAs: "strata-taken.json" }), /已存在/);
+  assert.equal(fs.readFileSync(path.join(dir, "strata-taken.json"), "utf8"), "{}", "and it is untouched");
+
+  const res = await backupCurrentConfig(ctx, { backupAs: "strata-a-keep.json" });
+  assert.deepEqual(res.copied, ["strata-a-keep.json", "strata-a-keep.shared-settings.json"]);
+  assert.equal(res.target, "strata-a-keep.json");
+  // The copy carries the settings, and the sibling is what the server would look
+  // for next to it (serve/server.py:5828 derives it from the path).
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "strata-a-keep.json"), "utf8")), JSON.parse(fs.readFileSync(path.join(dir, "strata-a.json"), "utf8")));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "strata-a-keep.shared-settings.json"), "utf8")).max_tokens, 4096);
+  // The original is untouched.
+  assert.ok(fs.existsSync(path.join(dir, "strata-a.json")));
+  // …and no backup at all when nothing was asked for.
+  assert.deepEqual(await backupCurrentConfig(ctx, {}), { copied: [], target: null });
+});
+
+test("startConfigSetup backs up first, then runs setup, and never fakes a target for it", async () => {
+  resetFirstRunState();
+  const dir = makeLocalDir();
+  const ctx = localCtx(dir);
+  let spawnedArgs = null;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/x", configFile: "strata-a.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: (cmd, args) => {
+      spawnedArgs = args;
+      // The backup already exists by the time setup starts, so the job's own
+      // snapshot sees it and can never mistake it for this run's product.
+      assert.ok(fs.existsSync(path.join(dir, "strata-a-keep.json")), "the backup exists before setup runs");
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        fs.writeFileSync(path.join(dir, "strata-b.json"), JSON.stringify({ port: 59995 }));
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  };
+  const res = await startConfigSetup(ctx, { io, platform: "linux", setup: {}, backupAs: "strata-a-keep.json" });
+  assert.deepEqual(res.backup, { copied: ["strata-a-keep.json"], target: "strata-a-keep.json" });
+  assert.equal(res.plan.setup && Object.keys(res.plan.setup).length, 0, "the backup is not a setup parameter");
+  // setup still gets ITS OWN command, nothing about a target name.
+  assert.ok(spawnedArgs.includes("--setup"));
+  assert.equal(spawnedArgs.includes("--config"), false, "setup.py has no --config");
+  const deadline = Date.now() + 3000;
+  while (!getFirstRunState().done && !getFirstRunState().error && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  assert.equal(getFirstRunState().error, null);
+
+  // A bad or taken name never starts a job.
+  resetFirstRunState();
+  await assert.rejects(() => startConfigSetup(ctx, { io, platform: "linux", backupAs: "nope.json" }), /backup-|strata-/);
+  assert.equal(getFirstRunState().running, false, "no job for a refused backup name");
+});
+
+test("the backup field is optional, validated in the dialog, and copied under the picker's name shape", () => {
+  const html = fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8");
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  // The field lives in the setup dialog, AFTER the read-only target line.
+  const form = html.slice(html.indexOf('id="setupParams"'), html.indexOf("confirm-popover-actions"));
+  assert.match(form, /id="sp-backupAs"/);
+  assert.ok(form.indexOf('id="setupTargetFile"') < form.indexOf('id="sp-backupAs"'), "target first, then the option");
+  // Optional: the hint says an empty field means no backup.
+  assert.match(form, /id="sp-backupAs"[^>]*data-i18n-placeholder="configPick\.backupPlaceholder"/);
+  assert.match(form, /data-i18n="configPick\.backupHint"/);
+  // The refusal shows in the DIALOG (its scrim covers the panel's #error area).
+  assert.match(form, /id="sp-backupError"/);
+  assert.match(js, /function setBackupError\(message\)/);
+  assert.match(js, /setBackupError\(t\("configPick\.backupBadName"\)\)/);
+  assert.doesNotMatch(js.slice(js.indexOf("async function startConfigSetup"), js.indexOf("async function startConfigSetup") + 900), /showError\(t\("configPick\.backupBadName"\)\)/);
+  // It is sent as `backupAs`, separate from the setup parameters, and never as a
+  // setup flag (setup.py has no target-name argument).
+  assert.match(js, /JSON\.stringify\(\{ setup: collectSetupParams\(\), backupAs \}\)/);
+  const firstrun = fs.readFileSync(path.join(ROOT, "lib/firstrun.js"), "utf8");
+  assert.doesNotMatch(firstrun, /backupAs/);
+});
+
+test("the backup copy exists in six locales, with the shared-binary caveat", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  for (const lang of LANGS) {
+    for (const key of ["configPick.backupLabel", "configPick.backupPlaceholder", "configPick.backupHint", "configPick.backupBadName"]) {
+      assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
+    }
+    // Empty must mean "no backup", the accepted shape must be spelled out, and the
+    // caveat (a shared encoder/engine) must be said rather than implied.
+    assert.match(STRINGS[lang]["configPick.backupHint"], /strata-/, `${lang}: the name shape`);
+    assert.match(STRINGS[lang]["configPick.backupHint"], /GPU/, `${lang}: the shared-encoder caveat`);
+    assert.match(STRINGS[lang]["configPick.backupBadName"], /strata-/, `${lang}: the refusal explains the shape`);
   }
 });
