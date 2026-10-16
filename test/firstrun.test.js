@@ -193,7 +193,13 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
 // because a re-run REBUILDS `args`: measured against setup's own
 // write_setup_config, a hand-set --max-context came back as setup's answer.
 test("the setup parameters are whitelisted, in setup's own value domains", () => {
-  assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), ["context", "kv", "kvStreaming", "lowRam", "vision"]);
+  assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), ["context", "ggufDir", "kv", "kvStreaming", "lowRam", "vision"]);
+  // The GGUF folder is setup's own flag, and it is a PATH: a free string here,
+  // with existence checked where the filesystem is.
+  assert.equal(SETUP_PARAMS.ggufDir.flag, "--gguf-dir");
+  assert.equal(SETUP_PARAMS.ggufDir.path, true);
+  assert.deepEqual(validateSetupParams({ ggufDir: "/models/IQ3_S" }).clean, { ggufDir: "/models/IQ3_S" });
+  assert.deepEqual(validateSetupParams({ ggufDir: "" }).clean, {});
 
   const ok = validateSetupParams({ vision: "gpu", lowRam: "resident", kvStreaming: "on", context: "131072", kv: "k8v4" });
   assert.deepEqual(ok.errors, []);

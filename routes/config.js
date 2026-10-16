@@ -109,6 +109,22 @@ export async function backupCurrentConfig(ctx, opts = {}) {
   return { copied, target: name };
 }
 
+// A GGUF folder is only useful if it is really there: this is the fs half of the
+// check (lib/firstrun.js's validateSetupParams keeps its shape). Returns an error
+// code, or null.
+export function checkGgufDir(cfg, dir) {
+  const wanted = String(dir ?? "").trim();
+  if (!wanted) return null; // empty = the general default, then a download
+  if (!path.isAbsolute(wanted)) return "ggufDirNotAbsolute";
+  try {
+    if (!fs.statSync(wanted).isDirectory()) return "ggufDirNotDir";
+    fs.readdirSync(wanted); // readable?
+  } catch {
+    return "ggufDirMissing";
+  }
+  return null;
+}
+
 // Build a config: same job as a first launch, forced (a config may already
 // exist) and without the trailing service start. `opts.setup` (whitelisted by
 // lib/firstrun.js's validateSetupParams) carries the parameters the user asked to
@@ -117,6 +133,8 @@ export async function startConfigSetup(ctx, opts = {}) {
   await assertConfigEditable(ctx, opts);
   const { clean, errors } = validateSetupParams(opts.setup);
   if (errors.length) throw validationError(errors[0], errors);
+  const badDir = checkGgufDir(await readAllConfig(ctx), clean.ggufDir);
+  if (badDir) throw validationError("GGUF 目录不可用", [badDir]);
   // The backup happens BEFORE the job starts, so the job's own "what did this run
   // produce" snapshot (lib/firstrun.js:293) already contains it and can never
   // mistake the backup for its product.

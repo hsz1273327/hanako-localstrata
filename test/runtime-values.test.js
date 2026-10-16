@@ -506,9 +506,12 @@ test("settings page wires the host directory picker", () => {
   }
 
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-ggufDir-pick", "pf-container-extra"]) {
+  // The local model folder's picker is gone with its field (a GGUF folder is a
+  // setup input now, chosen in the panel); the container's block stays.
+  for (const id of ["pf-strataDir-pick", "pf-container-extra"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
+  assert.doesNotMatch(html, /pf-ggufDir-pick/, "the local model-folder picker is gone");
 
   const js = fs.readFileSync(path.join(ROOT, "ui/assets/settings.js"), "utf8");
   assert.match(js, /resources\.pick/);
@@ -519,7 +522,7 @@ test("settings page wires the host directory picker", () => {
   // The pickers are write-side actions: locked in the read-only view. The
   // container block's own pickers are locked by the shared module.
   assert.match(js, /containerFields\.setReadOnly\(readOnly\)/);
-  assert.match(js, /profileGgufDirPick\.disabled\s*=\s*readOnly/);
+  assert.match(js, /profileStrataDirPick\.disabled\s*=\s*readOnly/);
 });
 
 // The General box's "default model directory" is a GGUF path field like the
@@ -546,7 +549,7 @@ test("the General default model directory reuses the host directory picker", () 
 // mode (it is a file, and it may stay empty or hold a bare command name).
 test("drawer path fields use the host picker with the right mode", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-strataDir-pick", "pf-pythonPath-pick", "pf-ggufDir-pick"]) {
+  for (const id of ["pf-strataDir-pick", "pf-pythonPath-pick"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
 
@@ -556,7 +559,7 @@ test("drawer path fields use the host picker with the right mode", () => {
   // The interpreter's button names Python; the directory fields keep the
   // generic label.
   assert.match(html, /id="pf-pythonPath-pick"[^>]*data-i18n="field\.pickPython"/);
-  for (const id of ["pf-strataDir-pick", "pf-ggufDir-pick", "defaultGgufDir-pick"]) {
+  for (const id of ["pf-strataDir-pick", "defaultGgufDir-pick"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*data-i18n="field\\.pickPath"`), `#${id} must use the generic label`);
   }
   // Directories go through directory mode; the interpreter through file mode.

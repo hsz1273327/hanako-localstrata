@@ -224,8 +224,10 @@ test("profileFromFlat carries the legacy flat settings (but not the config file)
   assert.equal(p.strataDir, "/s");
   assert.equal(p.pythonPath, "/p");
   assert.equal(p.gpu, "0");
-  assert.equal(p.ggufDir, "/g");
   assert.equal(p.port, 9090);
+  // A GGUF folder is NOT a profile field any more: it is an input to a setup run
+  // (chosen in the panel's dialog), so the legacy flat value is dropped.
+  assert.equal(p.ggufDir, undefined);
   // The chosen config is the top-level key, never a profile field: the profile
   // only says where Strata runs.
   assert.equal(p.configFile, undefined);
@@ -261,18 +263,20 @@ test("writeProfiles persists and readAllConfig restores the active profile", asy
 
 // ── General defaults fallback (priority: profile value → general default) ──
 
-test("general defaults fill empty profile fields; the profile's own values win", async () => {
+test("general defaults fill an empty profile field; the profile's own wins", async () => {
   const ctx = makeCtx({ defaultGgufDir: "/general/models", defaultPort: 9000 });
   await writeProfiles(
     ctx,
     [
-      localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0 }),
-      localProfile({ id: "p2", name: "own", strataDir: "/two", ggufDir: "/own/models", port: 1234 }),
+      localProfile({ id: "p1", name: "default", strataDir: "/one", port: 0 }),
+      localProfile({ id: "p2", name: "own", strataDir: "/two", port: 1234 }),
     ],
     "p1",
   );
 
-  // Active p1 leaves both fields empty → the general defaults apply.
+  // Active p1 leaves its port empty → the general default applies. The model
+  // folder is the general default for EVERY local profile now: a run names one in
+  // the setup dialog, and nothing on the profile can override it.
   let cfg = await readAllConfig(ctx);
   assert.equal(cfg.activeProfile.ggufDir, "/general/models");
   assert.equal(cfg.activeProfile.port, 9000);
@@ -283,12 +287,14 @@ test("general defaults fill empty profile fields; the profile's own values win",
   assert.equal(cfg.activeProfile.configFile, undefined);
   assert.equal(cfg.configFile, "");
 
-  // Switch to p2: its own values win over the general defaults.
+  // Switch to p2: its own port wins over the general default. The model folder is
+  // the general default for every local profile now (a setup run names one in the
+  // dialog, and nothing on a profile can override it).
   await selectProfile(ctx, "p2");
   cfg = await readAllConfig(ctx);
-  assert.equal(cfg.activeProfile.ggufDir, "/own/models");
+  assert.equal(cfg.activeProfile.ggufDir, "/general/models");
   assert.equal(cfg.activeProfile.port, 1234);
-  assert.equal(cfg.ggufDir, "/own/models");
+  assert.equal(cfg.ggufDir, "/general/models");
   assert.equal(cfg.port, 1234);
 });
 
@@ -305,18 +311,18 @@ test("general defaults are applied to the effective profile, not the persisted l
   const ctx = makeCtx({ defaultGgufDir: "/general/models", defaultPort: 9000 });
   await writeProfiles(
     ctx,
-    [localProfile({ id: "p1", name: "default", strataDir: "/one", ggufDir: "", port: 0 })],
+    [localProfile({ id: "p1", name: "default", strataDir: "/one", port: 0 })],
     "p1",
   );
   const cfg = await readAllConfig(ctx);
   // The effective copy the deployers receive carries the resolved values…
   assert.equal(cfg.activeProfile.ggufDir, "/general/models");
   assert.equal(cfg.activeProfile.port, 9000);
-  // …but the stored profile keeps its original empty/0 values.
+  // …but the stored profile keeps its original 0 and has no model folder of its own.
   assert.ok(Array.isArray(ctx._store.profiles), "profiles are stored as an array");
   const stored = ctx._store.profiles;
-  assert.equal(stored[0].ggufDir, "");
   assert.equal(stored[0].port, 0);
+  assert.equal(stored[0].ggufDir, undefined, "a local profile does not carry one");
 });
 
 // ── Stored shape: array now, legacy JSON string still readable ────────────
@@ -436,10 +442,10 @@ test("patchActiveProfile updates one field on the active profile only", async ()
     ],
     "p1",
   );
-  await patchActiveProfile(ctx, { ggufDir: "/models/x" });
+  await patchActiveProfile(ctx, { gpu: "1" });
   const cfg = await readAllConfig(ctx);
-  assert.equal(cfg.activeProfile.ggufDir, "/models/x");
-  assert.equal(findProfile(cfg.profiles, "p2").ggufDir, "");
+  assert.equal(cfg.activeProfile.gpu, "1");
+  assert.equal(findProfile(cfg.profiles, "p2").gpu, "");
 });
 
 // ── CRUD handlers ─────────────────────────────────────────────────────────
@@ -542,11 +548,11 @@ test("running service locks the in-use profile only", async () => {
 
     // Another profile is not: the write only touches ctx.config, and the
     // active selection plus the running service stay exactly as they were.
-    const saved = await saveProfile(ctx, { ...spare, name: "renamed", ggufDir: "/models/x" });
+    const saved = await saveProfile(ctx, { ...spare, name: "renamed", gpu: "1" });
     assert.equal(saved.saved, true);
     let cfg = await readAllConfig(ctx);
     assert.equal(findProfile(cfg.profiles, "spare").name, "renamed");
-    assert.equal(findProfile(cfg.profiles, "spare").ggufDir, "/models/x");
+    assert.equal(findProfile(cfg.profiles, "spare").gpu, "1");
     assert.equal(cfg.activeProfileId, "run");
     assert.equal((await getStatus(ctx)).state, "running");
 
@@ -924,4 +930,18 @@ test("a legacy container with an empty dataDir keeps its /data named volume", ()
   assert.deepEqual(profile.VolumeBinds, ["strata-data:/data"]);
   assert.ok(profile.environment.includes("STRATA_DATA=/data"));
   assert.ok(profile.environment.includes("PORT=9000"));
+});
+
+// ── where a model folder lives now ────────────────────────────────────────
+
+// A GGUF folder is an INPUT to a setup run, not part of the environment a profile
+// defines. A local profile therefore carries none (the panel's dialog names one
+// for a run, and the general default stands behind it). A container keeps its
+// bind-mount source, because THAT is its environment.
+test("a local profile has no model folder; a container keeps its bind source", () => {
+  assert.equal("ggufDir" in emptyLocalProfile(), false, "no ggufDir on the local model");
+  assert.equal(normalizeProfile({ type: "local", strataDir: "/s", ggufDir: "/models" }).ggufDir, undefined, "and normalization drops one");
+  assert.equal("ModelDir" in emptyContainerProfile(), true, "a container still says which host folder it mounts");
+  // The legacy container field still migrates onto the bind source.
+  assert.equal(normalizeProfile({ type: "container", containerName: "c", ggufDir: "/old/models" }).ModelDir, "/old/models");
 });

@@ -286,13 +286,9 @@
           <label class="field"><span data-i18n="field.gpu">GPU selector (optional)</span>
             <input id="ps-gpu" data-key="gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
           </label>
-          <!-- The local source's model folder and port. A container carries its
-               own host-model / container-path / engine-port pair plus the list
-               fields, rendered into #ps-container-extra by the shared module. -->
-          <label class="field"><span data-i18n="field.ggufDir">GGUF model directory</span>
-            <input id="ps-ggufDir" data-key="ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-            <span class="field-hint muted" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
-          </label>
+          <!-- The local source's own port. The model folder moved to the setup
+               dialog (a GGUF folder is an input to a setup run, not part of the
+               environment a profile defines). -->
           <label class="field"><span data-i18n="field.port">Port (0 = auto)</span>
             <input id="ps-port" data-key="port" type="number" min="0" max="65535" step="1">
           </label>
@@ -352,6 +348,12 @@
           <!-- The refusal is shown HERE, not in the panel's #error area: the dialog's
                scrim covers the panel, so a message back there would never be read. -->
           <span class="field-hint" id="sp-backupError" hidden></span>
+        </label>
+        <label class="field"><span data-i18n="configPick.setupGgufLabel">GGUF folder for this run</span>
+          <input id="sp-ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="configPick.setupGgufPlaceholder">
+          <!-- Filled when the dialog opens: the general default, or "download". -->
+          <span class="field-hint muted" id="sp-ggufDefault"></span>
+          <span class="field-hint" id="sp-ggufError" hidden></span>
         </label>
         <label class="field"><span data-i18n="field.vision">Vision</span>
           <select id="sp-vision" data-setup="vision"></select>

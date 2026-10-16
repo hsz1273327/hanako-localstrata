@@ -76,8 +76,6 @@ const els = {
   // The card model + vendor split, the model bind pair, the list fields and the
   // compose directory: rendered by the shared field module (below).
   profileContainerExtra: document.getElementById("pf-container-extra"),
-  profileGgufDir: document.getElementById("pf-ggufDir"),
-  profileGgufDirPick: document.getElementById("pf-ggufDir-pick"),
   profilePort: document.getElementById("pf-port"),
   profileReadOnlyHint: document.getElementById("profileReadOnlyHint"),
   profileSaveBtn: document.getElementById("profileSaveBtn"),
@@ -182,7 +180,7 @@ const localApiKeyField = createApiKeyField(els.profileLocalExtra, {
 
 let apiKeyInitial = "";
 // General fallbacks, mirrored from /prefs so the stopped editor can annotate an
-// empty ggufDir / port with the value it would fall back to.
+// empty port with the value it would fall back to.
 let generalDefaults = { defaultGgufDir: "", defaultPort: 0 };
 
 function setMessage(text, kind = "info") {
@@ -394,7 +392,8 @@ function ignoreMi50Preset() {
 // ── Runtime values (read-only "view" drawer) ─────────────────────────────
 
 // Which editor input renders which runtime field, per profile type — a local
-// source reports `ggufDir`, a container reports its model bind as `modelDir`
+// source reports the effective `ggufDir` (the general default now: a local profile
+// no longer carries one), a container reports its model bind as `modelDir`
 // (`configFile` is absent on purpose: the editor never displayed it).
 function fieldInputs() {
   if (els.profileType.value === "container") {
@@ -409,7 +408,6 @@ function fieldInputs() {
     strataDir: () => els.profileStrataDir,
     pythonPath: () => els.profilePythonPath,
     gpu: () => els.profileGpu,
-    ggufDir: () => els.profileGgufDir,
     port: () => els.profilePort,
   };
 }
@@ -436,7 +434,6 @@ function captureProfileValues(profile) {
     image: profile?.imageName || "",
     containerName: profile?.containerName || "",
     modelDir: profile?.ModelDir || "",
-    ggufDir: profile?.ggufDir || "",
     port: profile?.EnginePort ? String(profile.EnginePort) : profile?.port ? String(profile.port) : "",
   };
 }
@@ -496,10 +493,11 @@ function applyDefaultAnnotations() {
   const ggufDefault = String(generalDefaults.defaultGgufDir || "").trim();
   const portDefault = Number(generalDefaults.defaultPort) > 0 ? String(generalDefaults.defaultPort) : "";
   const container = els.profileType.value === "container";
-  const modelInput = container ? containerFields.refs.modelDir : els.profileGgufDir;
+  // Only a container has a model input on this page now: its bind-mount source.
+  // (A local profile's model folder is a setup input, chosen in the panel.)
+  const modelInput = container ? containerFields.refs.modelDir : null;
   const portInput = container ? containerFields.refs.enginePort : els.profilePort;
-  const modelKey = container ? "modelDir" : "ggufDir";
-  if (!String(profileFieldValues[modelKey] || "").trim() && ggufDefault) {
+  if (modelInput && !String(profileFieldValues.modelDir || "").trim() && ggufDefault) {
     addSourceSpan(modelInput, tp("profile.sourceDefaultValue", { value: ggufDefault }));
   }
   if (!String(profileFieldValues.port || "").trim() && portDefault) {
@@ -768,7 +766,7 @@ async function pickPath(input, mode, notify = setProfileMessage) {
   }
 }
 
-// Directory-mode picker: strataDir / dataDir / ggufDir / defaultGgufDir.
+// Directory-mode picker: strataDir / dataDir / defaultGgufDir.
 function pickDirectory(input, notify = setProfileMessage) {
   return pickPath(input, "directory", notify);
 }
@@ -981,7 +979,6 @@ function editorFields() {
     els.profileImageName,
     els.profileImageTag,
     els.profileContainerName,
-    els.profileGgufDir,
     els.profilePort,
   ];
 }
@@ -994,7 +991,6 @@ function setEditorReadOnly(readOnly) {
   // The image pull is a write-side action: never available in read-only view.
   if (els.profileImagePull) els.profileImagePull.disabled = readOnly || imagePullBusy;
   // Pickers write into the fields, so they follow the same rule.
-  if (els.profileGgufDirPick) els.profileGgufDirPick.disabled = readOnly;
   if (els.profileStrataDirPick) els.profileStrataDirPick.disabled = readOnly;
   if (els.profilePythonPathPick) els.profilePythonPathPick.disabled = readOnly;
   // The whole shared container block — its inputs, its pickers and its row
@@ -1038,7 +1034,6 @@ async function openProfileEditor(profile, readOnly = false) {
   els.profileImageName.value = profile?.imageName || "";
   els.profileImageTag.value = profile?.imageTag || "";
   els.profileContainerName.value = profile?.containerName || "";
-  els.profileGgufDir.value = profile?.ggufDir || "";
   els.profilePort.value = profile?.port ? String(profile.port) : "";
   // The local override (masked when set); the source line follows it.
   localApiKeyField.render(profile?.apiKey || "");
@@ -1056,7 +1051,7 @@ async function openProfileEditor(profile, readOnly = false) {
     loadRunningReport();
   } else {
     if (els.profileRuntimeNote) els.profileRuntimeNote.hidden = true;
-    // Stopped: annotate empty ggufDir / port with the general default.
+    // Stopped: annotate an empty port with the general default.
     applyDefaultAnnotations();
   }
   renderStartHints();
@@ -1123,7 +1118,6 @@ async function saveProfile() {
       setProfileMessage(t("profile.errPortInvalid"), "error");
       return;
     }
-    body.ggufDir = els.profileGgufDir.value.trim();
     body.port = port;
     body.strataDir = els.profileStrataDir.value.trim();
     body.pythonPath = els.profilePythonPath.value.trim();
@@ -1258,7 +1252,6 @@ containerFields.refs.presetIgnore.addEventListener("click", ignoreMi50Preset);
 els.profileImagePull.addEventListener("click", pullImage);
 // The resolved compose path is derived from the container name.
 els.profileContainerName.addEventListener("input", () => containerFields.refreshDeployPath());
-els.profileGgufDirPick.addEventListener("click", () => pickDirectory(els.profileGgufDir));
 els.profileStrataDirPick.addEventListener("click", () => pickDirectory(els.profileStrataDir));
 // The interpreter is a file: file mode, and the field may stay empty (the App
 // falls back to the system python3) or hold a bare command name.

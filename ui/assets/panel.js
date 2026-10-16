@@ -1511,7 +1511,6 @@ function ensurePluginForm() {
     imageStatus: root.querySelector("#ps-imageStatus"),
     containerName: root.querySelector("#ps-containerName"),
     // The local source's model folder / port; a container owns its own pair.
-    ggufDir: root.querySelector("#ps-ggufDir"),
     port: root.querySelector("#ps-port"),
     message: root.querySelector("#psMessage"),
   };
@@ -1576,7 +1575,6 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.imageName.value = profile?.imageName || "";
   pluginFormEls.imageTag.value = profile?.imageTag || "";
   pluginFormEls.containerName.value = profile?.containerName || "";
-  pluginFormEls.ggufDir.value = profile?.ggufDir || "";
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
   // The local override (masked when set); the source line follows it.
   pluginFormEls.localApiKey.render(profile?.apiKey || "");
@@ -1681,7 +1679,7 @@ function closeProfileDetail() {
 
 // The drawer's fields, shaped like the save route expects (mirrors the
 // settings page's profile form). The container block comes straight from the
-// shared field module; `ggufDir`/`port` belong to a local profile only (sending
+// shared field module; `port` belongs to a local profile only (sending
 // them on a container would re-trigger the legacy flat-field migration).
 function collectProfileEdits() {
   const type = pluginFormEls.type.value === "container" ? "container" : "local";
@@ -1696,7 +1694,6 @@ function collectProfileEdits() {
     body.containerName = pluginFormEls.containerName.value.trim();
     Object.assign(body, pluginFormEls.container.collect());
   } else {
-    body.ggufDir = pluginFormEls.ggufDir.value.trim();
     body.port = Number(pluginFormEls.port.value) || 0;
     body.strataDir = pluginFormEls.strataDir.value.trim();
     body.pythonPath = pluginFormEls.pythonPath.value.trim();
@@ -2094,12 +2091,22 @@ async function startConfigSetup() {
     return;
   }
   setBackupError("");
+  setGgufError("");
+  // The folder, when one was named: an absolute path is all the browser can
+  // check, and the server checks that it is really there (routes/config.js).
+  const ggufDir = collectSetupGgufDir();
+  if (ggufDir && !ggufDir.startsWith("/")) {
+    setGgufError(t("configPick.setupGgufBadPath"));
+    return;
+  }
   state.working = true;
   els.configFileSelect.disabled = true;
   els.configSetupBtn.disabled = true;
   showError("");
+  const setup = collectSetupParams();
+  if (ggufDir) setup.ggufDir = ggufDir;
   try {
-    const res = await api("config/setup", { method: "POST", body: JSON.stringify({ setup: collectSetupParams(), backupAs }) });
+    const res = await api("config/setup", { method: "POST", body: JSON.stringify({ setup, backupAs }) });
     if (res && res.running !== false) {
       showFirstRunOverlay(res, "configPick.running");
       await waitForFirstRun();
@@ -2111,6 +2118,13 @@ async function startConfigSetup() {
     const message = String(e?.message || e);
     endWorking();
     await refresh();
+    // A folder the server could not use is answered WHERE IT WAS ASKED: the
+    // dialog's own line, not the panel's #error behind the scrim.
+    const codes = Array.isArray(e?.validation) ? e.validation : [];
+    if (codes.some((c) => c.startsWith("ggufDir"))) {
+      setGgufError(t("configPick.setupGgufBadPath"));
+      return;
+    }
     showError(message);
   }
 }
@@ -2139,6 +2153,37 @@ els.configSetupBtn.addEventListener("click", () => {
   renderSetupTarget();
   fillBackupAs();
   setBackupError("");
+  fillSetupGguf();
+  // The GGUF folder for THIS run: empty is the normal case (the general default
+  // below is what setup will use). The hint says which folder that is, and the
+  // server checks that a folder the user does name really exists.
+}
+
+function fillSetupGguf() {
+  const ggufEl = document.getElementById("sp-ggufDir");
+  if (ggufEl) ggufEl.value = "";
+  renderSetupGgufDefault();
+  setGgufError("");
+}
+
+function renderSetupGgufDefault() {
+  const el = document.getElementById("sp-ggufDefault");
+  if (!el) return;
+  const dir = String(state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || "").trim();
+  el.textContent = dir ? tp("configPick.setupGgufDefault", { dir }) : t("configPick.setupGgufDownload");
+}
+
+function collectSetupGgufDir() {
+  const el = document.getElementById("sp-ggufDir");
+  return String(el?.value || "").trim();
+}
+
+function setGgufError(message) {
+  const el = document.getElementById("sp-ggufError");
+  if (!el) return;
+  el.textContent = message || "";
+  el.hidden = !message;
+}
   showConfirm({
     title: t("configPick.confirmTitle"),
     // Its own copy, not the first-launch one: this run rebuilds an EXISTING
@@ -2146,7 +2191,7 @@ els.configSetupBtn.addEventListener("click", () => {
     // writer: hand-added engine options are dropped and the file is kept as
     // .bak; top-level settings like sampling are carried over).
     sub: tp("configPick.setupSub", {
-      dir: state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
+      dir: state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
     }),
     confirmText: t("configPick.confirmAction"),
     trigger: els.configSetupBtn,
@@ -2188,7 +2233,7 @@ els.actionBtn.addEventListener("click", () => {
       showConfirm({
         title: t("firstRun.confirmTitle"),
         sub: tp("firstRun.confirmSub", {
-          dir: s.profile?.ggufDir || t("firstRun.noGgufDir"),
+          dir: state.status?.settings?.ggufDir || s.profile?.ggufDir || t("firstRun.noGgufDir"),
         }),
         confirmText: t("firstRun.confirmAction"),
         trigger: els.actionBtn,

@@ -270,9 +270,13 @@ test("the settings pull entry acquires a missing image", () => {
 // promises: local source vs container.
 test("settings page profile editor exposes type-specific fields", () => {
   const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
-  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image-name", "pf-image-tag", "pf-containerName", "pf-container-extra", "pf-ggufDir", "pf-port"]) {
+  // A local profile no longer has a model folder of its own: `pf-ggufDir` is gone
+  // (a GGUF folder is a setup input, chosen in the panel's dialog). The container
+  // side keeps its bind-mount source (`modelDir` in the shared block).
+  for (const id of ["pf-name", "pf-type", "pfLocalFields", "pfContainerFields", "pf-strataDir", "pf-pythonPath", "pf-gpu", "pf-image-name", "pf-image-tag", "pf-containerName", "pf-container-extra", "pf-port"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
   }
+  assert.doesNotMatch(html, /pf-ggufDir/, "the local model-folder field is gone");
   // Delete still goes through an explicit confirmation step.
   for (const id of ["profileConfirm", "profileConfirmOk", "profileConfirmCancel"]) {
     assert.match(html, new RegExp(`id="${id}"`), `settings.html must contain #${id}`);
@@ -456,8 +460,11 @@ test("the page names its two layers: the global layer vs the environments", asyn
   for (const lang of LANGS) {
     assert.ok(!profileWord.test(STRINGS[lang]["settings.general"]), `${lang}: the global layer is not an environment`);
     assert.ok(profileWord.test(STRINGS[lang]["profile.manage"]), `${lang}: the other layer IS the environments`);
-    for (const key of ["settings.defaultGgufDirHint", "settings.defaultPortHint", "settings.apiKeyHint"]) {
-      assert.match(STRINGS[lang][key], profileWord, `${lang}.${key} must read as a fallback for a profile`);
+    // The model-folder default is a SETUP fallback now (a profile no longer names
+    // one); the port and the key are still profile fallbacks.
+    assert.match(STRINGS[lang]["settings.defaultGgufDirHint"], /setup/i, `${lang}.settings.defaultGgufDirHint must say what it falls back for`);
+    for (const key of ["settings.defaultPortHint", "settings.apiKeyHint"]) {
+      assert.match(STRINGS[lang][key], profileWord, `${lang}.${key} must say it is a fallback for a profile`);
     }
     // The one-liner must name BOTH kinds it holds: the fallbacks, and the app's own
     // behaviour (both languages name Hana for the latter).

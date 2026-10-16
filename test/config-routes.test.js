@@ -335,7 +335,7 @@ test("the panel wires the two config routes without a second progress contract",
   assert.match(js, /api\("config\/select", \{ method: "POST", body: JSON\.stringify\(\{ file \}\) \}\)/);
   // "Run setup" reuses the shared first-run overlay + GET /start polling, and
   // carries the parameters the user asked to change (the popover's form).
-  assert.match(js, /api\("config\/setup", \{ method: "POST", body: JSON\.stringify\(\{ setup: collectSetupParams\(\), backupAs \}\) \}\)/);
+  assert.match(js, /api\("config\/setup", \{ method: "POST", body: JSON\.stringify\(\{ setup, backupAs \}\) \}\)/);
   assert.match(js, /showFirstRunOverlay\(res, "configPick\.running"\)/);
   assert.match(js, /await waitForFirstRun\(\)/);
   // No bespoke progress route was introduced.
@@ -561,7 +561,9 @@ test("the backup field is optional, validated in the dialog, and copied under th
   assert.doesNotMatch(js.slice(js.indexOf("async function startConfigSetup"), js.indexOf("async function startConfigSetup") + 900), /showError\(t\("configPick\.backupBadName"\)\)/);
   // It is sent as `backupAs`, separate from the setup parameters, and never as a
   // setup flag (setup.py has no target-name argument).
-  assert.match(js, /JSON\.stringify\(\{ setup: collectSetupParams\(\), backupAs \}\)/);
+  assert.match(js, /JSON\.stringify\(\{ setup, backupAs \}\)/);
+  // The GGUF folder rides in the same `setup` object (it is a setup param now).
+  assert.match(js, /if \(ggufDir\) setup\.ggufDir = ggufDir;/);
   const firstrun = fs.readFileSync(path.join(ROOT, "lib/firstrun.js"), "utf8");
   assert.doesNotMatch(firstrun, /backupAs/);
 });
@@ -612,4 +614,105 @@ test("the backup copy reads in both states (prefilled default / cleared) in six 
     // The placeholder stays a SHAPE (it must not age into a wrong example date).
     assert.match(STRINGS[lang]["configPick.backupPlaceholder"], /YYYYMMDD/, `${lang}.backupPlaceholder must show the shape`);
   }
+});
+
+// ── the GGUF folder: a per-run input, not a profile field ─────────────────
+
+import { checkGgufDir } from "../routes/config.js";
+
+test("a GGUF folder is only accepted when it is really there", () => {
+  const dir = tmpDir();
+  const file = path.join(dir, "a.json");
+  fs.writeFileSync(file, "{}");
+  // Empty = the general default, then a download: not an error.
+  assert.equal(checkGgufDir({}, ""), null);
+  assert.equal(checkGgufDir({}, undefined), null);
+  // A relative path is refused (setup resolves it against its own cwd, which is
+  // not what the user is looking at).
+  assert.equal(checkGgufDir({}, "models/IQ3_S"), "ggufDirNotAbsolute");
+  // Missing, or not a directory.
+  assert.equal(checkGgufDir({}, path.join(dir, "nope")), "ggufDirMissing");
+  assert.equal(checkGgufDir({}, file), "ggufDirNotDir");
+  // A readable directory is the only thing that passes.
+  assert.equal(checkGgufDir({}, dir), null);
+});
+
+test("startConfigSetup refuses an unusable GGUF folder without starting a job", async () => {
+  resetFirstRunState();
+  const dir = makeLocalDir();
+  const ctx = localCtx(dir);
+  let spawned = false;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-a.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: () => {
+      spawned = true;
+      throw new Error("must not run");
+    },
+  };
+  await assert.rejects(() => startConfigSetup(ctx, { io, platform: "linux", setup: { ggufDir: path.join(dir, "nope") } }), /GGUF/);
+  assert.equal(spawned, false, "the job never started");
+  assert.equal(getFirstRunState().running, false);
+  await assert.rejects(() => startConfigSetup(ctx, { io, platform: "linux", setup: { ggufDir: "relative/dir" } }), /GGUF/);
+});
+
+test("the GGUF folder the dialog names is what setup is given", async () => {
+  resetFirstRunState();
+  const dir = makeLocalDir();
+  const models = tmpDir();
+  const ctx = localCtx(dir);
+  let spawnedArgs = null;
+  const io = {
+    getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "", configFile: "strata-a.json" }),
+    saveSelectedConfig: async () => {},
+    sleep: async () => {},
+    spawn: (cmd, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        fs.writeFileSync(path.join(dir, "strata-b.json"), JSON.stringify({ port: 59994 }));
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  };
+  const res = await startConfigSetup(ctx, { io, platform: "linux", setup: { ggufDir: models } });
+  assert.equal(res.plan.ggufDir, models, "the plan carries the folder this run asked for");
+  assert.equal(res.plan.mayDownload, false, "and no download is expected");
+  const at = spawnedArgs.indexOf("--gguf-dir");
+  assert.ok(at >= 0, "--gguf-dir is passed");
+  assert.equal(spawnedArgs[at + 1], models);
+  // Exactly once: the params loop must not add a second pair.
+  assert.equal(spawnedArgs.filter((a) => a === "--gguf-dir").length, 1);
+  const deadline = Date.now() + 3000;
+  while (!getFirstRunState().done && !getFirstRunState().error && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  assert.equal(getFirstRunState().error, null);
+});
+
+test("the setup dialog has the GGUF folder field, empty, with the default named", () => {
+  const html = fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8");
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  const form = html.slice(html.indexOf('id="setupParams"'), html.indexOf("confirm-popover-actions"));
+  assert.match(form, /id="sp-ggufDir"/);
+  assert.ok(form.indexOf('id="sp-ggufDir"') < form.indexOf('id="sp-vision"'), "it leads the parameters");
+  assert.match(form, /id="sp-ggufDir"[^>]*data-i18n-placeholder="configPick\.setupGgufPlaceholder"/);
+  assert.match(form, /id="sp-ggufDefault"/, "the fallback folder is named under it");
+  assert.match(form, /id="sp-ggufError"/, "and a refusal shows in the dialog");
+  // Empty on open: the value is the general default, so the field must not be
+  // prefilled with it (that would look like this run's answer).
+  assert.match(js, /function fillSetupGguf\(\)/);
+  assert.match(js, /ggufEl\.value = "";/);
+  assert.match(js, /tp\("configPick\.setupGgufDefault", \{ dir \}\)/);
+  assert.match(js, /t\("configPick\.setupGgufDownload"\)/);
+  // A relative path is refused client-side; the server checks existence.
+  assert.match(js, /if \(ggufDir && !ggufDir\.startsWith\("\/"\)\)/);
+  assert.match(js, /codes\.some\(\(c\) => c\.startsWith\("ggufDir"\)\)/);
+  assert.doesNotMatch(html, /data-setup="ggufDir"/, "it is not one of the enum selects");
 });

@@ -121,17 +121,11 @@
             <span data-i18n="field.gpu">GPU selector (optional)</span>
             <input id="pf-gpu" type="text" autocomplete="off" spellcheck="false" placeholder="0,2 / all" data-i18n-placeholder="field.gpuPlaceholder">
           </label>
-          <!-- The local source's model folder and its own port. A container has
-               its own host-model / container-path / engine-port pair, rendered
-               by the shared field module into #pf-container-extra below. -->
-          <label class="field" for="pf-ggufDir">
-            <span data-i18n="field.ggufDir">GGUF model directory</span>
-            <input id="pf-ggufDir" type="text" autocomplete="off" spellcheck="false" placeholder="/models/UD-Q4_K_XL" data-i18n-placeholder="field.ggufDirPlaceholder">
-            <div class="field-inline">
-              <button id="pf-ggufDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
-            </div>
-            <span class="field-hint" data-i18n="field.ggufDirHint">Leave empty to download on first start</span>
-          </label>
+          <!-- The local source's own port. The model folder is NOT here: a GGUF
+               folder is an input to a setup run, chosen in the panel's
+               「运行 setup…」 dialog (or left to the general default). A container
+               keeps its own host-model / container-path pair below, because that
+               IS its environment (a bind-mount source). -->
           <label class="field" for="pf-port">
             <span data-i18n="field.port">Port (0 = auto)</span>
             <input id="pf-port" type="number" min="0" max="65535" step="1">
