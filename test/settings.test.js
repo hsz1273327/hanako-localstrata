@@ -430,3 +430,46 @@ test("read-only view i18n keys exist in every locale", () => {
     }
   }
 });
+
+// ── the page's two layers ─────────────────────────────────────────────────
+
+// 「全局」 holds TWO kinds of thing, and they are the same kind of thing: things
+// that are not an environment. (1) the FALLBACKS a profile may leave empty — the
+// default model directory, the default port, the global API key (which
+// lib/profiles.js:68 calls exactly that: `profile.apiKey → global defaultApiKey →
+// …`), and (2) this app's own BEHAVIOUR — start with Hana, refresh interval. The
+// other section, 「环境配置」, is the environments. Naming the layers is what keeps
+// "default model directory" from reading as "the environment's model directory".
+test("the page names its two layers: the global layer vs the environments", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  const html = fs.readFileSync(path.join(ROOT, "ui/settings.html"), "utf8");
+  const titles = [...html.matchAll(/class="group-title" data-i18n="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(titles, ["settings.general", "profile.manage"], "one global layer, one environment layer");
+  for (const [nameKey, hintKey] of [
+    ["settings.general", "settings.generalHint"],
+    ["profile.manage", "profile.manageHint"],
+  ]) {
+    assert.match(html, new RegExp(`data-i18n="${nameKey}"`), `${nameKey} must be the section's name`);
+    assert.match(html, new RegExp(`data-i18n="${hintKey}"`), `${hintKey} must explain what is in it`);
+  }
+  const profileWord = /profile|profil|профил|프로필|プロファイル|配置/i;
+  for (const lang of LANGS) {
+    assert.ok(!profileWord.test(STRINGS[lang]["settings.general"]), `${lang}: the global layer is not an environment`);
+    assert.ok(profileWord.test(STRINGS[lang]["profile.manage"]), `${lang}: the other layer IS the environments`);
+    for (const key of ["settings.defaultGgufDirHint", "settings.defaultPortHint", "settings.apiKeyHint"]) {
+      assert.match(STRINGS[lang][key], profileWord, `${lang}.${key} must read as a fallback for a profile`);
+    }
+    // The one-liner must name BOTH kinds it holds: the fallbacks, and the app's own
+    // behaviour (both languages name Hana for the latter).
+    const hint = STRINGS[lang]["settings.generalHint"];
+    assert.ok(profileWord.test(hint), `${lang}.settings.generalHint: the fallback kind`);
+    assert.match(hint, /Hana/, `${lang}.settings.generalHint: the behaviour kind`);
+  }
+  // The behaviour fields are NOT split into a section of their own: they sit in the
+  // same layer as the defaults, which is what the name covers.
+  const general = html.slice(html.indexOf('data-i18n="settings.general"'), html.indexOf('data-i18n="profile.manage"'));
+  for (const id of ["autoStart", "refreshSec", "apiKey", "defaultGgufDir", "defaultPort"]) {
+    assert.match(general, new RegExp(`id="${id}"`), `#${id} belongs to the global layer`);
+  }
+  assert.equal((html.match(/class="group-title"/g) || []).length, 2, "and there are exactly two layers");
+});

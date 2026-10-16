@@ -17,6 +17,9 @@
     <!-- 常规：随 Hana 启动 / 刷新间隔 / Strata API Key / 默认模型目录 / 默认端口 -->
     <section class="group-box">
       <h2 class="group-title" data-i18n="settings.general">General</h2>
+      <!-- 这一层是「全局」：兜底（某个 profile 没填时用）+ 机制（应用自身行为）。
+           下面那一段是「环境配置」，即每套 profile 自己。 -->
+      <p class="field-hint" data-i18n="settings.generalHint">Defaults and app behaviour</p>
 
       <label class="field field-row" for="autoStart">
         <span class="field-label" data-i18n="settings.autoStart">Start with Hana</span>
