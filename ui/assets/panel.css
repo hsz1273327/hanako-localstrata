@@ -319,6 +319,21 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
+/* "现在读的是 X" — the CURRENT value of an editable field, shown while the field is
+ * being edited. It is NOT .field-default (that one asks "what happens if you leave
+ * this empty": a default, about the future) and it is NOT .cf-readonly-item (that
+ * one means "this cannot be changed at all": this field can, it is the field's own
+ * value). Same size as the default line, but the value reads as data. */
+.field-current {
+  font-size: 11px;
+  color: var(--text-muted, #8e9196);
+}
+
+.field-current code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
 /* A READ-ONLY ITEM: a report, not a control. One neutral block style for every
  * such row (the KV streaming state, the local 视觉 report), so "this cannot be
  * pushed" is visible at a glance — a plain rule and a faint ground, no colour

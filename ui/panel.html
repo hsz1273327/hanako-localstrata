@@ -149,6 +149,26 @@
         <p class="field-hint muted" data-i18n="edit.causalityNote">Edits write into this config</p>
         <!-- 主题成组：一个组 = 一个主题，不再有「启动参数」这种零区分度的名字
              （所有项都是启动参数）。每个组内：只读报告在可改字段之前。 -->
+        <!-- WHERE THIS CONFIG READS ITS MODEL FROM. One field, three paths: `--native`
+             (shard 1), `--ple-gguf` (the PLE table's shard) and `vision.model` (shard 1
+             again) all name the same set, so a change rewrites all three.
+             NOT the same thing as the setup dialog's "GGUF directory": that one is the
+             INPUT of the next setup run (where setup should take the model from), this
+             one is what THIS config reads right now — restart to apply. -->
+        <fieldset class="group">
+          <legend><span data-i18n="edit.modelLegend">Model</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <label class="field"><span data-i18n="edit.modelDirLabel">Model directory (shards)</span>
+            <input id="ed-modelDir" data-key="modelDir" type="text" autocomplete="off" spellcheck="false">
+            <span class="field-hint muted" data-i18n="edit.modelDirHint">Only the shards move</span>
+            <!-- The CURRENT value, not a default: this answers "what is the file reading
+                 now?" while the field is being changed. NOT .field-default (which asks
+                 "what happens if you leave this empty") and NOT .cf-readonly-item (this
+                 value CAN be changed — it is the field's own). -->
+            <span class="field-current"><span data-i18n="edit.modelDirCurrent">Now reading</span> <code id="ed-modelDirNow"></code></span>
+            <span class="field-current muted" id="ed-modelDirFile"></span>
+          </label>
+        </fieldset>
+
         <fieldset class="group">
           <legend><span data-i18n="edit.kvLegend">KV cache</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
           <label class="field"><span data-i18n="edit.context">Context length</span>

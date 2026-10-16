@@ -104,6 +104,8 @@ const els = {
   diffBox: document.getElementById("diffBox"),
   diffList: document.getElementById("diffList"),
   editMessage: document.getElementById("editMessage"),
+  modelDirNow: document.getElementById("ed-modelDirNow"),
+  modelDirFile: document.getElementById("ed-modelDirFile"),
 };
 
 const state = {
@@ -1286,6 +1288,21 @@ function fillEditForm(values) {
     el.value = v === undefined || v === null ? "" : String(v);
   }
   state.formFilled = true;
+  renderModelDirNow(values);
+}
+
+// The model group's read-only item reports the CURRENT value (the config's own
+// `--native`), never the input: it answers "what is this file reading now?" while
+// the user is changing it. Unlike `.field-default` this is not a "what happens if
+// you leave it empty" note — it follows the loaded config, not the field.
+function renderModelDirNow(values) {
+  if (!els.modelDirNow || !els.modelDirFile) return;
+  const dir = values?.modelDir;
+  const file = values?.modelFile;
+  els.modelDirNow.textContent = isAbsent(dir) ? "—" : String(dir);
+  els.modelDirFile.textContent = isAbsent(file)
+    ? ""
+    : tp("edit.modelDirFile", { file: String(file).split(/[\\/]/).pop() });
 }
 
 // "—" for a value that is not there (as opposed to the literal empty string).
@@ -1450,7 +1467,13 @@ async function save() {
     const result = await api("settings", { method: "POST", body: JSON.stringify({ edits }) });
     applySaveResult(result);
   } catch (e) {
-    setMessage(String(e?.message || e), "error");
+    // A refused model directory is answered where it was asked: the panel's own
+    // message line, translated from the server's code (the write layer attaches
+    // `modelDir*` codes so the copy can name the fix, e.g. the shard count).
+    const code = (Array.isArray(e?.validation) ? e.validation : []).find((c) =>
+      String(c).startsWith("modelDir"),
+    );
+    setMessage(code ? t(`edit.${code}`) : String(e?.message || e), "error");
   } finally {
     state.working = false;
     await refresh();
