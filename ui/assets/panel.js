@@ -1971,6 +1971,21 @@ async function selectConfigFile(file) {
 // This is THE "re-run setup to change settings" entry — with the boundary the
 // copy states: it rebuilds from setup's recommended answers, so a specific
 // setting means running setup.py with its flag.
+// Which config file this run will write — said out loud, because it is the one
+// thing about "Run setup…" a reader cannot see anywhere else.
+//
+// setup.py derives it (`tag = fam["tag"] + model` → `ROOT / f"strata-{tag}.json"`,
+// setup.py:5034 / :5507) and takes NO name argument (there is no --config/--name),
+// so we do not pretend to offer one: we name the expected file instead — the
+// current one, since this form cannot change the model — and state the rule for
+// the other case (a different family/size = a NEW file).
+function renderSetupTarget() {
+  const el = document.getElementById("setupTargetFile");
+  if (!el) return;
+  const file = state.config?.configFile || state.status?.configFile || "";
+  el.textContent = file ? tp("configPick.targetNow", { file }) : t("configPick.targetUnknown");
+}
+
 // ── the setup parameters (what a "Run setup…" should change) ───────────────
 //
 // Only setup can set these (the engine does not know `--vision`-as-a-choice,
@@ -2082,6 +2097,7 @@ els.configSetupBtn.addEventListener("click", () => {
   for (const select of setupSelects()) fillSetupOptions(select);
   const current = currentSetupValues();
   for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
+  renderSetupTarget();
   showConfirm({
     title: t("configPick.confirmTitle"),
     // Its own copy, not the first-launch one: this run rebuilds an EXISTING

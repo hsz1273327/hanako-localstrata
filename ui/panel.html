@@ -335,6 +335,14 @@
            run should change. Prefilled with the current values, so leaving one
            alone keeps it; picking "— setup decides —" takes it out of the command. -->
       <div id="setupParams" class="confirm-popover-body" hidden>
+        <!-- Where this run will write, said out loud: setup derives the name from the
+             model's family + size (setup.py:5034/5507), so it cannot be named here —
+             the line says what that means instead of hiding it. -->
+        <div class="cf-readonly-item">
+          <span class="cf-readonly-label" data-i18n="configPick.targetLabel">Config it will write</span>
+          <span class="field-hint cf-readonly" id="setupTargetFile"></span>
+          <span class="field-hint muted" data-i18n="configPick.targetRule">setup derives the name</span>
+        </div>
         <p class="field-hint muted" id="setupParamsHint" data-i18n="configPick.setupParamsHint">Only setup can set these</p>
         <label class="field"><span data-i18n="field.vision">Vision</span>
           <select id="sp-vision" data-setup="vision"></select>

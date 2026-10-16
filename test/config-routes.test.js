@@ -413,3 +413,43 @@ test("the routes refuse a running service and non-local profiles", () => {
   assert.match(src, /validateSetupParams\(opts\.setup\)/);
   assert.match(src, /beginFirstRun\(ctx, \{ \.\.\.opts, setup: clean, force: true, startAfter: false \}\)/);
 });
+
+// ── where a "Run setup…" writes ───────────────────────────────────────────
+
+// setup.py derives the config file name (`tag = fam["tag"] + model` → 
+// `ROOT / f"strata-{tag.lower()}.json"`, setup.py:5034 / :5507) and takes NO name
+// argument (there is no --config/--name/--out). So the dialog must SAY where it
+// will write instead of offering a knob that cannot work — and it must say the
+// rule for the one case that produces a second file (another family or size).
+test("the setup dialog says which config file it will write", () => {
+  const html = fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8");
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  assert.match(html, /id="setupTargetFile"/, "the dialog names the target file");
+  // Before the parameter fields: what will happen, then what can be set.
+  const form = html.slice(html.indexOf('id="setupParams"'), html.indexOf("confirm-popover-actions"));
+  assert.ok(form.indexOf('id="setupTargetFile"') < form.indexOf('id="sp-vision"'), "and before the fields");
+  // Filled from the REAL selection, never invented.
+  assert.match(js, /state\.config\?\.configFile \|\| state\.status\?\.configFile/);
+  assert.match(js, /tp\("configPick\.targetNow", \{ file \}\)/);
+  assert.match(js, /t\("configPick\.targetUnknown"\)/);
+  // No name field, and no target flag invented for setup.py.
+  assert.doesNotMatch(html, /data-setup="fileName"|id="sp-configName"/);
+  const firstrun = fs.readFileSync(path.join(ROOT, "lib/firstrun.js"), "utf8");
+  assert.doesNotMatch(firstrun, /"--config"|"--name"/, "setup takes no target name");
+});
+
+test("the target copy exists in six locales and states both cases", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  for (const lang of LANGS) {
+    for (const key of ["configPick.targetLabel", "configPick.targetNow", "configPick.targetUnknown", "configPick.targetRule"]) {
+      assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
+    }
+    // The same-file case takes the real name, and says the old contents are kept.
+    assert.match(STRINGS[lang]["configPick.targetNow"], /\{file\}/, `${lang}.targetNow must interpolate the name`);
+    assert.match(STRINGS[lang]["configPick.targetNow"], /\.bak/, `${lang}.targetNow must mention the backup`);
+    // The rule: derived by setup, cannot be set here, and another family/size
+    // writes a NEW file.
+    assert.match(STRINGS[lang]["configPick.targetRule"], /strata-/, `${lang}.targetRule must show the name shape`);
+    assert.match(STRINGS[lang]["configPick.targetRule"], /setup/, `${lang}.targetRule must name who derives it`);
+  }
+});
