@@ -47,22 +47,37 @@ function readOnlyBlocks(html) {
   return out;
 }
 
-test("the KV streaming report is a read-only item, first in its group", () => {
-  const bodies = groupBodies();
-  const kv = bodies.find((b) => b.includes('data-i18n="edit.kvLegend"'));
-  assert.ok(kv, "the KV group exists");
-  const blocks = readOnlyBlocks(kv);
-  assert.equal(blocks.length, 1, "one read-only item in the KV group");
-  const firstKey = kv.indexOf('data-key="');
-  assert.ok(blocks[0].start < firstKey, "it comes before every editable field of the group");
-  // A report, not a control: nothing to type into.
-  assert.doesNotMatch(blocks[0].text, /data-key=|<input|<select|<textarea/, "no control inside");
-  // It keeps its label and its per-field annotation.
-  assert.match(blocks[0].text, /cf-readonly-label/);
-  assert.match(blocks[0].text, /data-i18n="edit\.needsSetup"/);
+test("the params groups hold editable fields, and the reports moved to 表一", () => {
+  // The read-only rows used to sit at the head of the KV / experts groups. They
+  // are setup's handwriting, so they now live together in the setup-facts table,
+  // which comes before its picker and its button (read-only first).
+  for (const body of groupBodies()) {
+    const legend = (body.match(/data-i18n="(edit\.[a-zA-Z]*Legend)"/) || [])[1] || "?";
+    assert.equal(readOnlyBlocks(body).length, 0, `${legend} must hold no read-only item`);
+  }
+  const html = read("ui/panel.html");
+  const table = html.indexOf('id="setupFactsBox"');
+  assert.ok(table > 0, "the setup-facts table exists");
+  assert.ok(table < html.indexOf('id="configFileSelect"'), "and comes before the config picker");
+  assert.ok(table < html.indexOf('id="configSetupBtn"'), "and before the setup button");
+  assert.match(html, /id="setupFactsBox" class="cf-readonly-item"/, "it IS a read-only item");
+  // Its rows come from one list, so the table and the reports cannot drift.
+  const js = read("ui/assets/panel.js");
+  assert.match(js, /const SETUP_FACT_ROWS = \[/);
+  for (const key of ["setupFacts.model", "setupFacts.backend", "setupFacts.gpu", "edit.lowRam", "edit.kvStream"]) {
+    assert.ok(js.includes(key), `${key} must be one of the rows`);
+  }
+  // 视觉 is deliberately NOT in the table: it belongs to the 本机 block, which the
+  // settings page shows too (the table is panel-only).
+  const rows = js.slice(js.indexOf("const SETUP_FACT_ROWS"), js.indexOf("]", js.indexOf("const SETUP_FACT_ROWS")));
+  assert.doesNotMatch(rows, /vision/i);
+  assert.match(read("ui/settings.html"), /id="pf-local-vision"/, "视觉 still has its home on the settings page");
+  assert.match(read("ui/panel.html"), /id="ps-local-vision"/);
 });
 
-test("no other params group has a read-only item after an editable field", () => {
+test("no params group has a read-only item after an editable field", () => {
+  // Vacuous while every report lives in 表一 — kept as the standing rule for the
+  // day one comes back.
   for (const body of groupBodies()) {
     const legend = (body.match(/data-i18n="(edit\.[a-zA-Z]*Legend)"/) || [])[1] || "?";
     const firstKey = body.indexOf('data-key="');
@@ -79,7 +94,6 @@ test("the local 视觉 report is mounted at the top of its block, on both pages"
   ];
   for (const [file, mountId, blockId] of pages) {
     const html = read(file);
-    const block = html.slice(html.indexOf(`id="${blockId}"`), html.indexOf(`id="${mountId}"`) + 200);
     assert.ok(html.includes(`id="${mountId}"`), `${file} needs the mount point`);
     // The mount point is a child of the block, before its first input.
     const mountAt = html.indexOf(`id="${mountId}"`);
@@ -87,7 +101,6 @@ test("the local 视觉 report is mounted at the top of its block, on both pages"
     const firstInput = html.indexOf("<input", blockAt);
     assert.ok(blockAt < mountAt, `${mountId} must be inside ${blockId}`);
     assert.ok(mountAt < firstInput, `${file}: the read-only mount must precede the block's first editable field`);
-    assert.ok(block.includes(mountId));
   }
   // The API key (editable) keeps its own mount point, below the fields.
   assert.match(read("ui/panel.html"), /id="ps-local-extra"/);
@@ -129,7 +142,7 @@ test("the read-only style is described once, in both sheets", async () => {
   const { STRINGS } = await import("../ui/assets/i18n.js");
   // The block carries copy the user already has (labels/announcements); no new
   // string was needed for the rule itself.
-  for (const key of ["edit.kvStream", "edit.kvStreamHint", "edit.needsSetup", "field.vision"]) {
+  for (const key of ["edit.kvStream", "edit.kvStreamHint", "setupFacts.title", "field.vision"]) {
     assert.ok(String(STRINGS.zh[key] || "").length > 0, `${key} missing`);
   }
   for (const html of ["ui/panel.html", "ui/settings.html"]) {

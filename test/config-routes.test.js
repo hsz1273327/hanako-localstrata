@@ -342,6 +342,41 @@ test("the panel wires the two config routes without a second progress contract",
   assert.doesNotMatch(js, /config\/setup\/progress|config\/setup\/log/);
 });
 
+test("the setup confirmation is modal: a scrim blocks the panel behind it", () => {
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  const html = fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "ui/assets/panel.css"), "utf8");
+  // The element, in the popover's own layer order (scrim first, dialog above it).
+  const scrimAt = html.indexOf('id="confirmScrim"');
+  assert.ok(scrimAt > 0, "the scrim exists");
+  assert.ok(scrimAt < html.indexOf('id="confirmPopover"'), "and sits before the dialog in the layer");
+  assert.match(css, /\.confirm-scrim \{[^}]*position: fixed;[^}]*inset: 0;/s, "it covers the panel");
+  // Same language as the drawer's scrim: a dim plus a hint of blur, and BELOW the
+  // popover (200) so the dialog itself stays readable and clickable.
+  const rule = css.match(/\.confirm-scrim \{([\s\S]*?)\}/)[1];
+  assert.match(rule, /background: rgba\(0, 0, 0/);
+  const scrimZ = Number(rule.match(/z-index: (\d+)/)[1]);
+  const popoverZ = Number(css.match(/\.confirm-popover \{([\s\S]*?)\}/)[1].match(/z-index: (\d+)/)[1]);
+  assert.ok(scrimZ < popoverZ, `the scrim (${scrimZ}) must sit below the dialog (${popoverZ})`);
+  // Shown and hidden WITH the dialog, and never left behind.
+  assert.match(js, /els\.confirmScrim\.hidden = false/);
+  assert.match(js, /els\.confirmScrim\.hidden = true/);
+  assert.match(js, /confirmScrim: document\.getElementById\("confirmScrim"\)/);
+  // A click on the scrim must NOT reach the panel, and must NOT cancel either:
+  // this dialog guards a heavy operation and may hold a half-filled form.
+  const pointerdown = js.slice(js.indexOf("function confirmDocPointerDown"), js.indexOf("// Place the popover right-aligned"));
+  assert.match(pointerdown, /ev\.target === els\.confirmScrim\) return;/, "the scrim swallows the click");
+  assert.equal(/closeConfirm\(\)/.test(pointerdown.split("confirmScrim")[0]), false, "nothing closes before that check");
+  // Esc does not dismiss it either (same reason): the Escape handler belongs to
+  // the profile drawer only.
+  const esc = js.slice(js.indexOf('e.key === "Escape"'), js.indexOf('e.key === "Escape"') + 200);
+  assert.match(esc, /profileDrawer/);
+  assert.doesNotMatch(esc, /confirm/i);
+  // It is announced as a modal dialog while it is open.
+  assert.match(js, /setAttribute\("aria-modal", "true"\)/);
+  assert.match(js, /setAttribute\("aria-modal", "false"\)/);
+});
+
 test("the /config routes are mounted and answer 400 on a bad selection", async () => {
   const dir = makeLocalDir();
   const ctx = localCtx(dir);

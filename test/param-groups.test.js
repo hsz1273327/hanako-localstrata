@@ -78,12 +78,10 @@ test("context is a KV subject; the KV flags share one group and are not scattere
   for (const key of ["context", "kv", "sessionCache"]) {
     assert.ok(kv.keys.includes(key), `${key} belongs to the KV group`);
   }
-  // … and --kv-resident (the report line) …
-  assert.ok(kv.ids.includes("edit-kvResident"), "the streaming report is in the same group");
-  assert.match(kv.text, /edit\.kvStreamHint/, "with the reason it cannot be edited here");
-  // … and --kv-streaming, whose effect annotation is per field.
-  assert.match(kv.text, /data-i18n="edit\.needsSetup"/, "the streaming row is annotated 'needs setup'");
-  assert.match(kv.text, /data-i18n="edit\.needsRestart"/, "while the fields themselves need a restart");
+  // The group holds editable fields ONLY: the streaming report moved to the
+  // setup-facts table (it is setup's handwriting, not a parameter).
+  assert.doesNotMatch(kv.text, /cf-readonly-item|edit-kvResident|edit\.kvStream/, "no report left in the group");
+  assert.doesNotMatch(kv.text, /data-i18n="edit\.needsSetup"/);
 
   // The subject is whole: no other group mentions KV.
   for (const other of g.filter((x) => x !== kv)) {
@@ -147,15 +145,19 @@ test("no default is ever prefilled, and the write layer is untouched", async () 
   assert.deepEqual(filled.payload, { residentBudget: 48 }, "a real value still gets written");
 });
 
-test("the read-only low-RAM report is not a parameter", () => {
+test("the two setup-only reports left the params groups for the setup-facts table", () => {
   const g = groups();
   const experts = g.find((x) => x.legend === "edit.expertsLegend");
   assert.ok(experts, "the experts group exists");
   // The mode is setup's translation of its own `--low-ram` into the pair the
-  // engine knows (setup.py:5364), so it is reported, never written.
-  assert.ok(experts.ids.includes("edit-lowRamMode"), "the mode is reported in the group");
+  // engine knows (setup.py:5364), so it is REPORTED — now in 表一, next to the
+  // entry that can change it, with the params group holding editable fields only.
+  assert.doesNotMatch(experts.text, /cf-readonly-item|edit-lowRamMode|edit\.lowRamHint/, "no report left in the group");
   assert.equal(experts.keys.includes("lowRam") || /data-key="lowRam"/.test(experts.text), false, "and nothing writes it");
-  assert.match(read("ui/assets/panel.js"), /renderLowRamMode/, "the panel drives the report");
+  const js = read("ui/assets/panel.js");
+  assert.match(js, /renderLowRamMode/, "the panel drives the report");
+  assert.match(js, /SETUP_FACT_ROWS/, "inside the setup-facts table");
+  assert.match(read("ui/panel.html"), /id="setupFactsBox"/);
 });
 
 test("the default copy exists in six locales, and never invents a number", async () => {
@@ -199,13 +201,15 @@ test("no group introduces a second level of folding", () => {
 test("every group name is a subject, present in all six locales", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
   const legends = ["edit.kvLegend", "edit.expertsLegend", "edit.draftLegend", "edit.samplingLegend", "edit.sharedLegend"];
-  const added = ["edit.kvLegend", "edit.kvStream", "edit.needsSetup", "edit.draftLegend", "edit.mtpHint", "edit.contextDefaultNote"];
+  const added = ["edit.kvLegend", "edit.kvStream", "edit.draftLegend", "edit.mtpHint", "edit.contextDefaultNote", "setupFacts.title", "setupFacts.model", "setupFacts.backend", "setupFacts.gpu"];
   for (const lang of LANGS) {
     for (const key of [...legends, ...added]) {
       assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
     }
     // "needs setup" is its own annotation, not a synonym of "needs restart".
-    assert.notEqual(STRINGS[lang]["edit.needsSetup"], STRINGS[lang]["edit.needsRestart"], `${lang} must distinguish them`);
+    // The "needs setup" annotation is gone from the params groups (the reports,
+    // and that annotation with them, moved into the setup-facts table).
+    assert.equal(STRINGS[lang]["edit.needsSetup"], undefined, `${lang} must not carry a stale annotation`);
     // The KV group's own field label must be there too.
     assert.ok(String(STRINGS[lang]["edit.kvStream"] || "").length > 0, `${lang}.edit.kvStream`);
   }

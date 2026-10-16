@@ -87,9 +87,10 @@ test("neither the switch nor the window is an edit key", () => {
   const html = read("ui/panel.html");
   assert.doesNotMatch(html, /data-key="kvResident"/, "no window field");
   assert.doesNotMatch(html, /data-key="kvStreaming"/, "no streaming field");
-  // But the state line and the reason are on the page.
-  assert.match(html, /id="edit-kvResident"/);
-  assert.match(html, /data-i18n="edit\.kvStreamHint"/);
+  // The state line and the reason live in the setup-facts table (表一), built from
+  // SETUP_FACT_ROWS at runtime — the params groups hold editable fields only.
+  assert.match(html, /id="setupFactsBox"/);
+  assert.match(js, /\{ label: "edit\.kvStream", value: "edit-kvResident", hint: "edit\.kvStreamHint" \}/);
 });
 
 test("a config that streams keeps its window through an unrelated edit", () => {

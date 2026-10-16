@@ -98,6 +98,10 @@
     <!-- ②b 配置文件（仅本机 · 停机时可见）：选一份已有配置，或跑一次 setup 新建 -->
     <section class="group-box" id="configPickBox" hidden>
       <h2 class="group-title" data-i18n="configPick.title">Config file</h2>
+      <!-- 表一：这份 config 是怎么被造出来的（只读）。按通则排在可选/可操作控件
+           之前：先看到现在实际是什么，再看到能改什么。视觉不在这里——它属于
+           「本机」块（设置页也要看得到这个安装的视觉构建）。 -->
+      <div id="setupFactsBox" class="cf-readonly-item" hidden></div>
       <div class="config-pick">
         <select id="configFileSelect" class="config-pick-select" aria-label="Config file" data-i18n-aria-label="configPick.selectLabel"></select>
         <button id="configSetupBtn" class="btn small" type="button" data-i18n="configPick.new">New config…</button>
@@ -148,15 +152,6 @@
              （所有项都是启动参数）。每个组内：只读报告在可改字段之前。 -->
         <fieldset class="group">
           <legend><span data-i18n="edit.kvLegend">KV cache</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
-          <!-- Read-only first: what is in effect, then what can be changed. The
-               engine knows no `--kv-streaming`, and setup writes `--kv-resident`
-               itself on its (context, kv, RAM) rule. -->
-          <div class="cf-readonly-item">
-            <span class="cf-readonly-label" data-i18n="edit.kvStream">KV streaming</span>
-            <span class="field-hint cf-readonly" id="edit-kvResident"></span>
-            <span class="note" data-i18n="edit.needsSetup">setup re-run required</span>
-            <span class="field-hint muted" data-i18n="edit.kvStreamHint">Decided by setup</span>
-          </div>
           <label class="field"><span data-i18n="edit.context">Context length</span>
             <select id="ed-context" data-key="context">
               <option value="8192">8192</option>
@@ -189,16 +184,6 @@
 
         <fieldset class="group">
           <legend><span data-i18n="edit.expertsLegend">Experts &amp; memory</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
-          <!-- Read-only first. The mode is expressed in the config by
-               `--resident-experts` / `--mmap-experts` — setup's translation of its own
-               `--low-ram` (setup.py:5364); the engine has no `--low-ram` at all, so
-               this is reported rather than offered as a field. -->
-          <div class="cf-readonly-item">
-            <span class="cf-readonly-label" data-i18n="edit.lowRam">Low-RAM expert mode</span>
-            <span class="field-hint cf-readonly" id="edit-lowRamMode"></span>
-            <span class="note" data-i18n="edit.needsSetup">setup re-run required</span>
-            <span class="field-hint muted" data-i18n="edit.lowRamHint">Decided by setup</span>
-          </div>
           <label class="field"><span data-i18n="edit.expertCache">Expert cache</span>
             <input id="ed-expertCache" data-key="expertCache" type="text" autocomplete="off" spellcheck="false" placeholder="auto" data-i18n-placeholder="edit.expertCachePlaceholder">
             <span class="field-hint" data-i18n="edit.expertCacheHint">auto, or the number of slots</span>
@@ -346,6 +331,7 @@
 
     <!-- 统一二次确认浮层：position:absolute 脱离文档流，锚定在触发按钮附近，
          复用 .panel 的 position:relative；超时/点外部/取消均关闭。 -->
+    <div id="confirmScrim" class="confirm-scrim" hidden></div>
     <div id="confirmPopover" class="confirm-popover" role="dialog" aria-modal="false" hidden>
       <div id="confirmTitle" class="confirm-popover-title"></div>
       <div id="confirmSub" class="confirm-popover-sub" hidden></div>

@@ -339,6 +339,35 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
+/* The setup facts table (表一): one read-only block, a row per fact. */
+.sf-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: baseline;
+}
+
+.sf-label {
+  font-size: 12px;
+  color: var(--text-muted, #8e9196);
+}
+
+.sf-row > .field-hint:last-child:nth-child(3) {
+  grid-column: 2;
+}
+
+/* Modal scrim for the confirm popover: the same language as the drawer's scrim
+ * (fixed, inset 0, a dim + a hint of blur), one layer BELOW the popover (200) so
+ * the dialog itself stays readable and clickable. A click on it does not cancel
+ * the dialog — see confirmDocPointerDown. */
+.confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(1px);
+}
+
 /* The setup parameters live INSIDE the confirm popover: compact, and scrollable
  * so a small window can still reach the confirm button. */
 .confirm-popover-body {

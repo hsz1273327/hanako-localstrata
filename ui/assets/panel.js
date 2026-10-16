@@ -98,6 +98,8 @@ const els = {
   editForm: document.getElementById("editForm"),
   kvResidentStatus: document.getElementById("edit-kvResident"),
   lowRamMode: document.getElementById("edit-lowRamMode"),
+  setupFactsBox: document.getElementById("setupFactsBox"),
+  confirmScrim: document.getElementById("confirmScrim"),
   saveBtn: document.getElementById("saveBtn"),
   diffBox: document.getElementById("diffBox"),
   diffList: document.getElementById("diffList"),
@@ -1024,6 +1026,8 @@ function closeConfirm() {
   confirmClearTimer();
   confirmState.onConfirm = null;
   els.confirmPopover.hidden = true;
+  if (els.confirmScrim) els.confirmScrim.hidden = true;
+  els.confirmPopover.setAttribute("aria-modal", "false");
   document.removeEventListener("pointerdown", confirmDocPointerDown, true);
 }
 
@@ -1053,6 +1057,10 @@ function confirmResume() {
 function confirmDocPointerDown(ev) {
   if (!confirmState.open) return;
   if (els.confirmPopover.contains(ev.target)) return;
+  // The scrim swallows the click instead of cancelling: a confirm that guards a
+  // heavy operation (and may hold a form) is not dismissed by a stray click. The
+  // drawer's own scrim does close its drawer — a view, not a decision.
+  if (els.confirmScrim && ev.target === els.confirmScrim) return;
   closeConfirm();
 }
 
@@ -1086,6 +1094,12 @@ function showConfirm({ title, sub, confirmText, cancelText, onConfirm, trigger, 
   // The setup parameters belong to the "Run setup…" dialog only; every other
   // dialog must not inherit them. The caller re-shows it when it wants it.
   if (els.setupParams) els.setupParams.hidden = !body;
+  // A MODAL-ish confirm: a scrim over the whole panel so a click cannot reach the
+  // main controls behind it. It does NOT dismiss the dialog (see
+  // confirmDocPointerDown): this one guards a heavy operation and may hold a
+  // half-filled form, so undoing it takes the explicit Cancel/confirm buttons.
+  if (els.confirmScrim) els.confirmScrim.hidden = false;
+  els.confirmPopover.setAttribute("aria-modal", "true");
   els.confirmOk.textContent = confirmText || t("common.confirm");
   els.confirmCancel.textContent = cancelText || t("common.cancel");
   confirmState.onConfirm = typeof onConfirm === "function" ? onConfirm : null;
@@ -1322,6 +1336,79 @@ function renderLowRamMode(values) {
   els.lowRamMode.dataset.state = mode === "auto" ? "off" : "on";
 }
 
+// ── 表一: what this config was BUILT as (read-only) ───────────────────────
+//
+// Everything here is setup's handwriting: the model it installed, the backend and
+// cards it picked out of the hardware, and the two switches only setup can set
+// (read out of the args). It lives with the setup entry, so "what it is now" and
+// "how to change it" are one glance apart, and it comes BEFORE the picker and the
+// button (the read-only-first rule).
+//
+// Not here: context/kv (editable in Parameters, and the params form says a re-run
+// rebuilds them) and 视觉 (an install fact that belongs to the 本机 block, which the
+// settings page also shows).
+const SETUP_FACT_ROWS = [
+  { label: "setupFacts.model", value: "sf-model" },
+  { label: "setupFacts.backend", value: "sf-backend" },
+  { label: "setupFacts.gpu", value: "sf-gpu" },
+  // These two keep their ids: renderKvStream/renderLowRamMode fill them, and each
+  // carries the line that says where to change it (the "Run setup…" entry).
+  { label: "edit.lowRam", value: "edit-lowRamMode", hint: "edit.lowRamHint" },
+  { label: "edit.kvStream", value: "edit-kvResident", hint: "edit.kvStreamHint" },
+];
+
+let setupFactsBuilt = false;
+
+function buildSetupFacts() {
+  if (setupFactsBuilt || !els.setupFactsBox) return;
+  setupFactsBuilt = true;
+  const title = document.createElement("span");
+  title.className = "cf-readonly-label";
+  title.dataset.i18n = "setupFacts.title";
+  title.textContent = t("setupFacts.title");
+  const rows = SETUP_FACT_ROWS.map(({ label, value, hint }) => {
+    const row = document.createElement("div");
+    row.className = "sf-row";
+    const name = document.createElement("span");
+    name.className = "sf-label";
+    name.dataset.i18n = label;
+    name.textContent = t(label);
+    const val = document.createElement("span");
+    val.className = "field-hint cf-readonly";
+    val.id = value;
+    row.append(name, val);
+    if (hint) {
+      const note = document.createElement("span");
+      note.className = "field-hint muted";
+      note.dataset.i18n = hint;
+      note.textContent = t(hint);
+      row.append(note);
+    }
+    return row;
+  });
+  els.setupFactsBox.replaceChildren(title, ...rows);
+}
+
+// Filled from the config view: `setup` (the facts setup recorded) plus the two
+// switches read out of the args. No config = nothing to report, so it hides —
+// claiming values for a file we could not read would be worse than saying nothing.
+function renderSetupFacts(cfg) {
+  if (!els.setupFactsBox) return;
+  buildSetupFacts();
+  const has = !!(cfg && cfg.hasConfig);
+  els.setupFactsBox.hidden = !has;
+  if (!has) return;
+  const facts = cfg.setup || {};
+  for (const [id, value] of [["sf-model", facts.model], ["sf-backend", facts.backend], ["sf-gpu", facts.gpu]]) {
+    const el = document.getElementById(id);
+    // "—" for what setup did not record (this install's config has no `backend`),
+    // the same mark the parameter diff uses for an absent value.
+    if (el) el.textContent = isAbsent(value) ? "—" : String(value);
+  }
+  renderLowRamMode(cfg.values || {});
+  renderKvStream(cfg.values || {});
+}
+
 // An empty editor that invites typing is how a good config gets overwritten with
 // blanks, so when there is a config file but it cannot be read (a stopped
 // container is the usual reason) the fields are locked and the reason is said
@@ -1395,6 +1482,7 @@ async function refreshConfig() {
     }
     renderKvStream(cfg.hasConfig ? cfg.values : null);
     renderLowRamMode(cfg.hasConfig ? cfg.values : null);
+    renderSetupFacts(cfg);
     renderDiff();
   } catch {
     state.config = null;

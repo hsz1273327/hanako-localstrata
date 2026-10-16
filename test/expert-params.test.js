@@ -126,19 +126,21 @@ test("flatConfig reports what the config carries (absent = the engine's default)
 
 // ── the form ─────────────────────────────────────────────────────────────
 
-test("the parameter editor carries the fields, and reports the low-RAM mode", () => {
+test("the parameter editor carries the fields, and the reports moved to 表一", () => {
   const html = read("ui/panel.html");
   for (const id of ["ed-expertCache", "ed-residentBudget"]) {
     assert.match(html, new RegExp(`id="${id}" data-key=`), `panel.html must carry #${id}`);
   }
-  // The low-RAM mode is a REPORT: a read-only row, no select, no data-key.
-  assert.match(html, /id="edit-lowRamMode"/, "the report line exists");
+  // The low-RAM mode is a REPORT, and reports now live in the setup-facts table
+  // (built from SETUP_FACT_ROWS at runtime), not inside the params groups.
+  assert.match(html, /id="setupFactsBox"/, "the setup-facts table exists");
+  const js = read("ui/assets/panel.js");
+  assert.match(js, /\{ label: "edit\.lowRam", value: "edit-lowRamMode"/, "the mode is a row of that table");
   assert.doesNotMatch(html, /id="ed-lowRam"/, "the old select is gone");
   assert.doesNotMatch(html, /data-key="lowRam"/, "and nothing writes the mode");
   const form = html.match(/<form id="editForm"[\s\S]*?<\/form>/)[0];
   assert.doesNotMatch(form, /data-key="port"/, "nor the config port");
   // The diff list labels what is left.
-  const js = read("ui/assets/panel.js");
   for (const key of ["expertCache", "residentBudget"]) {
     assert.match(js, new RegExp(`${key}: "edit\\.`), `panel.js must label ${key}`);
   }

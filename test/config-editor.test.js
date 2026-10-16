@@ -201,6 +201,35 @@ test("a container whose config cannot be read reports hasConfig=false", async ()
   assert.equal(buildConfigView({ configFile: "x.json", mainName: "x.json", sharedName: "y.json", mainText: "", sharedText: "" }).hasConfig, false);
 });
 
+test("the config view reports what setup built it as (表一's data)", async () => {
+  // The facts a setup run decided that have no editable field anywhere. `gpu: 0` is
+  // a REAL card (this install writes 0), a layer split records a list, and an
+  // absent key means setup did not record it (this install's config has no
+  // `backend`) — shown as such rather than guessed.
+  const { setupFacts } = await import("../lib/deployer/common.js");
+  assert.deepEqual(setupFacts({ model_name: "qwen3.8-flash-next-iq3_s", gpu: 0 }), {
+    model: "qwen3.8-flash-next-iq3_s",
+    backend: undefined,
+    gpu: "0",
+  });
+  assert.equal(setupFacts({ gpu: [0, 2] }).gpu, "0,2", "a layer split is a list");
+  assert.equal(setupFacts({ backend: "hip" }).backend, "hip");
+  assert.deepEqual(setupFacts(null), { model: undefined, backend: undefined, gpu: undefined });
+  assert.deepEqual(setupFacts(undefined), { model: undefined, backend: undefined, gpu: undefined });
+
+  //…and the canonical view carries it alongside the editable values.
+  const view = buildConfigView({
+    configFile: "strata-iq3_s.json",
+    mainName: "strata-iq3_s.json",
+    sharedName: "strata-iq3_s.shared-settings.json",
+    mainText: JSON.stringify({ model_name: "m", gpu: 0, args: ["--max-context", "262144", "--kv", "int8"] }),
+    sharedText: "{}",
+  });
+  assert.equal(view.hasConfig, true);
+  assert.deepEqual(view.setup, { model: "m", backend: undefined, gpu: "0" });
+  assert.equal(view.values.context, 262144, "and the editable values are unchanged");
+});
+
 // ── the tar a `docker cp … -` hands back ─────────────────────────────────
 
 // `docker cp` writes a tar archive to stdout, never the bare file. The old
