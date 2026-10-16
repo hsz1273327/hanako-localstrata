@@ -901,7 +901,10 @@ async function loadProfiles() {
   keySource = data?.keySource && typeof data.keySource === "object"
     ? { file: String(data.keySource.file || ""), hasKey: !!data.keySource.hasKey }
     : { file: "", hasKey: false };
-  visionInfo = data?.vision && typeof data.vision === "object" ? data.vision : null;
+  // This page defines environments; the vision state belongs to the panel's 表一
+  // (it reports a config file), so nothing here reads it. A stale assignment to
+  // that removed state is what threw "is not defined" at runtime — hence the
+  // guards in test/ui-references.test.js.
   containerFields.refreshApiKeySource();
   localApiKeyField.refreshSource();
   // Paint the list before the (potentially slow) status probe so the user is

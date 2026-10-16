@@ -236,10 +236,11 @@ test("the container block renders the vision switch as its own section", () => {
   // vision row of its own.
   assert.doesNotMatch(read("ui/assets/settings.js"), /createSetupFacts/);
   assert.doesNotMatch(read("ui/settings.html"), /setup-facts|local-vision/);
-  // Both pages read the state from /profiles; the facts come with the config view.
-  for (const rel of ["ui/assets/settings.js", "ui/assets/panel.js"]) {
-    assert.match(read(rel), /visionInfo = data\?\.vision/, `${rel} must take the vision state from /profiles`);
-  }
+  // The PANEL reads the vision state from /profiles (表一's vision row). The
+  // settings page does not read it at all: it defines environments, and reading it
+  // there without a declaration is exactly what threw at runtime.
+  assert.match(read("ui/assets/panel.js"), /visionInfo = data\?\.vision/, "panel: takes the vision state from /profiles");
+  assert.doesNotMatch(read("ui/assets/settings.js"), /visionInfo/, "settings.js: never touches it");
 });
 
 test("the vision copy exists in all six locales", async () => {
