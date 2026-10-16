@@ -579,3 +579,37 @@ test("the backup copy exists in six locales, with the shared-binary caveat", asy
     assert.match(STRINGS[lang]["configPick.backupBadName"], /strata-/, `${lang}: the refusal explains the shape`);
   }
 });
+
+// ── the backup field's DEFAULT is a real value ─────────────────────────────
+//
+// The user asked for a value, not a placeholder: the field opens on
+// `<current minus .json>-<YYYYMMDD>.json` (ui/assets/backup-name.js), so pressing
+// the button backs the current settings up without typing. Clearing it still means
+// "no backup" — both states have to be readable in the copy.
+test("the backup field opens on a usable default, not a placeholder", () => {
+  const js = fs.readFileSync(path.join(ROOT, "ui/assets/panel.js"), "utf8");
+  const html = fs.readFileSync(path.join(ROOT, "ui/panel.html"), "utf8");
+  // A real assignment to .value, from the shared generator.
+  assert.match(js, /import \{ backupDefaultName \} from "\.\/backup-name\.js"/);
+  assert.match(js, /function fillBackupAs\(\)/);
+  assert.match(js, /el\.value = backupDefaultName\(current, \{ existing \}\)/);
+  assert.match(js, /state\.status\?\.configCandidates/);
+  assert.match(js, /fillBackupAs\(\)/, "and it is called when the dialog opens");
+  // The field itself carries NO value attribute: the value comes from the code
+  // (a literal in the HTML would freeze today's date into the page).
+  assert.doesNotMatch(html, /id="sp-backupAs"[^>]*\svalue=/, "no hard-coded value");
+  assert.match(html, /id="sp-backupAs"[^>]*data-i18n-placeholder="configPick\.backupPlaceholder"/);
+});
+
+test("the backup copy reads in both states (prefilled default / cleared) in six locales", async () => {
+  const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
+  for (const lang of LANGS) {
+    const hint = STRINGS[lang]["configPick.backupHint"];
+    // The shape the picker can list, the clearing case, and the shared-encoder caveat.
+    assert.match(hint, /strata-/, `${lang}.backupHint: the name shape`);
+    assert.match(hint, /\.bak/, `${lang}.backupHint: the clearing case`);
+    assert.match(hint, /GPU/, `${lang}.backupHint: the shared-encoder caveat`);
+    // The placeholder stays a SHAPE (it must not age into a wrong example date).
+    assert.match(STRINGS[lang]["configPick.backupPlaceholder"], /YYYYMMDD/, `${lang}.backupPlaceholder must show the shape`);
+  }
+});

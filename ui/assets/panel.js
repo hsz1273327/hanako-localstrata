@@ -8,6 +8,7 @@ import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinLis
 import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.js";
 import { createSetupFacts } from "./setup-facts.js";
+import { backupDefaultName } from "./backup-name.js";
 import { copyToClipboard } from "./clipboard.js";
 
 // Resolve the UI language before anything renders.
@@ -2072,6 +2073,17 @@ function setBackupError(message) {
   el.hidden = !message;
 }
 
+// The backup field opens on a REAL value (a name that works today), so pressing
+// the button backs the current settings up without typing. Clearing it means "no
+// backup" — the behaviour this field has always had.
+function fillBackupAs() {
+  const el = document.getElementById("sp-backupAs");
+  if (!el) return;
+  const current = state.config?.configFile || state.status?.configFile || "";
+  const existing = (state.status?.configCandidates || []).map((c) => c?.file).filter(Boolean);
+  el.value = backupDefaultName(current, { existing });
+}
+
 async function startConfigSetup() {
   if (state.working) return;
   // A name that cannot become a config the picker shows is refused here, so the
@@ -2125,6 +2137,7 @@ els.configSetupBtn.addEventListener("click", () => {
   const current = currentSetupValues();
   for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
   renderSetupTarget();
+  fillBackupAs();
   setBackupError("");
   showConfirm({
     title: t("configPick.confirmTitle"),
