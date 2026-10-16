@@ -77,12 +77,11 @@ test("neither the switch nor the window is an edit key", () => {
   // run (setup.py Step 7 writes the literal 32768).
   assert.equal(EDIT_KEYS.kvStreaming, undefined, "the engine has no --kv-streaming");
   assert.equal(EDIT_KEYS.kvResident, undefined, "setup owns the resident window");
-  const js = read("ui/assets/panel.js");
-  // The panel reports it instead, from the flat values, via the absence rule.
-  assert.match(js, /function renderKvStream\(/, "the panel must report the state");
-  assert.match(js, /isAbsent\(win\)/, "and use the shared absence rule");
-  assert.match(js, /edit\.kvStreamOn/, "with copy for the on state");
-  assert.match(js, /edit\.kvStreamOff/, "and for the off state");
+  // The shared setup-facts table (表一) reports it instead, from the flat values.
+  const facts = read("ui/assets/setup-facts.js");
+  assert.match(facts, /export function kvStreamingText\(values\)/, "the table maps the state");
+  assert.match(facts, /edit\.kvStreamOn/, "with copy for the on state");
+  assert.match(facts, /edit\.kvStreamOff/, "and for the off state");
   // No form field was created for either of them.
   const html = read("ui/panel.html");
   assert.doesNotMatch(html, /data-key="kvResident"/, "no window field");
@@ -90,7 +89,7 @@ test("neither the switch nor the window is an edit key", () => {
   // The state line and the reason live in the setup-facts table (表一), built from
   // SETUP_FACT_ROWS at runtime — the params groups hold editable fields only.
   assert.match(html, /id="setupFactsBox"/);
-  assert.match(js, /\{ label: "edit\.kvStream", value: "edit-kvResident", hint: "edit\.kvStreamHint" \}/);
+  assert.match(facts, /\{ key: "kvStreaming", label: "edit\.kvStream", value: "edit-kvResident", hint: "edit\.kvStreamHint" \}/);
 });
 
 test("a config that streams keeps its window through an unrelated edit", () => {

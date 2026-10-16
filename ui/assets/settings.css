@@ -139,31 +139,8 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* Read-only report: muted, so it never reads as something to type in. */
-.cf-readonly {
-  color: var(--text-muted, #8e9196);
-}
-
-.cf-readonly[data-state="on"] {
-  color: inherit;
-}
-
-/* A READ-ONLY ITEM: a report, not a control (the local 视觉 section). One neutral
- * block style, no colour, and it comes before the editable fields of its group. */
-.cf-readonly-item {
-  display: grid;
-  gap: 4px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--border, rgba(83, 125, 150, 0.35));
-  border-radius: 0 6px 6px 0;
-  background: var(--bg-soft, rgba(127, 127, 127, 0.06));
-}
-
-.cf-readonly-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted, #8e9196);
-}
+/* Read-only reports live on the PANEL (表一 and its rows). This page defines
+ * environments, so it has no read-only value blocks of its own. */
 
 /* A start-required field that is still empty — fill it before the profile can
  * run. Distinct from a save error, which uses .message.error. */

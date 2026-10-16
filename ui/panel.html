@@ -98,10 +98,9 @@
     <!-- ②b 配置文件（仅本机 · 停机时可见）：选一份已有配置，或跑一次 setup 新建 -->
     <section class="group-box" id="configPickBox" hidden>
       <h2 class="group-title" data-i18n="configPick.title">Config file</h2>
-      <!-- 表一：这份 config 是怎么被造出来的（只读）。按通则排在可选/可操作控件
-           之前：先看到现在实际是什么，再看到能改什么。视觉不在这里——它属于
-           「本机」块（设置页也要看得到这个安装的视觉构建）。 -->
-      <div id="setupFactsBox" class="cf-readonly-item" hidden></div>
+      <!-- 表一：这份 config 是怎么被造出来的（只读），由共享模块 setup-facts.js 渲染。
+           按通则排在可选/可操作控件之前：先看到现在实际是什么，再看到能改什么。 -->
+      <div id="setupFactsBox" hidden></div>
       <div class="config-pick">
         <select id="configFileSelect" class="config-pick-select" aria-label="Config file" data-i18n-aria-label="configPick.selectLabel"></select>
         <button id="configSetupBtn" class="btn small" type="button" data-i18n="configPick.new">New config…</button>
@@ -278,9 +277,6 @@
         </label>
 
         <div id="psLocalFields" class="profile-type-fields">
-          <!-- Read-only first, in its own block: what this install's vision is
-               right now (setup wrote it), then what can be edited below. -->
-          <div id="ps-local-vision"></div>
           <label class="field"><span data-i18n="field.strataDir">Strata directory</span>
             <input id="ps-strataDir" data-key="strataDir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata">
           </label>

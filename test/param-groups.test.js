@@ -154,9 +154,9 @@ test("the two setup-only reports left the params groups for the setup-facts tabl
   // entry that can change it, with the params group holding editable fields only.
   assert.doesNotMatch(experts.text, /cf-readonly-item|edit-lowRamMode|edit\.lowRamHint/, "no report left in the group");
   assert.equal(experts.keys.includes("lowRam") || /data-key="lowRam"/.test(experts.text), false, "and nothing writes it");
-  const js = read("ui/assets/panel.js");
-  assert.match(js, /renderLowRamMode/, "the panel drives the report");
-  assert.match(js, /SETUP_FACT_ROWS/, "inside the setup-facts table");
+  const facts = read("ui/assets/setup-facts.js");
+  assert.match(facts, /export const SETUP_FACT_ROWS/);
+  assert.match(facts, /\{ key: "lowRam", label: "edit\.lowRam", value: "edit-lowRamMode", hint: "edit\.lowRamHint" \}/);
   assert.match(read("ui/panel.html"), /id="setupFactsBox"/);
 });
 
@@ -221,16 +221,13 @@ test("every group name is a subject, present in all six locales", async () => {
   }
 });
 
-test("视觉 is one section on both sides, out of the advanced drawer", () => {
+test("视觉 is one section on the container side, and a row of 表一 on the local side", () => {
   const fields = read("ui/assets/profile-fields.js");
-  // The container's switch and the local report both name it the same way, and
-  // both live in a `.cf-section-vision`.
+  // The container's switch is its own section (a subject, image input), outside
+  // the advanced drawer, and the module still owns it.
   assert.match(fields, /cf-section cf-section-vision/, "the section class exists");
-  assert.match(fields, /i18nSpan\("field\.vision", "cf-section-title"\)/, "the local report is titled 视觉");
-  assert.match(fields, /children: \[i18nSpan\("field\.vision"\), visionInput/, "the container's switch carries the same name");
-  // The switch is no longer an advanced key, and no longer in the drawer. (It
-  // stays in OWNED_KEYS: the module still owns the field, it just places it in its
-  // own section.)
+  assert.match(fields, /children: \[i18nSpan\("field\.vision"\), visionInput/, "the container's switch carries the name");
+  assert.doesNotMatch(fields, /createVisionStatus/, "the old LOCAL fragment is gone");
   const advKeys = fields.match(/const ADVANCED_KEYS = \[([\s\S]*?)\];/)[1];
   assert.doesNotMatch(advKeys, /"Vision"/, "Vision left ADVANCED_KEYS");
   assert.match(fields.match(/const OWNED_KEYS = new Set\(\[([\s\S]*?)\]\);/)[1], /"Vision"/, "but the module still owns it");
@@ -239,8 +236,11 @@ test("视觉 is one section on both sides, out of the advanced drawer", () => {
   const host = fields.match(/host\.replaceChildren\(([\s\S]*?)\);/)[1];
   assert.match(host, /visionSection,/, "it is mounted as its own section");
   assert.ok(host.indexOf("visionSection,") < host.indexOf("advToggle,"), "before the drawer toggle");
-  // Both pages get the styling.
-  for (const css of ["ui/assets/panel.css", "ui/assets/settings.css"]) {
-    assert.match(read(css), /\.cf-section-title/, `${css} styles the section title`);
-  }
+  // The local side: 视觉 is THIS config's property, so it is a row of 表一 — and the
+  // table lives on the PANEL, where the config picker, the setup entry and 参数编辑
+  // are. The settings page defines environments, so it shows neither.
+  assert.match(read("ui/assets/setup-facts.js"), /\{ key: "vision", label: "field\.vision", value: "sf-vision", hint: "setupFacts\.visionHint" \}/);
+  assert.match(read("ui/panel.html"), /id="setupFactsBox"/, "the panel carries 表一");
+  assert.doesNotMatch(read("ui/settings.html"), /setup-facts|local-vision/, "the settings page does not");
+  assert.match(read("ui/assets/panel.css"), /\.sf-row/, "panel.css styles the table's rows");
 });

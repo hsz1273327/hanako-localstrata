@@ -5,8 +5,9 @@
 // - Polls this App's GET /status route every refreshSec seconds.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, joinList, applyI18n } from "./i18n.js";
-import { createContainerFields, createApiKeyField, createVisionStatus } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.js";
+import { createSetupFacts } from "./setup-facts.js";
 import { copyToClipboard } from "./clipboard.js";
 
 // Resolve the UI language before anything renders.
@@ -96,8 +97,6 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   langSelect: document.getElementById("langSelect"),
   editForm: document.getElementById("editForm"),
-  kvResidentStatus: document.getElementById("edit-kvResident"),
-  lowRamMode: document.getElementById("edit-lowRamMode"),
   setupFactsBox: document.getElementById("setupFactsBox"),
   confirmScrim: document.getElementById("confirmScrim"),
   saveBtn: document.getElementById("saveBtn"),
@@ -1301,112 +1300,16 @@ function renderDefaultHints() {
   }
 }
 
-// The KV stream switch is setup's answer, not a field: the engine knows no
-// `--kv-streaming`, and `--kv-resident` is written by setup as the literal 32768
-// on its (context, kv, RAM) rule. Saying so beats a box the user cannot keep.
-// With no readable config there is nothing to report, and claiming "off" would be
-// a statement about a file we could not read.
-function renderKvStream(values) {
-  if (!els.kvResidentStatus) return;
-  if (!values) {
-    els.kvResidentStatus.textContent = "";
-    delete els.kvResidentStatus.dataset.state;
-    return;
-  }
-  const win = values.kvResident;
-  const on = !isAbsent(win);
-  els.kvResidentStatus.textContent = on ? tp("edit.kvStreamOn", { n: win }) : t("edit.kvStreamOff");
-  els.kvResidentStatus.dataset.state = on ? "on" : "off";
-}
+// 表一 lives in the panel's 「配置文件」区 and is built by the shared module
+// (ui/assets/setup-facts.js), the same one the settings page mounts. It carries
+// the vision row too: whether this config reads images is this FILE's property,
+// like MTP, not something that belongs to a profile or to one page.
+let panelSetupFacts = null;
 
-// The low-RAM expert mode is setup's translation, not a flag the engine knows: the
-// config carries `--resident-experts` / `--mmap-experts` (setup.py:5364), and
-// neither means setup's `auto` found the experts fit. So it is read out of the args
-// and reported — offering a `--low-ram` field would write a flag the engine refuses.
-function renderLowRamMode(values) {
-  if (!els.lowRamMode) return;
-  if (!values) {
-    els.lowRamMode.textContent = "";
-    delete els.lowRamMode.dataset.state;
-    return;
-  }
-  const mode = values.lowRamMode || "auto";
-  const key = `edit.lowRamMode${mode === "resident" ? "Resident" : mode === "mmap" ? "Mmap" : "Auto"}`;
-  els.lowRamMode.textContent = t(key);
-  els.lowRamMode.dataset.state = mode === "auto" ? "off" : "on";
-}
-
-// ── 表一: what this config was BUILT as (read-only) ───────────────────────
-//
-// Everything here is setup's handwriting: the model it installed, the backend and
-// cards it picked out of the hardware, and the two switches only setup can set
-// (read out of the args). It lives with the setup entry, so "what it is now" and
-// "how to change it" are one glance apart, and it comes BEFORE the picker and the
-// button (the read-only-first rule).
-//
-// Not here: context/kv (editable in Parameters, and the params form says a re-run
-// rebuilds them) and 视觉 (an install fact that belongs to the 本机 block, which the
-// settings page also shows).
-const SETUP_FACT_ROWS = [
-  { label: "setupFacts.model", value: "sf-model" },
-  { label: "setupFacts.backend", value: "sf-backend" },
-  { label: "setupFacts.gpu", value: "sf-gpu" },
-  // These two keep their ids: renderKvStream/renderLowRamMode fill them, and each
-  // carries the line that says where to change it (the "Run setup…" entry).
-  { label: "edit.lowRam", value: "edit-lowRamMode", hint: "edit.lowRamHint" },
-  { label: "edit.kvStream", value: "edit-kvResident", hint: "edit.kvStreamHint" },
-];
-
-let setupFactsBuilt = false;
-
-function buildSetupFacts() {
-  if (setupFactsBuilt || !els.setupFactsBox) return;
-  setupFactsBuilt = true;
-  const title = document.createElement("span");
-  title.className = "cf-readonly-label";
-  title.dataset.i18n = "setupFacts.title";
-  title.textContent = t("setupFacts.title");
-  const rows = SETUP_FACT_ROWS.map(({ label, value, hint }) => {
-    const row = document.createElement("div");
-    row.className = "sf-row";
-    const name = document.createElement("span");
-    name.className = "sf-label";
-    name.dataset.i18n = label;
-    name.textContent = t(label);
-    const val = document.createElement("span");
-    val.className = "field-hint cf-readonly";
-    val.id = value;
-    row.append(name, val);
-    if (hint) {
-      const note = document.createElement("span");
-      note.className = "field-hint muted";
-      note.dataset.i18n = hint;
-      note.textContent = t(hint);
-      row.append(note);
-    }
-    return row;
-  });
-  els.setupFactsBox.replaceChildren(title, ...rows);
-}
-
-// Filled from the config view: `setup` (the facts setup recorded) plus the two
-// switches read out of the args. No config = nothing to report, so it hides —
-// claiming values for a file we could not read would be worse than saying nothing.
 function renderSetupFacts(cfg) {
   if (!els.setupFactsBox) return;
-  buildSetupFacts();
-  const has = !!(cfg && cfg.hasConfig);
-  els.setupFactsBox.hidden = !has;
-  if (!has) return;
-  const facts = cfg.setup || {};
-  for (const [id, value] of [["sf-model", facts.model], ["sf-backend", facts.backend], ["sf-gpu", facts.gpu]]) {
-    const el = document.getElementById(id);
-    // "—" for what setup did not record (this install's config has no `backend`),
-    // the same mark the parameter diff uses for an absent value.
-    if (el) el.textContent = isAbsent(value) ? "—" : String(value);
-  }
-  renderLowRamMode(cfg.values || {});
-  renderKvStream(cfg.values || {});
+  if (!panelSetupFacts) panelSetupFacts = createSetupFacts(els.setupFactsBox);
+  panelSetupFacts.render(cfg?.hasConfig ? { setup: cfg.setup, values: cfg.values, vision: visionInfo } : null);
 }
 
 // An empty editor that invites typing is how a good config gets overwritten with
@@ -1480,8 +1383,6 @@ async function refreshConfig() {
       state.configFilled = null;
       setEditFormReadable(false, cfg);
     }
-    renderKvStream(cfg.hasConfig ? cfg.values : null);
-    renderLowRamMode(cfg.hasConfig ? cfg.values : null);
     renderSetupFacts(cfg);
     renderDiff();
   } catch {
@@ -1642,7 +1543,6 @@ function ensurePluginForm() {
   });
   // The LOCAL profile's own override: the same fragment the container block
   // mounts, so the mask semantics and the "in effect" line cannot drift.
-  pluginFormEls.localVision = createVisionStatus(root.querySelector("#ps-local-vision"), { idPrefix: "psl-" });
   pluginFormEls.localApiKey = createApiKeyField(root.querySelector("#ps-local-extra"), {
     idPrefix: "psl-",
     apiKeySource: () => keySource,
@@ -1679,8 +1579,8 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.port.value = profile?.port ? String(profile.port) : "";
   // The local override (masked when set); the source line follows it.
   pluginFormEls.localApiKey.render(profile?.apiKey || "");
-  // The local config's vision state (read-only).
-  pluginFormEls.localVision.render(visionInfo);
+  // 视觉 is part of 表一 now (it is this config's property, like MTP), so the
+  // 本机 block keeps only its own fields and the key override.
   // The container block preserves any field it does not render (see the shared
   // module), so nothing needs to be carried here.
   pluginFormEls.container.render(profile);
@@ -2303,7 +2203,7 @@ function relocalize() {
     // The shared container block re-renders its own static copy + option labels.
     pluginFormEls.container.relocalize();
     pluginFormEls.localApiKey.relocalize();
-    pluginFormEls.localVision.relocalize();
+    if (panelSetupFacts) panelSetupFacts.relocalize();
   }
   renderDiff();
 }

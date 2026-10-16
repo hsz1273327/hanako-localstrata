@@ -17,7 +17,7 @@
 // page, only a mask, so an untouched masked field is discarded on save.
 import { hana } from "./sdk.js";
 import { LANGS, LANG_NAMES, loadLang, saveLang, setLang, getLang, t, tp, applyI18n } from "./i18n.js";
-import { createContainerFields, createApiKeyField, createVisionStatus } from "./profile-fields.js";
+import { createContainerFields, createApiKeyField } from "./profile-fields.js";
 import { copyToClipboard } from "./clipboard.js";
 setLang(loadLang());
 
@@ -62,7 +62,6 @@ const els = {
   profileContainerFields: document.getElementById("pfContainerFields"),
   profileStrataDir: document.getElementById("pf-strataDir"),
   profileLocalExtra: document.getElementById("pf-local-extra"),
-  profileLocalVision: document.getElementById("pf-local-vision"),
   profileStrataDirPick: document.getElementById("pf-strataDir-pick"),
   profilePythonPath: document.getElementById("pf-pythonPath"),
   profilePythonPathPick: document.getElementById("pf-pythonPath-pick"),
@@ -166,17 +165,14 @@ const containerFields = createContainerFields(els.profileContainerExtra, {
   onChange: onGpuModelChange,
 });
 
-// The local config's vision state, refreshed from GET /profiles. READ-ONLY:
-// setup.py writes that block (encoder, GPU/CPU choice, mmproj path).
-let visionInfo = null;
+// This page defines ENVIRONMENTS (profile fields, and the defaults they fall back
+// to). 表一 is not here: it reports what a config FILE was built as, which is the
+// panel's context — the panel owns the config picker and the setup entry. 视觉 is
+// one of its rows for the same reason.
 
 // The LOCAL profile carries the same override field. It is the same fragment the
 // container block mounts, so the mask semantics and the "which key is in effect"
 // line (including the local-only "→ config file" source) cannot drift apart.
-// Its read-only 视觉 report is NOT here: it sits at the TOP of the local block
-// (see #pf-local-vision), because within a group the read-only rows come before
-// the fields that can be changed.
-const localVisionStatus = createVisionStatus(els.profileLocalVision, { idPrefix: "pfl-" });
 const localApiKeyField = createApiKeyField(els.profileLocalExtra, {
   idPrefix: "pfl-",
   apiKeySource: () => keySource,
@@ -893,6 +889,9 @@ function renderProfiles() {
   els.profileAddBtn.disabled = working;
 }
 
+// 表一 is NOT on this page: it reports what a config FILE was built as, which is
+// the panel's context (the panel owns the config picker and the setup entry).
+
 async function loadProfiles() {
   const data = await api("profiles");
   profiles = Array.isArray(data?.profiles) ? data.profiles : [];
@@ -905,7 +904,6 @@ async function loadProfiles() {
   visionInfo = data?.vision && typeof data.vision === "object" ? data.vision : null;
   containerFields.refreshApiKeySource();
   localApiKeyField.refreshSource();
-  localVisionStatus.render(visionInfo);
   // Paint the list before the (potentially slow) status probe so the user is
   // not waiting on docker/python checks. Edit/delete keep the last known
   // running state until the probe resolves.
@@ -1225,7 +1223,6 @@ function initLangSelect() {
     // The shared container block re-renders its own static copy + option labels.
     containerFields.relocalize();
     localApiKeyField.relocalize();
-    localVisionStatus.relocalize();
     renderPresetOffer();
     if (!els.profileConfirm.hidden && pendingDeleteId) {
       const pending = profiles.find((p) => p.id === pendingDeleteId);

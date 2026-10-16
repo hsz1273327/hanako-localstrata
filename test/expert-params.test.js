@@ -134,18 +134,18 @@ test("the parameter editor carries the fields, and the reports moved to 表一",
   // The low-RAM mode is a REPORT, and reports now live in the setup-facts table
   // (built from SETUP_FACT_ROWS at runtime), not inside the params groups.
   assert.match(html, /id="setupFactsBox"/, "the setup-facts table exists");
-  const js = read("ui/assets/panel.js");
-  assert.match(js, /\{ label: "edit\.lowRam", value: "edit-lowRamMode"/, "the mode is a row of that table");
+  const js = read("ui/assets/setup-facts.js");
+  assert.match(js, /\{ key: "lowRam", label: "edit\.lowRam", value: "edit-lowRamMode"/, "the mode is a row of that table");
   assert.doesNotMatch(html, /id="ed-lowRam"/, "the old select is gone");
   assert.doesNotMatch(html, /data-key="lowRam"/, "and nothing writes the mode");
   const form = html.match(/<form id="editForm"[\s\S]*?<\/form>/)[0];
   assert.doesNotMatch(form, /data-key="port"/, "nor the config port");
   // The diff list labels what is left.
   for (const key of ["expertCache", "residentBudget"]) {
-    assert.match(js, new RegExp(`${key}: "edit\\.`), `panel.js must label ${key}`);
+    assert.match(read("ui/assets/panel.js"), new RegExp(`${key}: "edit\\.`), `panel.js must label ${key}`);
   }
-  assert.match(js, /lowRamMode: "edit\.lowRam"/, "and name the report row");
-  assert.match(js, /function renderLowRamMode/, "which the panel must drive");
+  assert.match(read("ui/assets/panel.js"), /lowRamMode: "edit\.lowRam"/, "and name the report row");
+  assert.match(read("ui/assets/setup-facts.js"), /export function lowRamModeText/, "which the table maps");
 });
 
 test("the container side tells the user those envs exist instead of adding fields", () => {

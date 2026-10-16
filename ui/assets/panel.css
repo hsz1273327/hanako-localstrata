@@ -339,7 +339,8 @@ body {
   color: var(--text-muted, #8e9196);
 }
 
-/* The setup facts table (表一): one read-only block, a row per fact. */
+/* The setup-facts table (表一): one read-only block (see .cf-readonly-item), a row
+ * per fact, rendered by the shared module (ui/assets/setup-facts.js) on both pages. */
 .sf-row {
   display: grid;
   grid-template-columns: auto 1fr;

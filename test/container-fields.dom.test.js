@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createContainerFields, createApiKeyField, createVisionStatus } from "../ui/assets/profile-fields.js";
+import { createContainerFields, createApiKeyField } from "../ui/assets/profile-fields.js";
 import registerSettingsRoutes, { saveProfile } from "../routes/settings.js";
 import { readAllConfig } from "../lib/strata.js";
 import { mi50Preset } from "../lib/mi50.js";
@@ -433,29 +433,8 @@ test("the container's vision switch sits in its own section, outside the drawer"
   }
 });
 
-test("the local side reports 视觉 in the same section shape, with no control", () => {
-  const dom = installDom();
-  try {
-    const host = document.createElement("div");
-    const st = createVisionStatus(host, { idPrefix: "x-" });
-    assert.equal(st.field.classList.contains("cf-section-vision"), true, "its own section");
-    assert.equal(st.field.classList.contains("cf-readonly-item"), true, "and the shared read-only block style");
-    assert.equal(st.field.hidden, true, "hidden until the backend reports");
-    assert.equal(st.field.children[0].attrs["data-i18n"], "field.vision", "named 视觉, like the container's");
-    assert.equal(st.refs.line.id, "x-vision-status");
-
-    st.render({ available: true, encoder: "gpu", mmproj: "/m/mmproj.gguf" });
-    assert.equal(st.field.hidden, false, "shown once there is something to say");
-    assert.match(st.refs.line.textContent, /mmproj\.gguf/, "the encoder block is named");
-    // The shape follows the semantics: a local install's vision is setup's, so
-    // there is nothing to type in here.
-    assert.equal(st.field.querySelectorAll("input, select, textarea").length, 0, "no control at all");
-    st.render(null);
-    assert.equal(st.field.hidden, true, "a container hides the line");
-  } finally {
-    dom.restore();
-  }
-});
+// 视觉 (the local read-only report) lives in 表一 now — ui/assets/setup-facts.js,
+// mounted by both pages — so there is no local vision fragment to test here.
 
 test("the advanced fields live inside the collapsed group; the common ones stay out", () => {
   const dom = installDom();

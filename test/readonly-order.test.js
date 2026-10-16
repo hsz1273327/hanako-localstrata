@@ -60,19 +60,23 @@ test("the params groups hold editable fields, and the reports moved to 表一", 
   assert.ok(table > 0, "the setup-facts table exists");
   assert.ok(table < html.indexOf('id="configFileSelect"'), "and comes before the config picker");
   assert.ok(table < html.indexOf('id="configSetupBtn"'), "and before the setup button");
-  assert.match(html, /id="setupFactsBox" class="cf-readonly-item"/, "it IS a read-only item");
-  // Its rows come from one list, so the table and the reports cannot drift.
-  const js = read("ui/assets/panel.js");
-  assert.match(js, /const SETUP_FACT_ROWS = \[/);
-  for (const key of ["setupFacts.model", "setupFacts.backend", "setupFacts.gpu", "edit.lowRam", "edit.kvStream"]) {
-    assert.ok(js.includes(key), `${key} must be one of the rows`);
+  assert.match(html, /id="setupFactsBox"/);
+  // Its rows come from one list (the shared module), so the table, both pages and
+  // the reports cannot drift.
+  const facts = read("ui/assets/setup-facts.js");
+  assert.match(facts, /export const SETUP_FACT_ROWS = \[/);
+  for (const key of ["setupFacts.model", "setupFacts.backend", "setupFacts.gpu", "edit.lowRam", "edit.kvStream", "field.vision"]) {
+    assert.ok(facts.includes(key), `${key} must be one of the rows`);
   }
-  // 视觉 is deliberately NOT in the table: it belongs to the 本机 block, which the
-  // settings page shows too (the table is panel-only).
-  const rows = js.slice(js.indexOf("const SETUP_FACT_ROWS"), js.indexOf("]", js.indexOf("const SETUP_FACT_ROWS")));
-  assert.doesNotMatch(rows, /vision/i);
-  assert.match(read("ui/settings.html"), /id="pf-local-vision"/, "视觉 still has its home on the settings page");
-  assert.match(read("ui/panel.html"), /id="ps-local-vision"/);
+  // 视觉 IS one of the rows (this config's property, like MTP), and the table is
+  // the PANEL's: it reports a config file, and the panel owns the picker, the setup
+  // entry and 参数编辑. The settings page defines environments, so it has neither.
+  assert.ok(facts.includes("field.vision"), "the vision row");
+  assert.match(facts, /\{ key: "vision"/);
+  assert.match(read("ui/panel.html"), /id="setupFactsBox"/);
+  assert.doesNotMatch(read("ui/settings.html"), /setup-facts|local-vision/, "settings: no table, no vision row");
+  // The old per-page 视觉 mount points are gone (it would be the same fact twice).
+  assert.doesNotMatch(read("ui/panel.html"), /ps-local-vision/);
 });
 
 test("no params group has a read-only item after an editable field", () => {
@@ -87,24 +91,23 @@ test("no params group has a read-only item after an editable field", () => {
   }
 });
 
-test("the local 视觉 report is mounted at the top of its block, on both pages", () => {
-  const pages = [
-    ["ui/panel.html", "ps-local-vision", "psLocalFields"],
-    ["ui/settings.html", "pf-local-vision", "pfLocalFields"],
-  ];
-  for (const [file, mountId, blockId] of pages) {
-    const html = read(file);
-    assert.ok(html.includes(`id="${mountId}"`), `${file} needs the mount point`);
-    // The mount point is a child of the block, before its first input.
-    const mountAt = html.indexOf(`id="${mountId}"`);
-    const blockAt = html.indexOf(`id="${blockId}"`);
-    const firstInput = html.indexOf("<input", blockAt);
-    assert.ok(blockAt < mountAt, `${mountId} must be inside ${blockId}`);
-    assert.ok(mountAt < firstInput, `${file}: the read-only mount must precede the block's first editable field`);
-  }
-  // The API key (editable) keeps its own mount point, below the fields.
-  assert.match(read("ui/panel.html"), /id="ps-local-extra"/);
-  assert.match(read("ui/settings.html"), /id="pf-local-extra"/);
+test("表一 is mounted in the panel, before that section's controls", () => {
+  // The panel: in the 「配置文件」区, ahead of the picker and the setup button — the
+  // table reports what the config IS, then the controls say what you can do.
+  const panel = read("ui/panel.html");
+  const boxAt = panel.indexOf('id="setupFactsBox"');
+  assert.ok(boxAt > 0 && boxAt < panel.indexOf('id="configFileSelect"'), "panel: before the picker");
+  assert.ok(boxAt < panel.indexOf('id="configSetupBtn"'), "panel: and before the setup button");
+  // The settings page defines ENVIRONMENTS: no table, no vision row, no wiring.
+  const settings = read("ui/settings.html");
+  assert.doesNotMatch(settings, /setup-facts|setupFacts/, "settings: no 表一");
+  assert.doesNotMatch(settings, /local-vision/, "settings: no vision row");
+  assert.doesNotMatch(read("ui/assets/settings.js"), /createSetupFacts|renderSetupFacts/, "settings.js: no 表一 wiring");
+  // The panel's mount is filled by the shared module (the same "one copy" pattern
+  // the profile fields use), and the API key keeps its own mount point.
+  assert.match(read("ui/assets/panel.js"), /createSetupFacts\(els\.setupFactsBox\)/);
+  assert.match(panel, /id="ps-local-extra"/);
+  assert.match(settings, /id="pf-local-extra"/);
 });
 
 test("read-only items and default-value lines are different things", () => {
@@ -123,29 +126,28 @@ test("read-only items and default-value lines are different things", () => {
       assert.match(label, /data-key="/, `${file}: a default line must sit inside a field block that owns a control`);
     }
   }
-  // The read-only block is styled in BOTH sheets (each page renders one); the
-  // default-value line exists only in the params form, so only panel.css needs it.
-  for (const css of ["ui/assets/panel.css", "ui/assets/settings.css"]) {
-    const sheet = read(css);
-    assert.match(sheet, /\.cf-readonly-item\s*\{/, `${css} must style read-only items`);
-    assert.doesNotMatch(sheet, /\.cf-readonly-item\s*,\s*\.field-default/, `${css} must not merge the two`);
-  }
-  assert.match(read("ui/assets/panel.css"), /\.field-default\s*\{/, "panel.css must style default lines");
-  // No colour: the read-only block uses neutral tokens only.
+  // The read-only block is the PANEL's (表一 and its rows). The settings page
+  // defines environments, so its sheet carries neither block style.
   const panelCss = read("ui/assets/panel.css");
+  assert.match(panelCss, /\.cf-readonly-item\s*\{/, "panel.css must style read-only items");
+  assert.doesNotMatch(panelCss, /\.cf-readonly-item\s*,\s*\.field-default/, "panel.css must not merge the two");
+  assert.match(panelCss, /\.field-default\s*\{/, "panel.css must style default lines");
+  const settingsCss = read("ui/assets/settings.css");
+  assert.doesNotMatch(settingsCss, /\.cf-readonly-item\s*\{/, "the settings sheet needs no read-only block");
+  assert.doesNotMatch(settingsCss, /\ssf-row\s*\{/, "nor 表一's rows");
+  // No colour: the read-only block uses neutral tokens only.
   const rule = panelCss.match(/\.cf-readonly-item \{([\s\S]*?)\}/)[1];
   assert.doesNotMatch(rule, /#[0-9a-f]{6}|rgb\(|accent|danger|warn/i, "read-only is neutral, colour stays for state/danger");
   assert.match(rule, /border-left/, "and it is visibly a block");
 });
 
-test("the read-only style is described once, in both sheets", async () => {
+test("the read-only style lives on the page that has read-only items", async () => {
   const { STRINGS } = await import("../ui/assets/i18n.js");
-  // The block carries copy the user already has (labels/announcements); no new
-  // string was needed for the rule itself.
-  for (const key of ["edit.kvStream", "edit.kvStreamHint", "setupFacts.title", "field.vision"]) {
+  // The block's copy is the panel's; no new string was needed for the rule itself.
+  for (const key of ["edit.kvStream", "edit.kvStreamHint", "setupFacts.title", "setupFacts.visionHint"]) {
     assert.ok(String(STRINGS.zh[key] || "").length > 0, `${key} missing`);
   }
-  for (const html of ["ui/panel.html", "ui/settings.html"]) {
-    assert.match(read(html), /cf-readonly|local-vision/, `${html} must expose the rule`);
-  }
+  assert.match(read("ui/panel.html"), /setupFactsBox|cf-readonly/);
+  // …and the settings page deliberately has none of it: it defines environments.
+  assert.doesNotMatch(read("ui/settings.html"), /cf-readonly|setup-facts/);
 });

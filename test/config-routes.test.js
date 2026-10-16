@@ -292,7 +292,7 @@ test("the setup entry is named the same way in the copy and in the hints", () =>
   // "Re-run setup" is only actionable if the hint names the entry the user can
   // actually press. The button label minus its ellipsis must appear verbatim in
   // every hint that tells them to re-run setup.
-  const hintKeys = ["edit.kvStreamHint", "edit.lowRamHint", "vision.setupNote"];
+  const hintKeys = ["edit.kvStreamHint", "edit.lowRamHint", "setupFacts.visionHint"];
   for (const lang of LANGS) {
     const entry = STRINGS[lang]["configPick.new"].replace(/[…\.]+$/u, "").trim();
     assert.ok(entry.length > 4, `${lang}: the entry label is too short to be a pointer`);

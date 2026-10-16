@@ -216,45 +216,47 @@ test("the module's vision list is the model's list", () => {
   assert.deepEqual(VISION_OPTIONS, VISION_VALUES, "the asset must not drift from lib/profiles.js");
 });
 
-test("the container block renders the vision switch inside the advanced group", () => {
+test("the container block renders the vision switch as its own section", () => {
   const src = read("ui/assets/profile-fields.js");
   // A select, never free text, fed from the one list.
   assert.match(src, /make\("select", \{ id: `\$\{p\}vision` \}\)/);
   assert.match(src, /for \(const value of VISION_OPTIONS\)/);
   assert.match(src, /"Vision",\n    "apiKey",/);
   assert.match(src, /Vision: visionInput\.value\.trim\(\)/);
-  // The read-only local status is a real fragment both pages mount.
-  assert.match(src, /export function createVisionStatus\(/);
-  assert.match(read("ui/assets/settings.js"), /createVisionStatus\(els\.profileLocalVision/);
-  // Mounted at the TOP of the local block: a read-only report precedes the fields
-  // that can be changed (the API key keeps its own mount point below them).
-  assert.match(read("ui/assets/panel.js"), /createVisionStatus\(root\.querySelector\("#ps-local-vision"\)/);
-  assert.match(read("ui/assets/settings.js"), /localVisionStatus\.render\(visionInfo\)/);
-  assert.match(read("ui/assets/panel.js"), /pluginFormEls\.localVision\.render\(visionInfo\)/);
-  // Both pages read the state from /profiles.
+  // 视觉 is its own section on the container side (image input is a subject), and
+  // the LOCAL side's vision report lives in 表一 (ui/assets/setup-facts.js), one
+  // shared table both pages mount — not in a profile block.
+  assert.match(src, /cf-section cf-section-vision/);
+  assert.doesNotMatch(src, /createVisionStatus/, "the old local fragment is gone");
+  const facts = read("ui/assets/setup-facts.js");
+  assert.match(facts, /export function createSetupFacts\(/);
+  assert.match(facts, /\{ key: "vision", label: "field\.vision", value: "sf-vision", hint: "setupFacts\.visionHint" \}/);
+  assert.match(read("ui/assets/panel.js"), /createSetupFacts\(els\.setupFactsBox\)/);
+  // The settings page defines ENVIRONMENTS (profile fields): no table, and no
+  // vision row of its own.
+  assert.doesNotMatch(read("ui/assets/settings.js"), /createSetupFacts/);
+  assert.doesNotMatch(read("ui/settings.html"), /setup-facts|local-vision/);
+  // Both pages read the state from /profiles; the facts come with the config view.
   for (const rel of ["ui/assets/settings.js", "ui/assets/panel.js"]) {
-    assert.match(read(rel), /vision: data\?\.vision|visionInfo = data\?\.vision/, `${rel} must take the vision state from /profiles`);
+    assert.match(read(rel), /visionInfo = data\?\.vision/, `${rel} must take the vision state from /profiles`);
   }
 });
 
 test("the vision copy exists in all six locales", async () => {
   const { STRINGS, LANGS } = await import("../ui/assets/i18n.js");
-  const keys = ["field.vision", "field.visionHint", "field.visionPlaceholder", "vision.on", "vision.off", "vision.encoderCpu", "vision.encoderGpu", "vision.mmproj", "vision.setupNote"];
+  const keys = ["field.vision", "field.visionHint", "field.visionPlaceholder", "vision.on", "vision.off", "vision.encoderCpu", "vision.encoderGpu", "vision.mmproj", "setupFacts.visionHint"];
   for (const lang of LANGS) {
     for (const key of keys) {
       assert.ok(String(STRINGS[lang][key] || "").length > 0, `${lang} is missing ${key}`);
     }
-    // The hint has to name the three values the image accepts.
-    for (const value of ["no", "yes", "cpu"]) {
-      assert.match(STRINGS[lang]["field.visionHint"], new RegExp(value), `${lang}.field.visionHint must mention ${value}`);
-    }
-    // The read-only line says who owns it, and names the exact way out.
-    assert.match(STRINGS[lang]["vision.setupNote"], /setup/i, `${lang}.vision.setupNote must name setup`);
-    assert.match(STRINGS[lang]["vision.setupNote"], /--vision/, `${lang}.vision.setupNote must name the flag`);
-    // The two vocabularies are tied together, so `gpu` and `yes` do not read as
-    // two unrelated things.
-    assert.match(STRINGS[lang]["vision.encoderGpu"], /yes|VISION=yes/, `${lang}.vision.encoderGpu must name the container's spelling`);
-    assert.match(STRINGS[lang]["vision.encoderCpu"], /VISION=cpu|cpu/, `${lang}.vision.encoderCpu must name the container's spelling`);
+    // 表一's hint keeps the two tiers apart: this config's choice vs the build.
+    assert.match(STRINGS[lang]["setupFacts.visionHint"], /no/, `${lang}: the config's own choice`);
+    assert.match(STRINGS[lang]["setupFacts.visionHint"], /setup/i, `${lang}: and where to change it`);
+    // The row's two values keep the two tiers readable, and the encoders are named
+    // so `gpu` and the container's `yes` do not read as unrelated things.
+    assert.ok(STRINGS[lang]["vision.on"].length > 0 && STRINGS[lang]["vision.off"].length > 0);
+    assert.match(STRINGS[lang]["vision.encoderGpu"], /gpu/i, `${lang}.vision.encoderGpu`);
+    assert.match(STRINGS[lang]["vision.encoderCpu"], /cpu/i, `${lang}.vision.encoderCpu`);
   }
 });
 
@@ -267,18 +269,19 @@ test("the vision copy exists in all six locales", async () => {
 // tolerates a hand-edited section but tells you to re-run setup
 // (`serve/server.py:2174-2181`). So the app reports the state and points at
 // setup, instead of offering a switch that half-works.
-test("the local vision state stays read-only, pointing at setup", async () => {
+test("the local vision state stays read-only, reported in 表一", async () => {
   const { emptyLocalProfile } = await import("../lib/profiles.js");
   // No local vision field to write: the local model carries none.
   assert.ok(!("Vision" in emptyLocalProfile()), "no Vision field on the local model");
   assert.ok(!("Vision" in normalizeProfile({ type: "local", strataDir: "/s", Vision: "gpu" })), "and normalization drops one if it appears");
+  // …and the table only PAINTS it (no write path), while the reason — setup
+  // compiles a per-mode encoder — stays on the record where the next reader looks.
+  const facts = read("ui/assets/setup-facts.js");
+  assert.match(facts, /export function visionText\(vision\)/, "the row is a pure mapper");
+  assert.doesNotMatch(facts, /addEventListener|collect\(|save|write/i, "no write path in 表一");
+  assert.match(facts, /setup\.py:3229/, "and the reason is cited where the row is built");
   const fields = read("ui/assets/profile-fields.js");
-  const status = fields.slice(fields.indexOf("// ── the local vision state (read-only)"), fields.indexOf("// ── the module ──"));
-  assert.match(status, /function paint\(info\)/, "the fragment only paints");
-  assert.doesNotMatch(status, /addEventListener|execCommand|collect\(/, "no write path in the read-only line");
-  // …and the reason is on the record where the next reader will look.
-  assert.match(status, /setup\.py:3229/);
-  assert.match(status, /server\.py:2174/);
+  assert.doesNotMatch(fields, /createVisionStatus/, "the old local fragment is gone");
 });
 
 // ── the MI50 preset must not carry an env the image ignores ──────────────
