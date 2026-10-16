@@ -40,9 +40,16 @@ const EXPECTED_KEYS = [
   "context",
   "kv",
   "sessionCache",
+  "conversationSlots",
   "expertCache",
   "residentBudget",
+  "vramReserve",
+  "prefill",
+  "poolWorkers",
+  "vramElastic",
   "mtp",
+  "specMinP",
+  "suffixDraft",
   "temperature",
   "top_p",
   "top_k",
@@ -93,7 +100,7 @@ test("MTP has its own subject, not KV and not sampling", () => {
   const g = groups();
   const draft = g.find((x) => x.legend === "edit.draftLegend");
   assert.ok(draft, "draft & speculation is its own group");
-  assert.deepEqual(draft.keys, ["mtp"], "the MTP window lives there");
+  assert.deepEqual(draft.keys, ["mtp", "specMinP", "suffixDraft"], "the MTP window and its two draft knobs");
   assert.match(draft.text, /edit\.mtpHint/, "and explains itself");
   for (const other of g.filter((x) => x !== draft)) {
     assert.doesNotMatch(other.text, /data-key="mtp"/, `${other.legend} must not carry MTP`);

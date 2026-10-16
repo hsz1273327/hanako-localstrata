@@ -1246,6 +1246,13 @@ const FIELD_LABEL_KEYS = {
   reasoning_effort: "edit.reasoningEffort",
   expertCache: "edit.expertCache",
   residentBudget: "edit.residentBudget",
+  vramReserve: "edit.vramReserve",
+  prefill: "edit.prefill",
+  poolWorkers: "edit.poolWorkers",
+  vramElastic: "edit.vramElastic",
+  specMinP: "edit.specMinP",
+  suffixDraft: "edit.suffixDraft",
+  conversationSlots: "edit.conversationSlots",
   lowRamMode: "edit.lowRam",
 };
 

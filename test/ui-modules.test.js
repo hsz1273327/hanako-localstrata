@@ -221,6 +221,8 @@ test("G3b: ids nobody looks up stay on a known list", () => {
       "ed-context", "ed-kv", "ed-sessionCache", "ed-expertCache", "ed-residentBudget", "ed-mtp",
       "ed-temperature", "ed-top_p", "ed-top_k", "ed-min_p", "ed-presence_penalty", "ed-max_tokens",
       "ed-reasoning_effort",
+      "ed-vramReserve", "ed-prefill", "ed-poolWorkers", "ed-vramElastic", "ed-specMinP",
+      "ed-suffixDraft", "ed-conversationSlots",
       "sp-vision", "sp-context", "sp-kv", "sp-kvStreaming", "sp-lowRam",
     ]),
     "ui/settings.html": new Set(["profileConfirmSub"]),

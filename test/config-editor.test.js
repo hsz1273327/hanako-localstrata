@@ -86,6 +86,14 @@ function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
           "32768",
           "--expert-cache",
           "auto",
+          "--vram-reserve-mib",
+          "700",
+          "--prefill",
+          "auto",
+          "--spec-min-p",
+          "0.5",
+          "--conversation-cache-slots",
+          "4",
         ],
         cwd: dir,
         model_name: "Qwen3.8-IQ3_S",
@@ -168,7 +176,10 @@ test("a local deployment reads every parameter out of its config file", async ()
     if (key === "presence_penalty") continue; // a legitimate 0
     // Optional by design: an absent flag IS the engine's default here (this model's
     // experts fit, so there is no `--resident-budget-gib`).
-    if (key === "residentBudget") continue;
+    // Optional by design: an absent flag IS the engine's default here (this model's
+    // experts fit, so there is no `--resident-budget-gib`), and these three are the
+    // tuning knobs this install happens to leave unset.
+    if (["residentBudget", "poolWorkers", "suffixDraft", "vramElastic"].includes(key)) continue;
     assert.ok(!isAbsent(value), `${key} must not come back empty`);
   }
   // And the summary agrees (used elsewhere).

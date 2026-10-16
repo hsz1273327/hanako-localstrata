@@ -179,6 +179,10 @@
                  lives in this group rather than among the startup switches. -->
             <span class="field-default" data-i18n="edit.sessionCacheDefault" hidden></span>
           </label>
+          <label class="field"><span data-i18n="edit.conversationSlots">Parked conversations</span>
+            <input id="ed-conversationSlots" data-key="conversationSlots" type="number" min="1" max="16" step="1">
+            <span class="field-default" data-i18n="edit.conversationSlotsDefault" hidden></span>
+          </label>
         </fieldset>
 
         <fieldset class="group">
@@ -193,6 +197,26 @@
             <span class="field-hint" data-i18n="edit.residentBudgetHint">Only for a model whose experts do not all fit in RAM</span>
             <span class="field-default" data-i18n="edit.residentBudgetDefault" hidden></span>
           </label>
+          <!-- The tuning knobs (all engine args → a restart applies them). -->
+          <label class="field"><span data-i18n="edit.vramReserve">VRAM kept free (MiB)</span>
+            <input id="ed-vramReserve" data-key="vramReserve" type="number" min="0" max="8192" step="1">
+            <span class="field-default" data-i18n="edit.vramReserveDefault" hidden></span>
+          </label>
+          <label class="field"><span data-i18n="edit.prefill">Prompt chunk</span>
+            <input id="ed-prefill" data-key="prefill" type="text" autocomplete="off" spellcheck="false">
+            <span class="field-default" data-i18n="edit.prefillDefault" hidden></span>
+          </label>
+          <label class="field"><span data-i18n="edit.poolWorkers">CPU expert threads</span>
+            <input id="ed-poolWorkers" data-key="poolWorkers" type="number" min="0" max="256" step="1">
+            <span class="field-default" data-i18n="edit.poolWorkersDefault" hidden></span>
+          </label>
+          <label class="field"><span data-i18n="edit.vramElastic">Segment the expert cache</span>
+            <select id="ed-vramElastic" data-key="vramElastic">
+              <option value="" data-i18n="edit.vramElasticUnset">— off (the flag is not written) —</option>
+              <option value="on">on</option>
+            </select>
+            <span class="field-default" data-i18n="edit.vramElasticDefault" hidden></span>
+          </label>
         </fieldset>
 
         <!-- 主题成组：草稿层 / 投机解码。MTP 既不是 KV 的事也不是采样的事：
@@ -203,6 +227,14 @@
             <input id="ed-mtp" data-key="mtp" type="number" min="0" step="1">
             <span class="field-hint muted" data-i18n="edit.mtpHint">Draft tokens per check</span>
             <span class="field-default" data-i18n="edit.mtpDefault" hidden></span>
+          </label>
+          <label class="field"><span data-i18n="edit.specMinP">Draft confidence</span>
+            <input id="ed-specMinP" data-key="specMinP" type="number" min="0" max="1" step="0.05">
+            <span class="field-default" data-i18n="edit.specMinPDefault" hidden></span>
+          </label>
+          <label class="field"><span data-i18n="edit.suffixDraft">Suffix drafts</span>
+            <input id="ed-suffixDraft" data-key="suffixDraft" type="number" min="0" max="8" step="1">
+            <span class="field-default" data-i18n="edit.suffixDraftDefault" hidden></span>
           </label>
         </fieldset>
 
