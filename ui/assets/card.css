@@ -2,13 +2,29 @@
  *
  * The card's BOX comes from the host (a card's bounds in the layout), so this file
  * never stretches its content to fill it: the block is centred instead, which is what
- * turns "content at the top, half the card empty" into a composed tile. Everything
- * here uses the tokens ./assets/app-ui.css already defines (--control-height,
- * --control-radius, --border-width, --accent, --bg-card-alt, --duration-fast) — no new
- * palette, and colour only where it carries meaning (the state dot).
+ * turns "content at the top, half the card empty" into a composed tile.
  *
- * The button styles live here because a slim card does not load panel.css, which is
- * where `.btn` is defined: without this the browser's default grey button shows up. */
+ * `html, body { height: 100% }` is what makes that centring possible at all: a
+ * `min-height: 100%` on the flex column resolves against its parent's height, and an
+ * auto-height body gives it nothing to resolve against (that is why the first version
+ * stayed glued to the top with half the card empty). Neither the host's app-ui.css nor
+ * this file used to set it.
+ *
+ * Colour and spacing come from the tokens ./assets/app-ui.css defines. Note which ones
+ * it does NOT define — --accent, --text, --text-muted, --green, --amber, --danger,
+ * --border — so every use here carries a literal fallback; and --bg-card-alt is a
+ * GREY (rgba(0,0,0,.03)), which is why a button filled with it reads as the system's
+ * default button rather than as ours. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
 .slim {
   box-sizing: border-box;
   display: flex;
@@ -116,8 +132,12 @@
   white-space: nowrap;
 }
 
-/* The action, full width: the one primary (solid accent) while stopped, an outline
- * while running. Only one of the two is on screen at a time (see card.js). */
+/* The action: the one primary (solid accent) while stopped, an OUTLINE while running.
+ * Only one of the two is on screen at a time (see card.js).
+ *
+ * Outlined means transparent: filling it with --bg-card-alt gives a grey slab that
+ * reads as the browser's own button. The border is a neutral rule (no new colour), and
+ * 8px is set literally because --control-radius resolves through --radius-input. */
 .slim-actions {
   display: flex;
 }
@@ -125,22 +145,28 @@
 .slim-btn {
   flex: 1 1 auto;
   min-width: 0;
-  height: var(--control-height, 32px);
-  padding: 0 12px;
-  border: var(--border-width, 1px) solid var(--border-muted, rgba(83, 125, 150, 0.32));
-  border-radius: var(--control-radius, 6px);
-  background: var(--bg-card-alt, transparent);
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(83, 125, 150, 0.38);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text, inherit);
   font: inherit;
   font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color var(--duration-fast, 120ms) ease, background var(--duration-fast, 120ms) ease;
+  transition: border-color var(--duration-fast, 150ms) ease, background var(--duration-fast, 150ms) ease;
 }
 
 .slim-btn:hover:not(:disabled) {
   border-color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.slim-btn:active:not(:disabled) {
+  background: rgba(16, 185, 129, 0.14);
 }
 
 .slim-btn:focus-visible {
@@ -157,6 +183,11 @@
   border-color: transparent;
   background: var(--accent, #10b981);
   color: #fff;
+}
+
+.slim-btn.primary:hover:not(:disabled) {
+  background: var(--accent, #10b981);
+  filter: brightness(1.06);
 }
 
 .slim-msg {

@@ -135,11 +135,25 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   // the button is not the browser default (a slim card does not load panel.css, which
   // is where .btn lives — that is what made it a grey UA button).
   const css = read("ui/assets/card.css");
-  assert.match(css, /justify-content: center/);
-  // `min-height: 100%` is what lets the centring work inside the host's box; what must
-  // NOT appear is a hard height (or a stretched child) that fills it.
-  assert.doesNotMatch(css, /[\s;{]height:\s*100%/);
-  assert.doesNotMatch(css, /flex:\s*1 1 auto;\s*\n?\s*height/);
+  // The height chain: `min-height: 100%` on the flex column only centres when the
+  // ancestors have a resolved height (neither app-ui.css nor this file used to set it).
+  // Comments are stripped first: this file explains the fix in prose, and prose must not
+  // be mistaken for a declaration.
+  const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(code, /html,\s*\nbody\s*\{\s*\n\s*height:\s*100%;/);
+  assert.match(code, /margin:\s*0/);
+  assert.match(code, /justify-content: center/);
+  // `min-height: 100%` is what lets the centring work inside the host's box; elsewhere a
+  // hard height would mean "stretch to fill", which is what we do not want.
+  const rest = code.replace(/html,\s*\nbody\s*\{[^}]*\}/, "");
+  assert.doesNotMatch(rest, /[\s;{]height:\s*100%/);
+  // The action is OURS: an outline (transparent ground), not a fill with the host's
+  // grey --bg-card-alt, which reads as the browser's default button.
+  const btn = code.slice(code.indexOf(".slim-btn {"), code.indexOf(".slim-btn:hover"));
+  assert.match(btn, /background: transparent/);
+  assert.doesNotMatch(btn, /bg-card-alt/);
+  assert.match(btn, /border-radius: 8px/);
+  assert.match(code, /\.slim-btn\.primary \{[^}]*background: var\(--accent, #10b981\)/);
   assert.match(css, /\.slim-btn\s*\{/);
   assert.match(css, /\.slim-btn\.primary/);
   assert.match(css, /var\(--accent/);
