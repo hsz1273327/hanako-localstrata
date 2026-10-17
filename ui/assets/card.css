@@ -1,20 +1,17 @@
 /* The slim view (canvas card + right-hand function panel).
  *
- * The card's BOX comes from the host (a card's bounds in the layout), so this file
- * never stretches its content to fill it: the block is centred instead, which is what
- * turns "content at the top, half the card empty" into a composed tile.
+ * A canvas card's BOX is the host's (the card's bounds in the layout) and the manifest
+ * has no field to change it — the only size a v2 manifest can declare is
+ * `detachedDefaultSize`, and that one governs a newly created detached window, not a
+ * canvas card. So this file cannot "make the frame shorter"; it makes the CONTENT carry
+ * the frame instead: larger type, a real hierarchy (the numbers are the subject, the
+ * labels are footnotes), and a generous top margin with the slack left at the BOTTOM
+ * (equal voids above and below read as two holes; a top margin reads as a card).
  *
- * `html, body { height: 100% }` is what makes that centring possible at all: a
- * `min-height: 100%` on the flex column resolves against its parent's height, and an
- * auto-height body gives it nothing to resolve against (that is why the first version
- * stayed glued to the top with half the card empty). Neither the host's app-ui.css nor
- * this file used to set it.
- *
- * Colour and spacing come from the tokens ./assets/app-ui.css defines. Note which ones
- * it does NOT define — --accent, --text, --text-muted, --green, --amber, --danger,
- * --border — so every use here carries a literal fallback; and --bg-card-alt is a
- * GREY (rgba(0,0,0,.03)), which is why a button filled with it reads as the system's
- * default button rather than as ours. */
+ * `html, body { height: 100% }` still matters: it is what gives `min-height: 100%`
+ * something to resolve against (neither this file nor the host's app-ui.css sets it).
+ * Colour: --accent / --text / --text-muted / --green / --amber / --danger / --border are
+ * NOT defined by app-ui.css, so every use carries a literal fallback. */
 html,
 body {
   height: 100%;
@@ -25,45 +22,48 @@ body {
   overflow: hidden;
 }
 
+/* Top-aligned with breathing room, NOT centred: whatever the frame leaves over stays at
+ * the bottom, which reads as a roomy margin instead of a second void. */
 .slim {
   box-sizing: border-box;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: flex-start;
   min-height: 100%;
-  padding: 12px 14px;
+  padding: 24px 16px 28px;
 }
 
 .slim-main {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 22px;
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   min-width: 0;
 }
 
-/* One line: dot + state + reach. Nothing wraps at a 320 px column. */
+/* One line: dot + state + reach. The state is the loudest thing on the card. */
 .slim-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .slim-state {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .slim .dot {
-  flex: 0 0 8px;
-  width: 8px;
-  height: 8px;
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: var(--text-muted, #8e9196);
 }
@@ -76,16 +76,16 @@ body {
   background: var(--amber, #d9a441);
 }
 
-/* 本地 / 局域网: a quiet pill on the right of the same line. Two states only, no
- * colour: the dot is the only thing that carries state colour. */
+/* 本地 / 局域网: a quiet pill on the right of the same line, two states, no colour.
+ * It shrinks before the state text does. */
 .slim-scope {
   margin-left: auto;
   flex: 0 0 auto;
-  padding: 1px 7px;
-  border: var(--border-width, 1px) solid var(--border-muted, rgba(83, 125, 150, 0.28));
+  padding: 2px 9px;
+  border: 1px solid rgba(83, 125, 150, 0.3);
   border-radius: 999px;
   font-size: 11px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--text-muted, #8e9196);
   white-space: nowrap;
 }
@@ -95,10 +95,11 @@ body {
   font-weight: 600;
 }
 
-/* Two rows, label left / value right, tabular numbers so the digits do not dance. */
+/* Two rows: small label on the left, the NUMBER large on the right (tabular figures so
+ * a changing value does not make the row twitch). */
 .slim-rows {
   display: grid;
-  gap: 4px;
+  gap: 14px;
   margin: 0;
 }
 
@@ -108,8 +109,8 @@ body {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
-  padding-bottom: 4px;
-  border-bottom: var(--border-width, 1px) solid var(--border-muted, rgba(83, 125, 150, 0.18));
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(83, 125, 150, 0.18);
 }
 
 .slim-row:last-child {
@@ -119,6 +120,7 @@ body {
 
 .slim-row dt {
   font-size: 11px;
+  letter-spacing: 0.02em;
   color: var(--text-muted, #8e9196);
   white-space: nowrap;
   overflow: hidden;
@@ -127,17 +129,15 @@ body {
 
 .slim-row dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* The action: the one primary (solid accent) while stopped, an OUTLINE while running.
- * Only one of the two is on screen at a time (see card.js).
- *
- * Outlined means transparent: filling it with --bg-card-alt gives a grey slab that
- * reads as the browser's own button. The border is a neutral rule (no new colour), and
- * 8px is set literally because --control-radius resolves through --radius-input. */
+/* The action: solid accent while stopped, an OUTLINE while running. Only one of the two
+ * is on screen at a time (see card.js). */
 .slim-actions {
   display: flex;
 }
@@ -145,14 +145,14 @@ body {
 .slim-btn {
   flex: 1 1 auto;
   min-width: 0;
-  height: 34px;
-  padding: 0 14px;
+  height: 46px;
+  padding: 0 16px;
   border: 1px solid rgba(83, 125, 150, 0.38);
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text, inherit);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -188,6 +188,18 @@ body {
 .slim-btn.primary:hover:not(:disabled) {
   background: var(--accent, #10b981);
   filter: brightness(1.06);
+}
+
+/* The service address: a fact, set small and quiet under the action. */
+.slim-addr {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted, #8e9196);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slim-msg {

@@ -31,6 +31,7 @@ const els = {
   pp: document.getElementById("slimPp"),
   start: document.getElementById("slimStart"),
   stop: document.getElementById("slimStop"),
+  addr: document.getElementById("slimAddr"),
   msg: document.getElementById("slimMsg"),
 };
 
@@ -74,11 +75,17 @@ function paint(s) {
     els.scope.hidden = false;
     els.scope.className = `slim-scope${lan ? " lan" : ""}`;
     els.scope.textContent = t(lan ? "card.scopeLan" : "card.scopeLocal");
-    els.scope.title = String(net.addressUrl || net.listenAddr || "");
+    const url = String(net.addressUrl || net.listenAddr || "");
+    els.scope.title = url;
+    // The address itself, small and quiet: it is a fact about this service, not a label.
+    els.addr.hidden = !url;
+    els.addr.textContent = url;
   } else {
     els.scope.hidden = true;
     els.scope.textContent = "";
     els.scope.title = "";
+    els.addr.hidden = true;
+    els.addr.textContent = "";
   }
   els.tg.textContent = rate(s.metrics?.tg);
   els.pp.textContent = rate(s.metrics?.pp);

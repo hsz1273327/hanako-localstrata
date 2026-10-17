@@ -114,7 +114,7 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(html, /data-hana-app-ui/);
   assert.match(js, /import \{ hana \} from "\.\/sdk\.js"/);
   // Three things only: state + reach, speed, start/stop.
-  for (const id of ["slimState", "slimScope", "slimTg", "slimPp", "slimStart", "slimStop"]) {
+  for (const id of ["slimState", "slimScope", "slimTg", "slimPp", "slimStart", "slimStop", "slimAddr"]) {
     assert.ok(html.includes(`id="${id}"`), `${id} is on the card`);
   }
   for (const id of ["slimGpu", "slimMem", "slimOpen"]) {
@@ -135,24 +135,33 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   // the button is not the browser default (a slim card does not load panel.css, which
   // is where .btn lives — that is what made it a grey UA button).
   const css = read("ui/assets/card.css");
-  // The height chain: `min-height: 100%` on the flex column only centres when the
-  // ancestors have a resolved height (neither app-ui.css nor this file used to set it).
+  // The height chain: the ancestors must have a resolved height, otherwise
+  // `min-height: 100%` on the column has nothing to resolve against.
   // Comments are stripped first: this file explains the fix in prose, and prose must not
   // be mistaken for a declaration.
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
   assert.match(code, /html,\s*\nbody\s*\{\s*\n\s*height:\s*100%;/);
   assert.match(code, /margin:\s*0/);
-  assert.match(code, /justify-content: center/);
-  // `min-height: 100%` is what lets the centring work inside the host's box; elsewhere a
-  // hard height would mean "stretch to fill", which is what we do not want.
+  // The frame is the host's, so the content carries it: TOP-aligned with a margin, and
+  // the slack stays at the bottom — centring made two equal voids, which read as holes.
+  assert.match(code, /\.slim \{[^}]*justify-content: flex-start/);
+  assert.doesNotMatch(code, /justify-content: center/);
+  // `min-height: 100%` lets the column reach the frame; elsewhere a hard height would
+  // mean "stretch to fill".
   const rest = code.replace(/html,\s*\nbody\s*\{[^}]*\}/, "");
   assert.doesNotMatch(rest, /[\s;{]height:\s*100%/);
+  // Type scale: the numbers are the subject (20px, tabular), the labels are footnotes.
+  const value = code.slice(code.indexOf(".slim-row dd {"), code.indexOf(".slim-actions {"));
+  assert.match(value, /font-size: 22px/);
+  assert.match(value, /font-variant-numeric: tabular-nums/);
+  assert.match(code, /\.slim-state \{[^}]*font-size: 16px/);
   // The action is OURS: an outline (transparent ground), not a fill with the host's
   // grey --bg-card-alt, which reads as the browser's default button.
   const btn = code.slice(code.indexOf(".slim-btn {"), code.indexOf(".slim-btn:hover"));
   assert.match(btn, /background: transparent/);
   assert.doesNotMatch(btn, /bg-card-alt/);
-  assert.match(btn, /border-radius: 8px/);
+  assert.match(btn, /height: 46px/);
+  assert.match(btn, /border-radius: 10px/);
   assert.match(code, /\.slim-btn\.primary \{[^}]*background: var\(--accent, #10b981\)/);
   assert.match(css, /\.slim-btn\s*\{/);
   assert.match(css, /\.slim-btn\.primary/);
