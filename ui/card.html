@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strata</title>
+  <link rel="stylesheet" href="./assets/app-ui.css">
+  <link rel="stylesheet" href="./assets/card.css">
+</head>
+<body>
+  <!-- The SLIM view: a canvas card on a page, and (through the same route) the
+       right-hand function panel. Three things only — state, speed, start/stop —
+       because that is what a glance needs. The full page lives at /panel.html. -->
+  <main class="slim" data-hana-app-ui>
+    <header class="slim-head">
+      <span id="slimDot" class="dot stopped" aria-hidden="true"></span>
+      <span id="slimState" class="slim-state">—</span>
+    </header>
+
+    <dl class="slim-rows">
+      <div class="slim-row"><dt data-i18n="label.tg">Decode</dt><dd id="slimTg">—</dd></div>
+      <div class="slim-row"><dt data-i18n="label.pp">Prefill</dt><dd id="slimPp">—</dd></div>
+    </dl>
+
+    <div class="slim-actions">
+      <button id="slimStart" class="btn small" type="button" data-i18n="action.start">Start</button>
+      <button id="slimStop" class="btn small" type="button" data-i18n="action.stop">Stop</button>
+    </div>
+
+    <p id="slimMsg" class="slim-msg" hidden></p>
+  </main>
+  <script>
+    // A module that fails to parse would otherwise leave a blank card with no hint.
+    window.addEventListener("error", (e) => {
+      if (e.target && e.target.tagName === "SCRIPT") {
+        const box = document.getElementById("slimMsg");
+        if (box) { box.textContent = "Card failed to start. Check the App resources and run the validator."; box.hidden = false; }
+      }
+    }, true);
+  </script>
+  <script type="module" src="./assets/card.js"></script>
+</body>
+</html>

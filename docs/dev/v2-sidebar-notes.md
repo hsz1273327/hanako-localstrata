@@ -60,33 +60,41 @@ if (tU(e) && !n.acceptsFunctionPanelContributions)
 **所以不是"声明了却不显示"的坑**：在 page 上它一定出现；而在 home / detached 上，
 带 `functionPanel` 的卡片会被**拒绝放置**并报 `INVALID_STRUCTURE`（不是静默忽略）。
 
-## 三、`app/input.panels` 是另一条路（这次没加）
+## 三、`app/input.panels` 是另一条路，而且我们**不申报**它
 
 - `app/input.panels` 守的是 `hana.inputPanel.*`，位置是**输入框上方**的输入面板，不是右栏
   （`hana-app-creator/SKILL.md:354`：`app/input.panels` = custom pages above a conversation's input box）。
-- 我们 UI 里**一处都没调** `hana.inputPanel.*`：树里那 2 个命中是 vendored SDK
-  （`ui/assets/sdk.js:1843 / :1862`）**自己的实现**，不是我们的调用。
-- 所以不存在"静默拒绝"；加这个能力只会多一条无用的授权。测试
-  `test/manifest.test.js`（"we do not claim capabilities our UI never uses"）钉住了这一点：
-  什么时候我们真的开始呈现输入面板，那条断言会先红。
+- **不申报**：我们 UI 里一处都没调 `hana.inputPanel.*` —— 树里那 2 个命中是 vendored SDK
+  （`ui/assets/sdk.js:1843 / :1862`）**自己的实现**，不是我们的调用。没人要"输入框上方面板"这个东西。
+- 申报一条没人用的能力 = 一条用不上的授权 + 一次**强制重新批准**（`approval.appDeclaration`
+  只覆盖 capabilities + network，改了它就得重点一次）。
+- 规则由 `test/manifest.test.js` 的 "we do not claim capabilities our UI never uses" 守着：
+  `capabilities` 必须**逐字**等于那 5 条，并且我们 UI 里不出现 `hana.inputPanel.`。
 
 ## 四、落地的 manifest 形状
 
 ```jsonc
 "cards": [
-  { "id": "panel", … "realization": "page", "siteNavEntry": true,
-    "functionPanel": { "id": "console-panel", "label": "Strata", "route": "/sidebar.html" } },
-  { "id": "dashboard", … /* 不写 realization = 画布卡 */
-    "functionPanel": { "id": "console-dashboard", "label": "Strata", "route": "/sidebar.html" } }
+  { "id": "panel", "route": "/panel.html", "realization": "page", "siteNavEntry": true,
+    "face": { … } },                       /* 全功能页：**不带** functionPanel */
+  { "id": "dashboard", "route": "/card.html", /* 不写 realization = 画布卡 */
+    "face": { … },
+    "functionPanel": { "id": "console-dashboard", "label": "Strata", "route": "/card.html" } }
 ]
 ```
 
-- **整页卡保留**（站点导航入口），并且也能带 `functionPanel`（白板 `board` 就是这个形状，
-  是"整页 + 右栏"的现成证据）。
+- **整页卡**保留原样（站点导航入口 + 全功能），**不带** `functionPanel`：整页已经什么都有了，
+  没人要求它在右栏再放一份。（平台允许这么组合——白板 `board` 就是"整页 + 右栏"——只是我们不需要。）
 - **画布卡**让卡片中心能拖；拖到某个 **page**（主页 / 新页面）上，右栏就是我们的窄面板。
-- **窄面板**是新文件 `ui/sidebar.html`（+`assets/sidebar.js` / `sidebar.css`）：
-  只显示 状态 · 解码/预取速度 · VRAM/RAM · 一键启停 + 「打开完整面板」。
-  后端复用 **同三条路由**（`GET /status`、`POST /start`、`POST /stop`），没有新接口。
+  右栏只由画布卡提供：整页上不出现右栏。
+- **精简视图**是新文件 `ui/card.html`（+`assets/card.js` / `card.css`）：
+  只显示 **状态 · 解码/预取速度 · 启停**（VRAM/RAM 与「打开完整面板」已按产品意见去掉）。
+  后端复用 **同两条路由**（`GET /status`、`POST /start` / `POST /stop`），没有新接口。
+- **为什么不是 `/panel.html?compact=1`**：`ui/assets/panel.js` 是 ~2500 行的模块，同时带着配置文件区、表一、
+  参数编辑 6 组、setup 弹窗、profile 抽屉和日志轮询。紧凑模式不是加一段 CSS 就能收敛的，得给每一段渲染和轮询加护栏，
+  而且这份代价每次开卡都要付。卡片是"一眼看完"的产品面，独立成页更干净。
+- **右栏也用同一个 `/card.html`**：右栏同样是一列窄栏、同一件事（看一眼就走）；把整页塞进右栏会把配置区和参数编辑
+  挤到不可用，还会额外拉起整页的定时器。完整功能由整页承担。
 - **`minAppVersion` 不动**（`1.1.0-beta`）：我们没用 `titleMode` / `structural` /
   `edge-to-edge` / `service` 这些有版本门槛的字段，`cardForm: "flush"` 是 legacy 但仍加载。
 
@@ -95,6 +103,6 @@ if (tU(e) && !n.acceptsFunctionPanelContributions)
 1. 重载/批准新版 App 后，打开 **卡片中心**：应当出现两个磁贴——
    「Strata Console」（整页，拖不动）和「Strata 状态」（画布卡，**能拖**）。
 2. 把「Strata 状态」拖到**主页（page）**上：右侧功能面板应出现标题 **Strata** 的窄面板
-   （状态 / 速度 / VRAM / RAM / 启停 / 打开完整面板）。
+   （状态 / 解码与预取速度 / 启停）。
 3. 若把它拖到**桌面（home）**上：平台会拒绝并报
    `…requires function panel contributions but … rejects them` —— 这是设计如此，不是 bug。

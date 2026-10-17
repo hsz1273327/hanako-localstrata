@@ -1,13 +1,14 @@
-// Strata Console — the right function panel (narrow).
+// Strata — the SLIM view.
 //
-// This is the App's `contributes.cards[].functionPanel` route: it renders in the
-// host's right-hand panel and follows whichever of this App's cards is active on a
-// PAGE surface (the host's own rule: the panel list is empty unless the active
-// surface has `acceptsFunctionPanelContributions` — see
-// docs/dev/v2-sidebar-notes.md for the exact call sites).
+// One route serves two hosts: the canvas card the user drags onto a page, and the
+// right-hand function panel (`contributes.cards[].functionPanel`). Both are narrow,
+// so both get the same three things: state, speed, start/stop. The full page
+// (/panel.html: navigation, config, logs, the parameter editor) is a separate
+// document on purpose — it boots ~2.5k lines of editor/drawer logic that a glanceable
+// card must not pay for.
 //
-// Same backend as the full panel: GET /status, POST /start, POST /stop. Nothing
-// here is a second API — the narrow view just shows less.
+// Backend: exactly the two routes the full panel already uses — GET /status and
+// POST /start|/stop. Nothing new.
 import { hana } from "./sdk.js";
 import { loadLang, setLang, t, applyI18n } from "./i18n.js";
 
@@ -23,17 +24,13 @@ async function api(path, init = {}) {
 }
 
 const els = {
-  dot: document.getElementById("sideDot"),
-  state: document.getElementById("sideState"),
-  port: document.getElementById("sidePort"),
-  tg: document.getElementById("sideTg"),
-  pp: document.getElementById("sidePp"),
-  gpu: document.getElementById("sideGpu"),
-  mem: document.getElementById("sideMem"),
-  start: document.getElementById("sideStart"),
-  stop: document.getElementById("sideStop"),
-  open: document.getElementById("sideOpen"),
-  msg: document.getElementById("sideMsg"),
+  dot: document.getElementById("slimDot"),
+  state: document.getElementById("slimState"),
+  tg: document.getElementById("slimTg"),
+  pp: document.getElementById("slimPp"),
+  start: document.getElementById("slimStart"),
+  stop: document.getElementById("slimStop"),
+  msg: document.getElementById("slimMsg"),
 };
 
 const RUNNING = new Set(["running", "starting", "stopping", "restarting"]);
@@ -55,11 +52,6 @@ function rate(value) {
   return Number.isFinite(value) ? `${value} t/s` : "—";
 }
 
-function usage(res) {
-  if (!res || !Number.isFinite(res.totalGiB)) return "—";
-  return `${res.usedGiB} / ${res.totalGiB} GB`;
-}
-
 function setMessage(text) {
   els.msg.textContent = text || "";
   els.msg.hidden = !text;
@@ -71,11 +63,8 @@ function paint(s) {
   const busy = s.state === "starting" || s.state === "stopping" || s.state === "restarting";
   els.dot.className = `dot ${s.state === "running" ? "running" : busy ? "starting" : "stopped"}`;
   els.state.textContent = t(STATE_KEYS[s.state] || "state.stopped");
-  els.port.textContent = Number.isFinite(s.port) ? `:${s.port}` : "";
   els.tg.textContent = rate(s.metrics?.tg);
   els.pp.textContent = rate(s.metrics?.pp);
-  els.gpu.textContent = usage(s.resources?.gpu);
-  els.mem.textContent = usage(s.resources?.mem);
   // Only the action that makes sense right now is offered.
   els.start.hidden = running;
   els.stop.hidden = !running;
@@ -121,10 +110,6 @@ function schedule() {
 
 els.start.addEventListener("click", () => act("start"));
 els.stop.addEventListener("click", () => act("stop"));
-// Back to the full panel: the SDK's own card navigation (same App, card id "panel").
-els.open.addEventListener("click", () => {
-  Promise.resolve(hana.cards.open("panel")).catch((e) => setMessage(String(e?.message || e)));
-});
 
 applyI18n();
 await hana.ready();

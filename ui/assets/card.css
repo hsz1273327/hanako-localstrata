@@ -1,7 +1,7 @@
-/* The right function panel: a narrow column, so everything here is one line per
- * fact. It inherits the host's theme through ./assets/app-ui.css (the same file the
- * full panel loads), and adds only the narrow layout. */
-.side {
+/* The slim view (canvas card + right function panel). It inherits the host's theme
+ * through ./assets/app-ui.css — the same tokens and button/field classes the full
+ * panel uses — and adds only the narrow layout. No new palette. */
+.slim {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -10,36 +10,28 @@
   box-sizing: border-box;
 }
 
-.side-head {
+.slim-head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.side-state {
+.slim-state {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text, inherit);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.side-port {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted, #8e9196);
-  font-variant-numeric: tabular-nums;
-}
-
-.side-rows {
+.slim-rows {
   display: grid;
   gap: 6px;
   margin: 0;
 }
 
-.side-row {
+.slim-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -47,7 +39,7 @@
   min-width: 0;
 }
 
-.side-row dt {
+.slim-row dt {
   font-size: 11px;
   color: var(--text-muted, #8e9196);
   overflow: hidden;
@@ -55,30 +47,25 @@
   white-space: nowrap;
 }
 
-.side-row dd {
+.slim-row dd {
   margin: 0;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--text, inherit);
   white-space: nowrap;
 }
 
-.side-actions {
+.slim-actions {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.side-actions .btn {
+.slim-actions .btn {
   flex: 1 1 0;
   min-width: 0;
 }
 
-.side-open {
-  width: 100%;
-}
-
-.side-msg {
+.slim-msg {
   margin: 0;
   font-size: 11px;
   line-height: 1.45;
@@ -86,8 +73,8 @@
   overflow-wrap: anywhere;
 }
 
-/* The state dot mirrors the full panel's (green running, amber busy, grey stopped). */
-.side .dot {
+/* State dot: green running, amber busy, grey stopped (same reading as the panel). */
+.slim .dot {
   width: 8px;
   height: 8px;
   flex: 0 0 8px;
@@ -95,10 +82,10 @@
   background: var(--text-muted, #8e9196);
 }
 
-.side .dot.running {
+.slim .dot.running {
   background: var(--green, #3f9a55);
 }
 
-.side .dot.starting {
+.slim .dot.starting {
   background: var(--amber, #d9a441);
 }

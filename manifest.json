@@ -52,17 +52,16 @@
         "realization": "page",
         "siteNavEntry": true,
         "pageIcon": "assets/icon.svg",
-        "face": { "image": "assets/cover.svg" },
-        "functionPanel": { "id": "console-panel", "label": "Strata", "route": "/sidebar.html" }
+        "face": { "image": "assets/cover.svg" }
       },
       {
         "id": "dashboard",
         "title": "Strata 状态",
-        "description": "A small always-on card: service state, decode/prefill speed, VRAM and RAM",
-        "route": "/panel.html",
+        "description": "A small always-on card: service state, start/stop, and decode/prefill speed",
+        "route": "/card.html",
         "cardForm": "flush",
         "face": { "image": "assets/cover.svg" },
-        "functionPanel": { "id": "console-dashboard", "label": "Strata", "route": "/sidebar.html" }
+        "functionPanel": { "id": "console-dashboard", "label": "Strata", "route": "/card.html" }
       }
     ]
   }

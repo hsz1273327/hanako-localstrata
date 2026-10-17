@@ -58,63 +58,78 @@ test("one card is a CANVAS card (the only kind that can be dragged onto a page)"
   const canvas = cards.filter((c) => !c.realization);
   assert.equal(canvas.length, 1, "exactly one plain canvas card");
   assert.equal(canvas[0].id, "dashboard");
-  // The page card stays a page: it is the site-navigation entry.
+  // The canvas card is the SLIM view: a glanceable card must not boot the full
+  // page's editor/drawer code (~2.5k lines). Same reason the function panels use it.
+  assert.equal(canvas[0].route, "/card.html", "the slim view, not the full page");
+  // The page card stays a page: it is the site-navigation entry with everything.
   const page = cards.find((c) => c.id === "panel");
   assert.equal(page.realization, "page");
   assert.equal(page.siteNavEntry, true);
+  assert.equal(page.route, "/panel.html", "the full page is untouched");
 });
 
-test("every card carries the right-hand function panel, pointing at the narrow page", () => {
-  for (const card of cards) {
-    const fp = card.functionPanel;
-    assert.ok(fp, `${card.id}: functionPanel`);
-    assert.ok(typeof fp.id === "string" && fp.id.length > 0, `${card.id}: functionPanel.id`);
-    assert.equal(fp.route, "/sidebar.html", `${card.id}: the narrow panel page`);
-    assert.ok(fs.existsSync(uiFile(fp.route)), `${card.id}: ${fp.route} exists`);
-    assert.equal(fp.embedUrl, undefined, `${card.id}: route and embedUrl are exclusive`);
-    assert.equal(fp.service, undefined, `${card.id}: a service would raise minAppVersion`);
-  }
-  const ids = cards.map((c) => c.functionPanel.id);
-  assert.deepEqual([...new Set(ids)], ids, "functionPanel ids are unique");
+test("the canvas card is the one with a right-hand function panel", () => {
+  // The FUNCTION PANEL is what the product asked for on the always-on card. The
+  // whole-page card is the full-function page: it carries no panel of its own
+  // (nothing asked for one, and the page already holds everything).
+  const withPanel = cards.filter((c) => c.functionPanel);
+  assert.deepEqual(withPanel.map((c) => c.id), ["dashboard"], "only the canvas card");
+  const fp = withPanel[0].functionPanel;
+  assert.ok(typeof fp.id === "string" && fp.id.length > 0, "functionPanel.id");
+  assert.equal(fp.route, "/card.html", "the same narrow view as the card itself");
+  assert.ok(fs.existsSync(uiFile(fp.route)), `${fp.route} exists`);
+  assert.equal(fp.embedUrl, undefined, "route and embedUrl are exclusive");
+  assert.equal(fp.service, undefined, "a service would raise minAppVersion");
+  const page = cards.find((c) => c.id === "panel");
+  assert.equal(page.functionPanel, undefined, "the full page does not carry a panel");
 });
 
 test("we do not claim capabilities our UI never uses", () => {
-  // `app/input.panels` guards `hana.inputPanel.*`. The only hits in the tree are the
-  // vendored SDK's own definitions, so claiming it would grant a door nothing knocks
-  // on. If the App ever starts presenting an input panel, this test is the place that
-  // should change first.
-  const ours = ["ui/assets/panel.js", "ui/assets/settings.js", "ui/assets/sidebar.js"].map(read).join("\n");
-  assert.doesNotMatch(ours, /hana\.inputPanel\./, "our UI never opens an input panel");
-  assert.ok(!(manifest.capabilities || []).includes("app/input.panels"), "so no grant for it");
-  // And nothing we declare is gated above our own minAppVersion floor.
+  // `app/input.panels` guards `hana.inputPanel.*`. Our UI never calls it (the two
+  // hits in the tree are the vendored SDK's own implementation), and nothing asked
+  // for an input-box panel, so claiming the grant would only add an unused
+  // permission and a re-approval. This test is the rule: declare what we call.
+  assert.deepEqual(manifest.capabilities, [
+    "app/tools.expose-to-model",
+    "app/ui.open-external",
+    "app/ui.clipboard-write",
+    "app/process.spawn",
+    "app/resources.read",
+  ]);
+  assert.ok(!manifest.capabilities.includes("app/input.panels"), "no unused grant");
+  const ours = ["ui/assets/panel.js", "ui/assets/settings.js", "ui/assets/card.js"].map(read).join("\n");
+  assert.doesNotMatch(ours, /hana\.inputPanel\./, "and no call site that would need it");
+  // Nothing we declare is gated above our own minAppVersion floor.
   const gated = cards.some((c) => c.titleMode || ["structural", "edge-to-edge"].includes(c.cardForm) || c.service);
   assert.equal(gated, false, "no field that requires minAppVersion >= 0.1017.0");
 });
 
-test("the narrow panel page is wired, localised, and reuses the existing routes", () => {
-  const html = read("ui/sidebar.html");
-  const js = read("ui/assets/sidebar.js");
-  // It loads through the same SDK + theme the full panel uses.
-  assert.match(html, /src="\.\/assets\/sidebar\.js"/);
-  assert.match(html, /href="\.\/assets\/sidebar\.css"/);
+test("the slim view is wired, localised, and reuses the existing routes", () => {
+  const html = read("ui/card.html");
+  const js = read("ui/assets/card.js");
+  // Same SDK + theme the full panel uses.
+  assert.match(html, /src="\.\/assets\/card\.js"/);
+  assert.match(html, /href="\.\/assets\/card\.css"/);
   assert.match(html, /href="\.\/assets\/app-ui\.css"/);
   assert.match(html, /data-hana-app-ui/);
   assert.match(js, /import \{ hana \} from "\.\/sdk\.js"/);
-  // Same backend as the full panel — no second API for the sidebar. `api("status")`
-  // is the only literal path; the two actions go through `act(verb)`.
+  // Three things only: state, speed, start/stop.
+  for (const id of ["slimState", "slimTg", "slimPp", "slimStart", "slimStop"]) {
+    assert.ok(html.includes(`id="${id}"`), `${id} is on the card`);
+  }
+  for (const id of ["slimGpu", "slimMem", "slimOpen"]) {
+    assert.ok(!html.includes(`id="${id}"`), `${id} does not belong on the slim view`);
+  }
+  // Same backend as the full panel — no second API for the card.
   const literal = [...js.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(literal)].sort(), ["status"], "only GET /status by name");
   const verbs = [...js.matchAll(/act\("([^"]+)"\)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(verbs)].sort(), ["start", "stop"], "the same two actions the panel has");
-  // "Open the full panel" goes through the SDK's own card navigation.
-  assert.match(js, /hana\.cards\.open\("panel"\)/);
+  assert.doesNotMatch(js, /cards\.open/, "the slim view does not navigate: the page switcher does that");
   // Every string it shows is in all six languages.
   const i18n = read("ui/assets/i18n.js");
   const keys = new Set([...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]));
-  keys.add("sidebar.open");
-  for (const lang of ["zh", "en", "fr", "ru", "ja", "ko"]) {
-    assert.ok(i18n.includes(`${lang}: {`) || i18n.includes(`"${lang}"`), `${lang} block exists`);
-  }
+  assert.ok(keys.size >= 4, "the labels it renders");
   for (const key of keys) {
     const hits = [...i18n.matchAll(new RegExp(`"${key.replace(/\./g, "\\.")}":`, "g"))];
     assert.equal(hits.length, 6, `${key} must be translated in all six languages`);
