@@ -26,6 +26,7 @@ async function api(path, init = {}) {
 const els = {
   dot: document.getElementById("slimDot"),
   state: document.getElementById("slimState"),
+  scope: document.getElementById("slimScope"),
   tg: document.getElementById("slimTg"),
   pp: document.getElementById("slimPp"),
   start: document.getElementById("slimStart"),
@@ -63,6 +64,22 @@ function paint(s) {
   const busy = s.state === "starting" || s.state === "stopping" || s.state === "restarting";
   els.dot.className = `dot ${s.state === "running" ? "running" : busy ? "starting" : "stopped"}`;
   els.state.textContent = t(STATE_KEYS[s.state] || "state.stopped");
+  // REACH: whether this service answers only on this machine or on the LAN too.
+  // The host already computes it (`status.network`: lib/deployer/common.js:1401
+  // buildNetwork → listenAddr/lanExposed/addressUrl, with isLanExposedAddr at :1277),
+  // so this is a display of a fact, not a probe.
+  const net = s.network;
+  if (net && typeof net === "object") {
+    const lan = net.lanExposed === true;
+    els.scope.hidden = false;
+    els.scope.className = `slim-scope${lan ? " lan" : ""}`;
+    els.scope.textContent = t(lan ? "card.scopeLan" : "card.scopeLocal");
+    els.scope.title = String(net.addressUrl || net.listenAddr || "");
+  } else {
+    els.scope.hidden = true;
+    els.scope.textContent = "";
+    els.scope.title = "";
+  }
   els.tg.textContent = rate(s.metrics?.tg);
   els.pp.textContent = rate(s.metrics?.pp);
   // Only the action that makes sense right now is offered.

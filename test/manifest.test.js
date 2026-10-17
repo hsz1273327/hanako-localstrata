@@ -113,19 +113,36 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(html, /href="\.\/assets\/app-ui\.css"/);
   assert.match(html, /data-hana-app-ui/);
   assert.match(js, /import \{ hana \} from "\.\/sdk\.js"/);
-  // Three things only: state, speed, start/stop.
-  for (const id of ["slimState", "slimTg", "slimPp", "slimStart", "slimStop"]) {
+  // Three things only: state + reach, speed, start/stop.
+  for (const id of ["slimState", "slimScope", "slimTg", "slimPp", "slimStart", "slimStop"]) {
     assert.ok(html.includes(`id="${id}"`), `${id} is on the card`);
   }
   for (const id of ["slimGpu", "slimMem", "slimOpen"]) {
     assert.ok(!html.includes(`id="${id}"`), `${id} does not belong on the slim view`);
   }
+  // Reach comes from the host's own computation, not from a probe of ours.
+  assert.match(js, /s\.network/);
+  assert.match(js, /net\.lanExposed === true/);
+  assert.match(js, /card\.scopeLan/);
+  assert.match(js, /card\.scopeLocal/);
   // Same backend as the full panel — no second API for the card.
   const literal = [...js.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(literal)].sort(), ["status"], "only GET /status by name");
   const verbs = [...js.matchAll(/act\("([^"]+)"\)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(verbs)].sort(), ["start", "stop"], "the same two actions the panel has");
   assert.doesNotMatch(js, /cards\.open/, "the slim view does not navigate: the page switcher does that");
+  // Layout guards: the block is centred, never stretched to fill the host's box, and
+  // the button is not the browser default (a slim card does not load panel.css, which
+  // is where .btn lives — that is what made it a grey UA button).
+  const css = read("ui/assets/card.css");
+  assert.match(css, /justify-content: center/);
+  // `min-height: 100%` is what lets the centring work inside the host's box; what must
+  // NOT appear is a hard height (or a stretched child) that fills it.
+  assert.doesNotMatch(css, /[\s;{]height:\s*100%/);
+  assert.doesNotMatch(css, /flex:\s*1 1 auto;\s*\n?\s*height/);
+  assert.match(css, /\.slim-btn\s*\{/);
+  assert.match(css, /\.slim-btn\.primary/);
+  assert.match(css, /var\(--accent/);
   // Every string it shows is in all six languages.
   const i18n = read("ui/assets/i18n.js");
   const keys = new Set([...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]));
