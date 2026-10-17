@@ -392,6 +392,17 @@
           <span class="field-hint muted" data-i18n="configPick.targetRule">setup derives the name</span>
         </div>
         <p class="field-hint muted" id="setupParamsHint" data-i18n="configPick.setupParamsHint">Only setup can set these</p>
+        <!-- WHICH SIZE this run installs. The default comes from the machine's RAM
+             tier (lib/model-tiers.js / docs/MODELS.md), NOT from setup's own
+             recommendation: with `--yes` and no `--model`, setup picks IQ3_XXS on any
+             PC with 60 GB or more (setup.py:4988), which silently downgraded an
+             IQ3_S deployment. Sizes that cannot run here stay listed and greyed with
+             the reason, so the list never looks like it is hiding something. -->
+        <label class="field"><span data-i18n="configPick.modelLabel">Model size</span>
+          <select id="sp-model"></select>
+          <span class="field-hint muted" data-i18n="configPick.modelHint">Defaults to what the RAM fits</span>
+          <span class="field-current" id="sp-modelRam"></span>
+        </label>
         <!-- Optional: keep the config in use as another file first (we COPY it; setup
              itself takes no name). Empty = no backup, which is the current behaviour. -->
         <label class="field"><span data-i18n="configPick.backupLabel">Keep the current settings as</span>

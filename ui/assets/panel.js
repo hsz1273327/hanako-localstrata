@@ -1629,27 +1629,44 @@ function setProfileEditorReadOnly(readOnly) {
   if (readOnly && pluginFormEls.imagePull) pluginFormEls.imagePull.hidden = true;
 }
 
+// The facts that ride along with a profile: which profile is active, where its key
+// comes from, and the config's vision state. Extracted from openDrawer because the
+// "Run setup…" dialog needs the SAME facts BEFORE it fills its fields: `visionInfo`
+// used to be filled only while opening the drawer, so a dialog opened straight from
+// the panel had no current vision value, the select fell back to "setup decides",
+// and setup's default answer there is "no images" (setup.py:5106) — the run then
+// rebuilt the config with 视觉 off and the user never asked for it.
+//
+// It was worse than a missing prefill: the payload was read from a `const` declared
+// inside the `try`, so this line threw a ReferenceError on EVERY drawer open and
+// `visionInfo` was never set at all. Kept as a plain object read from an OUTER
+// binding now — test/ui-modules.test.js pins that shape.
+async function loadProfileFacts() {
+  let profileData = null;
+  try {
+    profileData = await api("profiles");
+  } catch (e) {
+    showError(String(e?.message || e));
+    return null;
+  }
+  const list = Array.isArray(profileData?.profiles) ? profileData.profiles : [];
+  const activeId = profileData?.activeProfileId || state.status?.activeProfileId || "";
+  const profile = list.find((p) => p.id === activeId) || list[0] || state.status?.profile || null;
+  const src = profileData?.keySource;
+  if (src && typeof src === "object") {
+    keySource = { file: String(src.file || ""), hasKey: !!src.hasKey };
+  }
+  visionInfo = profileData?.vision && typeof profileData.vision === "object" ? profileData.vision : null;
+  return { profile, vision: visionInfo };
+}
+
 // Open the shared profile drawer for the CURRENT environment. `readOnly` is the
 // running-view variant; the editable variant is only reachable while stopped.
 async function openDrawer(readOnly) {
   if (state.working || !ensurePluginForm() || !els.profileDrawer.hidden) return;
-  let profile = null;
-  let keySourceFromServer = null;
-  try {
-    const data = await api("profiles");
-    const list = Array.isArray(data?.profiles) ? data.profiles : [];
-    const activeId = data?.activeProfileId || state.status?.activeProfileId || "";
-    profile = list.find((p) => p.id === activeId) || list[0] || state.status?.profile || null;
-    keySourceFromServer = data?.keySource;
-  } catch (e) {
-    showError(String(e?.message || e));
-    return;
-  }
+  const facts = await loadProfileFacts();
+  const profile = facts?.profile;
   if (!profile) return;
-  if (keySourceFromServer && typeof keySourceFromServer === "object") {
-    keySource = { file: String(keySourceFromServer.file || ""), hasKey: !!keySourceFromServer.hasKey };
-  }
-  visionInfo = data?.vision && typeof data.vision === "object" ? data.vision : null;
   pluginFormEls.localApiKey.refreshSource();
   state.editingProfileId = readOnly ? null : profile.id;
   // The card-model picker needs the catalog before it can hold the profile's
@@ -2033,6 +2050,71 @@ function setupSelects() {
   return [...document.querySelectorAll("#setupParams [data-setup]")];
 }
 
+// The last /config/setup-plan answer (the dialog that is open). The server decides
+// what is feasible and which size is the default; this only draws it.
+let setupPlan = null;
+
+function familyTitle(key) {
+  return (setupPlan?.models || []).find((m) => m.family === key)?.familyTitle || key;
+}
+
+// One option per (family, size). Greyed options stay visible WITH the reason: a
+// size that silently disappeared would make the list look arbitrary, and the user
+// could not learn that this box simply cannot hold it.
+function renderSetupModel(plan) {
+  const sel = document.getElementById("sp-model");
+  if (!sel) return;
+  sel.replaceChildren();
+  const decide = document.createElement("option");
+  decide.value = "";
+  decide.textContent = t("configPick.modelLetSetup");
+  sel.append(decide);
+  const entries = plan?.models || [];
+  const keep = plan?.current;
+  if (keep && entries.some((m) => m.family === keep.family && m.model === keep.model && m.ok)) {
+    const o = document.createElement("option");
+    o.value = `${keep.family}|${keep.model}`;
+    o.textContent = tp("configPick.modelKeepCurrent", { title: familyTitle(keep.family), model: keep.model });
+    sel.append(o);
+  }
+  const groups = new Map();
+  for (const m of entries) {
+    if (!groups.has(m.family)) {
+      const g = document.createElement("optgroup");
+      g.label = m.familyTitle;
+      groups.set(m.family, g);
+      sel.append(g);
+    }
+    const o = document.createElement("option");
+    o.value = `${m.family}|${m.model}`;
+    o.disabled = !m.ok;
+    let label = m.recommended ? tp("configPick.modelRecommended", { model: m.model }) : m.model;
+    if (!m.ok) label = modelUnavailableText(m);
+    else if (m.experimental) label = tp("configPick.modelExperimental", { label });
+    o.textContent = label;
+    groups.get(m.family).append(o);
+  }
+  // The default is the recommendation (the tier's size, or the best that still
+  // runs). "Let setup decide" is available but never preselected.
+  const rec = plan?.recommended;
+  sel.value = rec ? `${rec.family}|${rec.model}` : "";
+  const ram = document.getElementById("sp-modelRam");
+  if (ram) {
+    ram.textContent = plan
+      ? tp("configPick.modelRamLine", {
+        usable: plan.ram.usableGiB,
+        nominal: plan.ram.nominalGiB,
+        tier: plan.ram.tier === "below" ? "32" : plan.ram.tier,
+      })
+      : "";
+  }
+}
+
+function modelUnavailableText(m) {
+  if (m.reason === "nvidiaOnly") return tp("configPick.modelNvidiaOnly", { model: m.model });
+  return tp("configPick.modelNeedsRam", { model: m.model, needed: m.ramGiB, have: Math.round(setupPlan?.ram?.usableGiB || 0) });
+}
+
 // "— setup decides —" (value "") then setup's own values for that flag. A current
 // value that is NOT one of them (a context this list does not carry) is injected
 // too: a select that cannot show what is in effect would quietly fall back to
@@ -2077,6 +2159,16 @@ function collectSetupParams() {
   for (const select of setupSelects()) {
     const value = String(select.value || "").trim();
     if (value) params[select.dataset.setup] = value;
+  }
+  // The size is ONE control for TWO flags: `--family` and `--model` are separate
+  // setup arguments (setup.py:4574-4575) and a lone `--family` names a release
+  // without a size, so they always travel together — the pair is checked by
+  // lib/firstrun.js and again by setup's own `choices`.
+  const pick = String(document.getElementById("sp-model")?.value || "");
+  const [family, model] = pick.split("|");
+  if (family && model) {
+    params.family = family;
+    params.model = model;
   }
   return params;
 }
@@ -2173,31 +2265,50 @@ els.profileEditBtn.addEventListener("click", openProfileEditor);
 els.profileDrawerSave.addEventListener("click", saveProfileEdit);
 els.envSelect.addEventListener("change", () => selectEnv(els.envSelect.value));
 els.configFileSelect.addEventListener("change", () => selectConfigFile(els.configFileSelect.value));
-els.configSetupBtn.addEventListener("click", () => {
+els.configSetupBtn.addEventListener("click", async () => {
   if (state.working) return;
-  // Fill the parameter form from what is in effect NOW, then let the user change
-  // only what they mean to. "— setup decides —" takes a parameter out of the run.
-  for (const select of setupSelects()) fillSetupOptions(select);
-  const current = currentSetupValues();
-  for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
-  renderSetupTarget();
-  fillBackupAs();
-  setBackupError("");
-  fillSetupGguf();
-  showConfirm({
-    title: t("configPick.confirmTitle"),
-    // Its own copy, not the first-launch one: this run rebuilds an EXISTING
-    // config, so it must say what that means (measured against setup's own
-    // writer: hand-added engine options are dropped and the file is kept as
-    // .bak; top-level settings like sampling are carried over).
-    sub: tp("configPick.setupSub", {
-      dir: state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
-    }),
-    confirmText: t("configPick.confirmAction"),
-    trigger: els.configSetupBtn,
-    body: els.setupParams,
-    onConfirm: startConfigSetup,
-  });
+  // The button is disabled while the two reads run: one of them is the fix for
+  // 视觉 being silently turned off (see loadProfileFacts).
+  els.configSetupBtn.disabled = true;
+  try {
+    // (a) Load the CURRENT values first. 视觉 is not a config value — it comes with
+    // the profile payload — so without this the select opened on "setup decides"
+    // and setup's default answer is "no images" (setup.py:5106).
+    await loadProfileFacts();
+    // Which size this run installs, and whether this box can run each one.
+    setupPlan = null;
+    try {
+      setupPlan = await api("config/setup-plan");
+    } catch (e) {
+      setupPlan = null;
+    }
+    // Fill the parameter form from what is in effect NOW, then let the user change
+    // only what they mean to. "— setup decides —" takes a parameter out of the run.
+    for (const select of setupSelects()) fillSetupOptions(select);
+    const current = currentSetupValues();
+    for (const select of setupSelects()) select.value = current[select.dataset.setup] || "";
+    renderSetupModel(setupPlan);
+    renderSetupTarget();
+    fillBackupAs();
+    setBackupError("");
+    fillSetupGguf();
+    showConfirm({
+      title: t("configPick.confirmTitle"),
+      // Its own copy, not the first-launch one: this run rebuilds an EXISTING
+      // config, so it must say what that means (measured against setup's own
+      // writer: hand-added engine options are dropped and the file is kept as
+      // .bak; top-level settings like sampling are carried over).
+      sub: tp("configPick.setupSub", {
+        dir: state.status?.settings?.ggufDir || state.status?.profile?.ggufDir || t("firstRun.noGgufDir"),
+      }),
+      confirmText: t("configPick.confirmAction"),
+      trigger: els.configSetupBtn,
+      body: els.setupParams,
+      onConfirm: startConfigSetup,
+    });
+  } finally {
+    els.configSetupBtn.disabled = false;
+  }
 });
 
 function fillSetupGguf() {

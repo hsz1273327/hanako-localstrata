@@ -11,9 +11,12 @@
 // `/config/setup` reuses lib/firstrun.js's single background job (force + no
 // auto-start); progress is polled through GET /start, the exact same contract a
 // first launch uses — there is deliberately no second progress API.
-import { readAllConfig, savePluginConfig, getStatus, listConfigFiles, describeConfigFile } from "../lib/strata.js";
+import { savePluginConfig, getStatus, listConfigFiles, describeConfigFile, getConfigView } from "../lib/strata.js";
 import { beginFirstRun, validateSetupParams } from "../lib/firstrun.js";
+import { setupModelPlan } from "../lib/model-tiers.js";
+import { readGpu, readMem, readAllConfig } from "../lib/deployer/common.js";
 import * as fs from "../lib/fsx.js";
+import os from "node:os";
 import path from "node:path";
 
 const RUNNING_STATES = new Set(["running", "starting", "stopping", "restarting"]);
@@ -144,6 +147,36 @@ export async function startConfigSetup(ctx, opts = {}) {
 }
 
 export default function registerConfigRoutes(app, ctx) {
+  // What a setup run would install here, and why. One payload: the machine's two
+  // RAM numbers (usable = what setup.py's ram_gb() reads, nominal = the capacity
+  // the box was sold as), the tier they fall in, every size with its verdict, and
+  // the default the docs' table asks for (lib/model-tiers.js). The panel renders
+  // it; nothing about the decision lives in the UI.
+  //
+  // VRAM comes from nvidia-smi (readGpu), so a local HIP install reads as "no
+  // card" — its Unsloth sizes then show as selectable, and setup's own risk prompt
+  // (setup.py:4998) is the authority there. Deliberately no guessing.
+  app.get("/config/setup-plan", async (c) => {
+    let currentName = "";
+    try {
+      const view = await getConfigView(ctx);
+      currentName = String(view?.setup?.model || "");
+    } catch {
+      /* no config yet: the plan still answers, without a "current" entry */
+    }
+    const mem = readMem();
+    const gpu = readGpu();
+    const memGiB = Number.isFinite(os.totalmem()) ? os.totalmem() / 1024 ** 3 : 0;
+    return c.json(
+      setupModelPlan({
+        memGiB: memGiB || Number(mem?.totalGiB) || 0,
+        vramGiB: Number(gpu?.totalGiB) || 0,
+        hip: false,
+        currentName,
+      }),
+    );
+  });
+
   app.post("/config/select", async (c) => {
     let body;
     try {

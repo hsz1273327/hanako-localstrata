@@ -239,7 +239,7 @@ test("the container block renders the vision switch as its own section", () => {
   // The PANEL reads the vision state from /profiles (表一's vision row). The
   // settings page does not read it at all: it defines environments, and reading it
   // there without a declaration is exactly what threw at runtime.
-  assert.match(read("ui/assets/panel.js"), /visionInfo = data\?\.vision/, "panel: takes the vision state from /profiles");
+  assert.match(read("ui/assets/panel.js"), /visionInfo = profileData\?\.vision/, "panel: takes the vision state from /profiles");
   assert.doesNotMatch(read("ui/assets/settings.js"), /visionInfo/, "settings.js: never touches it");
 });
 

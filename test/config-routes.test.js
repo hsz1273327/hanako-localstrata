@@ -381,10 +381,18 @@ test("the /config routes are mounted and answer 400 on a bad selection", async (
   const dir = makeLocalDir();
   const ctx = localCtx(dir);
   const handlers = {};
-  const app = { post: (p, h) => { handlers[p] = h; } };
+  const app = {
+    get: (p, h) => {
+      handlers[p] = h;
+    },
+    post: (p, h) => {
+      handlers[p] = h;
+    },
+  };
   registerConfigRoutes(app, ctx);
   assert.equal(typeof handlers["/config/select"], "function");
   assert.equal(typeof handlers["/config/setup"], "function");
+  assert.equal(typeof handlers["/config/setup-plan"], "function");
 
   const call = (path, body) =>
     handlers[path]({

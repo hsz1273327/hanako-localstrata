@@ -193,7 +193,16 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
 // because a re-run REBUILDS `args`: measured against setup's own
 // write_setup_config, a hand-set --max-context came back as setup's answer.
 test("the setup parameters are whitelisted, in setup's own value domains", () => {
-  assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), ["context", "ggufDir", "kv", "kvStreaming", "lowRam", "vision"]);
+  assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), [
+    "context",
+    "family",
+    "ggufDir",
+    "kv",
+    "kvStreaming",
+    "lowRam",
+    "model",
+    "vision",
+  ]);
   // The GGUF folder is setup's own flag, and it is a PATH: a free string here,
   // with existence checked where the filesystem is.
   assert.equal(SETUP_PARAMS.ggufDir.flag, "--gguf-dir");
