@@ -601,12 +601,17 @@ function paintConfigPick(s) {
 }
 
 function paintSpeeds(m) {
-  const rows = [];
-  if (Number.isFinite(m?.tg)) rows.push([t("label.tg"), `${m.tg} t/s`]);
-  if (Number.isFinite(m?.pp)) rows.push([t("label.pp"), `${m.pp} t/s`]);
-  if (Number.isFinite(m?.expertCacheHit)) rows.push([t("label.expertCache"), `${m.expertCacheHit}%`]);
-  if (Number.isFinite(m?.kvHit)) rows.push([t("label.kvHit"), `${m.kvHit}%`]);
-  renderKvRows(els.speedRows, rows);
+  // ALWAYS the same four rows, in the same order, each "—" until it is measured.
+  // Omitting a row when its number was missing made the block grow and shrink a row
+  // at a time (and, with the old visibility rule, disappear entirely); the metrics
+  // legitimately go quiet whenever the log's last 512 KB holds no timed request.
+  const value = (v, unit) => (Number.isFinite(v) ? `${v}${unit}` : "—");
+  renderKvRows(els.speedRows, [
+    [t("label.tg"), value(m?.tg, " t/s")],
+    [t("label.pp"), value(m?.pp, " t/s")],
+    [t("label.expertCache"), value(m?.expertCacheHit, "%")],
+    [t("label.kvHit"), value(m?.kvHit, "%")],
+  ]);
 }
 
 function paintUptime(s) {
@@ -767,7 +772,21 @@ function paint(s) {
   // Container configs are derived from the container's own env: say so instead
   // of offering a picker that does not apply.
   els.configManagedNotice.hidden = els.configBox.hidden || !isDockerMethod(s);
-  els.speedBox.hidden = isSetup || !els.speedRows.children.length;
+  // PERFORMANCE is a STATE of the service, not a sample of the log.
+  //
+  // It used to be `!els.speedRows.children.length`, i.e. hidden whenever the metrics
+  // came back empty — and they do come back empty periodically: `readRecentLogs`
+  // parses only the log's last 512 KB (`parseMetrics(readTail(file))`), so once a
+  // quiet stretch (or a long log that scrolled past the last timed request) pushes
+  // the "… generated in N ms (X tok/s)" lines out of that window, every number is
+  // null. The block then blinked out at the 5 s refresh and came back on the next
+  // request — a data condition driving a layout decision.
+  //
+  // The rule now: visible while the service is up (running, or coming up/going
+  // down), and the rows say "—" while nothing has been measured yet (renderKvRows's
+  // empty case). Visibility no longer depends on a field that legitimately goes
+  // quiet.
+  els.speedBox.hidden = isSetup || !(isRunning || isBusy);
   // Resources are whole-machine figures (nvidia-smi / os.freemem), not this
   // service's; while it is not running they are not this page's job, so hide.
   els.resourceBox.hidden = isSetup || !isRunning;
