@@ -13,8 +13,7 @@
     "app/ui.clipboard-write",
     "app/process.spawn",
     "app/resources.read"
-  ],
-  "network": {
+  ],  "network": {
     "allowedHosts": ["api.github.com", "127.0.0.1", "localhost"],
     "methods": ["GET"],
     "allowLocalhost": true,
@@ -53,7 +52,17 @@
         "realization": "page",
         "siteNavEntry": true,
         "pageIcon": "assets/icon.svg",
-        "face": { "image": "assets/cover.svg" }
+        "face": { "image": "assets/cover.svg" },
+        "functionPanel": { "id": "console-panel", "label": "Strata", "route": "/sidebar.html" }
+      },
+      {
+        "id": "dashboard",
+        "title": "Strata 状态",
+        "description": "A small always-on card: service state, decode/prefill speed, VRAM and RAM",
+        "route": "/panel.html",
+        "cardForm": "flush",
+        "face": { "image": "assets/cover.svg" },
+        "functionPanel": { "id": "console-dashboard", "label": "Strata", "route": "/sidebar.html" }
       }
     ]
   }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strata</title>
+  <link rel="stylesheet" href="./assets/app-ui.css">
+  <link rel="stylesheet" href="./assets/sidebar.css">
+</head>
+<body>
+  <!-- The right function panel (`contributes.cards[].functionPanel`).
+       Narrow on purpose: state, speed, VRAM/RAM, start/stop, and a way back to the
+       full panel. Everything else lives in /panel.html. -->
+  <main class="side" data-hana-app-ui>
+    <header class="side-head">
+      <span id="sideDot" class="dot stopped" aria-hidden="true"></span>
+      <span id="sideState" class="side-state">—</span>
+      <span id="sidePort" class="side-port"></span>
+    </header>
+
+    <dl class="side-rows">
+      <div class="side-row"><dt data-i18n="label.tg">Decode</dt><dd id="sideTg">—</dd></div>
+      <div class="side-row"><dt data-i18n="label.pp">Prefill</dt><dd id="sidePp">—</dd></div>
+      <div class="side-row"><dt data-i18n="resource.gpu">VRAM</dt><dd id="sideGpu">—</dd></div>
+      <div class="side-row"><dt data-i18n="resource.mem">RAM</dt><dd id="sideMem">—</dd></div>
+    </dl>
+
+    <div class="side-actions">
+      <button id="sideStart" class="btn small" type="button" data-i18n="action.start">Start</button>
+      <button id="sideStop" class="btn small" type="button" data-i18n="action.stop">Stop</button>
+    </div>
+    <button id="sideOpen" class="btn small ghost side-open" type="button" data-i18n="sidebar.open">Open the full panel</button>
+
+    <p id="sideMsg" class="side-msg" hidden></p>
+  </main>
+  <script>
+    // A module that fails to parse would otherwise leave a blank panel with no
+    // hint (the same guard the full panel carries).
+    window.addEventListener("error", (e) => {
+      if (e.target && e.target.tagName === "SCRIPT") {
+        const box = document.getElementById("sideMsg");
+        if (box) { box.textContent = "Panel failed to start. Check the App resources and run the validator."; box.hidden = false; }
+      }
+    }, true);
+  </script>
+  <script type="module" src="./assets/sidebar.js"></script>
+</body>
+</html>

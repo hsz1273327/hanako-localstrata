@@ -1,0 +1,104 @@
+/* The right function panel: a narrow column, so everything here is one line per
+ * fact. It inherits the host's theme through ./assets/app-ui.css (the same file the
+ * full panel loads), and adds only the narrow layout. */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.side-state {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-port {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #8e9196);
+  font-variant-numeric: tabular-nums;
+}
+
+.side-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.side-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.side-row dt {
+  font-size: 11px;
+  color: var(--text-muted, #8e9196);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-row dd {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text, inherit);
+  white-space: nowrap;
+}
+
+.side-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.side-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.side-open {
+  width: 100%;
+}
+
+.side-msg {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--danger, #b56b66);
+  overflow-wrap: anywhere;
+}
+
+/* The state dot mirrors the full panel's (green running, amber busy, grey stopped). */
+.side .dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: var(--text-muted, #8e9196);
+}
+
+.side .dot.running {
+  background: var(--green, #3f9a55);
+}
+
+.side .dot.starting {
+  background: var(--amber, #d9a441);
+}
