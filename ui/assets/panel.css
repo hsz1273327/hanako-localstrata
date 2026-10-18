@@ -938,17 +938,26 @@ body {
 
 /* One button, so no two-column grid: the vestigial `grid-template-columns: 1fr 1fr` put
  * the save button alone in the first column with an empty second column beside it, which
- * is why it sat flush left. Centred, at its own size — not stretched to the full row. */
+ * is why it sat flush left. It now closes the form: centred, wide enough to read as the
+ * action (min-width, not the full row), a touch taller and rounder than the inputs so it
+ * carries weight without a new colour — the accent it already has is the emphasis. */
 .edit-actions {
   display: flex;
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .edit-actions .btn {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 220px;
   max-width: 100%;
+  min-height: 38px;
+  padding: 0 20px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
 .btn.warn {

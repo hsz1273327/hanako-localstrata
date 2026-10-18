@@ -176,10 +176,15 @@ test("the params editor's save button is centred at its own size", () => {
   assert.match(box, /display:\s*flex/);
   assert.match(box, /justify-content:\s*center/);
   assert.doesNotMatch(box, /grid-template-columns/, "no vestigial two-column grid");
-  // And the button keeps its own size: the request was "centre it", not "stretch it".
+  // Wide enough to read as the form's action, but not the full row.
   const btn = rule(".edit-actions .btn");
-  assert.match(btn, /flex:\s*0 0 auto/);
+  assert.match(btn, /min-width:\s*220px/, "an action-width button, not a chip");
+  assert.match(btn, /flex:\s*0 1 auto/);
+  assert.match(btn, /min-height:\s*38px/);
+  assert.match(btn, /font-weight:\s*600/);
+  assert.match(btn, /white-space:\s*nowrap/, "the label never wraps");
   assert.doesNotMatch(box + btn, /(^|[;\s])width:\s*100%/, "not stretched full width");
+  assert.match(box, /margin-top:\s*16px/, "breathing room above the closing action");
   // The markup side is a single-button row.
   const html = read("ui/panel.html");
   const row = html.match(/<div class="edit-actions">([\s\S]*?)<\/div>/)[1];
