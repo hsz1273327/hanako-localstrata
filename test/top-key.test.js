@@ -99,13 +99,13 @@ test("it refuses when the key appears more than once, and when the value is not 
   assert.equal(JSON.parse(repaired).port, 1);
 });
 
-test("the field is capped at 3, and 1 means the default (no key written)", () => {
+test("the server accepts 1 (off) through 8 (the engine's window); the UI tier caps below that", () => {
   assert.deepEqual(EDIT_KEYS.parallel, { kind: "number", restart: true, top: true });
-  for (const ok of [1, 2, 3]) assert.deepEqual(validateEdits({ parallel: ok }).errors, []);
-  for (const bad of [0, -1, 4, 9, 2.5, "x"]) {
+  for (const ok of [1, 2, 3, 4, 6, 8]) assert.deepEqual(validateEdits({ parallel: ok }).errors, []);
+  for (const bad of [0, -1, 9, 2.5, "x"]) {
     assert.equal(validateEdits({ parallel: bad }).errors.length, 1, `${bad} must be refused`);
   }
-  assert.match(validateEdits({ parallel: 4 }).errors[0], /1\.\.3/);
+  assert.match(validateEdits({ parallel: 9 }).errors[0], /1\.\.8/);
 });
 
 test("flatConfig reads an absent key as 1, so leaving the field alone is never an edit", () => {
@@ -143,7 +143,7 @@ test("through renderConfigEdits: 2 adds the key, 1 removes it again", () => {
 
 // ── the panel side: the group, the warning, the two numbers ─────────────────
 
-test("the field lives in its own group, after KV, as a 1–3 select", async () => {
+test("the field lives in its own group, after KV, as a switch plus a number", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -160,12 +160,17 @@ test("the field lives in its own group, after KV, as a 1–3 select", async () =
     .map((m) => m[1])
     .find((g) => g.includes("edit.parallelLegend"));
   assert.ok(group, "the group exists");
-  assert.match(group, /<select id="ed-parallel" data-key="parallel">/);
-  assert.deepEqual([...group.matchAll(/<option value="(\d)">/g)].map((m) => m[1]), ["1", "2", "3"]);
+  // A switch, not a pick: "one at a time" and "off" are the same state.
+  assert.match(group, /<input id="ed-parallelOn" type="checkbox">/);
+  assert.match(group, /<input id="ed-parallel" data-key="parallel" type="number" min="2"/);
+  assert.doesNotMatch(group, /<select/);
+  // 8 GB is refused with a line that says why, never a silent grey switch.
+  assert.match(group, /id="ed-parallelBlocked"/);
   // The parked-conversation knob stays in KV; this group holds no read-only report and no
   // default line (a select always has a value, so "engine default" belongs in the hint).
   assert.doesNotMatch(group, /conversationSlots|cf-readonly-item|field-default/);
   assert.match(group, /id="ed-parallelNow"/);
+  assert.match(group, /id="ed-parallelTier"/);
 });
 
 test("the panel asks before turning concurrency on, and shows asked vs actual", async () => {

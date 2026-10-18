@@ -210,15 +210,19 @@
           <!-- Its own group, after KV: this one multiplies the KV budget, the VRAM the
                expert cache can hold AND every request's speed, so it is a subject of its
                own rather than one more KV knob (the parked-conversation settings live in
-               the KV group and are a different thing). -->
-          <label class="field"><span data-i18n="edit.parallel">Requests at once</span>
-            <select id="ed-parallel" data-key="parallel">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-            </select>
+               the KV group and are a different thing).
+               A SWITCH, not a 1/2/3 pick: "one at a time" and "off" are the same thing
+               (an absent key), so the switch simply writes the key or removes it. -->
+          <label class="field"><span data-i18n="edit.parallelEnable">Allow several requests at once</span>
+            <input id="ed-parallelOn" type="checkbox">
+            <span class="field-hint muted" data-i18n="edit.parallelHint">Off writes no key at all</span>
+            <span class="field-hint muted" id="ed-parallelTier"></span>
+            <span class="field-hint warn" id="ed-parallelBlocked" hidden></span>
+          </label>
+          <label class="field" id="ed-parallelField" hidden><span data-i18n="edit.parallel">Requests at once</span>
+            <input id="ed-parallel" data-key="parallel" type="number" min="2" max="8" step="1">
+            <span class="field-hint muted" id="ed-parallelRange"></span>
             <span class="field-current"><span data-i18n="edit.parallelNow">Now</span> <code id="ed-parallelNow"></code></span>
-            <span class="field-hint muted" data-i18n="edit.parallelHint">One at a time by default</span>
           </label>
         </fieldset>
 

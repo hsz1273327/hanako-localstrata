@@ -10,6 +10,7 @@ import { isAbsent, editDiff, valuesFingerprint, needsRefill } from "./edit-diff.
 import { createSetupFacts } from "./setup-facts.js";
 import { backupDefaultName } from "./backup-name.js";
 import { copyToClipboard } from "./clipboard.js";
+import { parallelTier, parallelBounds, parallelDefault, PARALLEL_OFF } from "./parallel-tier.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -106,6 +107,12 @@ const els = {
   editMessage: document.getElementById("editMessage"),
   modelDirNow: document.getElementById("ed-modelDirNow"),
   modelDirFile: document.getElementById("ed-modelDirFile"),
+  parallelOn: document.getElementById("ed-parallelOn"),
+  parallelField: document.getElementById("ed-parallelField"),
+  parallel: document.getElementById("ed-parallel"),
+  parallelTier: document.getElementById("ed-parallelTier"),
+  parallelRange: document.getElementById("ed-parallelRange"),
+  parallelBlocked: document.getElementById("ed-parallelBlocked"),
 };
 
 const state = {
@@ -760,6 +767,9 @@ function paint(s) {
   paintConfig(s);
   paintConfigPick(s);
   renderParallelNow(s);
+  // The tier depends on the card the service reports; refresh it with the status, but
+  // never re-read the field's value here (that would step on what the user is typing).
+  syncParallelUi();
   paintSpeeds(s.metrics);
   paintLogs(s.log);
 
@@ -1309,6 +1319,73 @@ function fillEditForm(values) {
   }
   state.formFilled = true;
   renderModelDirNow(values);
+  // A freshly loaded config is the only time the concurrency switch re-reads its value
+  // from the file (see syncParallelUi).
+  syncParallelUi({ resetValue: true });
+}
+
+// ── Concurrency: a switch plus a number, not a 1/2/3 pick ───────────────────
+//
+// "One request at a time" and "off" are the same thing — an ABSENT `parallel` key — so the
+// switch writes the key or removes it (the writer's `top-key` op). The tier comes from the
+// card's TOTAL VRAM (ui/assets/parallel-tier.js): 8 GB cannot, 12 GB can but is told not
+// to, and from 16 GB up each tier has its own recommendation and ceiling.
+function parallelTotalMiB() {
+  const gpu = state.status?.resources?.gpu || {};
+  const mib = Number(gpu.totalMiB);
+  return Number.isFinite(mib) && mib > 0 ? mib : null;
+}
+
+function vramTierText(totalMiB) {
+  return totalMiB === null ? "" : String(Math.round(totalMiB / 1024));
+}
+
+function syncParallelUi({ resetValue = false } = {}) {
+  if (!els.parallelOn) return;
+  const total = parallelTotalMiB();
+  const tier = parallelTier(total);
+  const bounds = parallelBounds(total);
+  const configured = Number(state.config?.values?.parallel ?? PARALLEL_OFF);
+  const on = configured >= 2;
+
+  els.parallelOn.checked = on;
+  els.parallelOn.disabled = tier.disabled;
+  els.parallelField.hidden = !on;
+  els.parallel.min = String(bounds.min);
+  els.parallel.max = String(bounds.max);
+  if (resetValue) els.parallel.value = String(on ? configured : PARALLEL_OFF);
+
+  const vram = vramTierText(total);
+  els.parallelTier.textContent = tier.disabled
+    ? ""
+    : total === null
+      ? t("edit.parallelNoGpu")
+      : tp(tier.warn ? "edit.parallelTierWarn" : "edit.parallelTier", {
+        vram,
+        def: String(tier.recommended),
+        max: String(tier.max),
+      });
+  els.parallelRange.textContent = on ? tp("edit.parallelRange", { min: String(bounds.min), max: String(bounds.max) }) : "";
+  els.parallelBlocked.hidden = !tier.disabled;
+  els.parallelBlocked.textContent = tier.disabled ? tp("edit.parallelBlocked8", { vram }) : "";
+}
+
+function onParallelSwitch() {
+  const total = parallelTotalMiB();
+  const tier = parallelTier(total);
+  if (els.parallelOn.checked) {
+    if (tier.disabled) {
+      els.parallelOn.checked = false;
+      return;
+    }
+    els.parallel.value = String(parallelDefault(total));
+    els.parallelField.hidden = false;
+  } else {
+    els.parallel.value = String(PARALLEL_OFF);
+    els.parallelField.hidden = true;
+  }
+  syncParallelUi();
+  renderDiff();
 }
 
 // The model group's read-only item reports the CURRENT value (the config's own
@@ -2467,6 +2544,7 @@ els.confirmPopover.addEventListener("pointerenter", confirmPause);
 els.confirmPopover.addEventListener("pointerleave", confirmResume);
 els.overlayLogBtn.addEventListener("click", () => toggleUpdateLog());
 els.saveBtn.addEventListener("click", () => save());
+els.parallelOn?.addEventListener("change", onParallelSwitch);
 els.editForm.addEventListener("input", () => renderDiff());
 window.addEventListener("beforeunload", () => window.clearTimeout(timer));
 
