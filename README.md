@@ -32,9 +32,31 @@ the header.
 - **Resources** — VRAM and RAM bars.
 - **Performance** — generation `tg`, prefill `pp`, expert-cache hit rate and
   KV hit rate.
-- **Parameter editing** — context length, KV quantization, session cache,
-  sampling parameters, max output and reasoning effort, with a pending-change
-  diff and a "save & restart" action.
+- **Parameter editing** — the config's own values, in six themed groups: model
+directory, KV cache, concurrency, experts & memory, draft/speculation, sampling,
+plus the shared settings. Changes are shown as a pending diff and written by a
+single **Save** (the writer only touches the fields that changed).
+- **Model directory** — point this config at another folder of GGUF shards without
+  leaving the panel. One field rewrites the three paths that name the model
+  (`--native`, `--ple-gguf`, `vision.model`); `--pack`, the tokenizer, the draft
+  model and the expert profile stay where they are. The new folder is searched by
+  same name, then by the same quantization — a renamed or re-split upload is found,
+  and a different size is refused instead of being written in.
+- **Concurrency** — a switch, off by default. When on, the number of requests decoded
+  together is `parallel`; the tier of your card decides the recommendation and the cap
+  (8 GB cannot at all; 12 GB is allowed but discouraged, 2 at most; 16 GB → 2, up to 3;
+  above 16 GB → 3, up to 4; above 24 GB → 4, up to 6; above 32 GB → 4, up to 8). The
+  panel also shows what the **engine** opened, which can be fewer than configured —
+  that is normal, not a failure.
+- **Setup with parameters** — “Run setup…” can pass the choices setup takes
+  (`--vision`, `--low-ram`, `--kv-streaming`, `--context`, `--kv`, `--gguf-dir`, and a
+  pinned `--family`/`--model`), plus “keep the current settings as…” which copies the
+  config (and its shared-settings sibling) to a name you choose before the run.
+- **Cards** — the App contributes a whole-page card (everything: status, config, logs,
+  the parameter editor) and a slim one: state, model + vision, speed, start/stop. The
+  slim view is also the right-hand function panel, so it can sit beside a conversation.
+  Dragging it onto a **page** gives you that panel; the desktop surface refuses cards
+  that carry one (the host's rule).
 - **Logs** — tail of the Strata log.
 - **First-run setup** — set the Strata directory, a Python interpreter and
   (optionally) a GGUF model folder in Hana's settings page (App **Local
@@ -132,7 +154,8 @@ Configured in Hana's settings page (app **Local Strata**):
 | `port` | `0` | `0` = use the port from the selected config file |
 | `autoStart` | `false` | Try to start the active profile together with Hana |
 | `refreshSec` | `5` | Status polling interval, in seconds |
-| `apiKey` | — | Strata API key, if the service requires one |
+| `defaultApiKey` | — | Default Strata API key (a profile's own key wins; a local config's `api_key` is the last fallback) |
+| `apiKey` | — | Legacy global key, migrated into `defaultApiKey` once |
 | `profiles` | `[]` | Internal array of environment profiles; manage them in this settings page, not by hand |
 | `activeProfileId` | `""` | Internal: id of the currently selected profile |
 
@@ -147,6 +170,15 @@ Configured in Hana's settings page (app **Local Strata**):
 - Technical terms that have no stable translation in local inference
   (`KV`, `prefill`, `token`, `temperature`, `top_p`, `tg` / `pp`, …) are kept
   verbatim in every language.
+- **Errors are words, not codes.** The host answers with identifiers
+  (`app_surface_session_expired`, …); the card and panel map them to one short sentence
+  each, retry once, and back the poll off. A card whose surface session expired cannot
+  renew it from inside (the token is minted when the iframe loads), so reopening the card
+  is the fix — the line says so instead of showing the code.
+- **What is measured vs decided here.** Numbers with a source (0.6 GiB of VRAM per
+  concurrency slot, 10–25% slower per request, ~3.6 GB of RAM per slot at 256K) come from
+  Strata's own docs and logs; the **VRAM tiers are this App's product rule**, not the
+  engine's.
 
 ### Development
 
@@ -182,8 +214,24 @@ Requires a Hana install that provides `scripts/validate-app.mjs`
 - **版本检查 + 一键更新** —— 读取最新版本，然后停服、拉取代码、编译引擎、重启。
 - **资源占用** —— 显存与内存进度条。
 - **性能** —— 生成 `tg`、预填 `pp`、专家缓存命中率、KV 命中率。
-- **参数编辑** —— 上下文长度、KV 量化、会话缓存、采样参数、最大输出、思考档位，
-  带待保存改动对比和「保存并重启」。
+- **参数编辑** —— 直接改这份 config 的值，按主题分六组：模型目录、KV 缓存、并发、
+  专家与内存、草稿/投机、采样，外加上「共享设置」。改动以「待保存改动」对比展示，
+  一个**保存**写盘（写入器只动真正变化的字段）。
+- **模型目录** —— 不离开面板就能把这份 config 指向另一份 GGUF 分片目录。一个字段
+  同时改写三处（`--native`、`--ple-gguf`、`vision.model`）；`--pack`、tokenizer、
+  投机草稿、专家档案都留在原处。新目录先按同名找分片，再按同量化找；换了量化就拒绝，
+  不会静默写进去。
+- **并发** —— 一个开关，默认关。打开后由 `parallel` 决定同时解码几条；按显卡档位给
+  推荐与上限（8 GB 不可用；12 GB 可以开但不推荐、最多 2；16 GB 推荐 2、上限 3；
+  高于 16 GB 推荐 3、上限 4；高于 24 GB 推荐 4、上限 6；高于 32 GB 推荐 4、上限 8）。
+  面板同时显示**引擎实际**开了几个槽，可能少于你设的值 —— 这是正常现象，不是失败。
+- **带参数的 setup** —— 「运行 setup…」可以把 setup 的选择传进去（`--vision`、
+  `--low-ram`、`--kv-streaming`、`--context`、`--kv`、`--gguf-dir`，以及钉死的
+  `--family`/`--model`）；还有「当前设置备份为」，在跑之前把这份 config（连同它的
+  shared-settings 兄弟文件）复制成你指定的名字。
+- **卡片** —— 这个 App 提供两张卡：整页卡（全部内容：状态、配置、日志、参数编辑）
+  与瘦卡（状态、模型与视觉、速度、启停）。瘦卡也是右侧功能面板的视图，可以停在对话旁边；
+  把它拖到**页面**上右栏就会出现；桌面（home）会拒绝带功能面板的卡片（平台规则）。
 - **日志** —— Strata 日志尾部。
 - **首次配置引导** —— 在 Hana 设置页（App **Local Strata**）填写 Strata 目录、
   Python 解释器与（可选的）GGUF 模型目录；没有可用配置时，同一个启动按钮会先跑
@@ -267,7 +315,8 @@ manifest 的 `id`。
 | `port` | `0` | `0` = 使用所选配置文件里的端口 |
 | `autoStart` | `false` | 随 Hana 启动时尝试拉起当前配置 |
 | `refreshSec` | `5` | 状态刷新间隔（秒）|
-| `apiKey` | — | 服务需要时的 Strata API Key |
+| `defaultApiKey` | — | 默认 Strata API Key（配置自带的 key 优先；本机 config 里的 `api_key` 是最后兜底） |
+| `apiKey` | — | 旧版全局 key，会被一次性迁移进 `defaultApiKey` |
 | `profiles` | `[]` | 内部：环境配置数组；请在本设置页管理，不要手改 |
 | `activeProfileId` | `""` | 内部：当前选中配置的 id |
 
@@ -279,6 +328,12 @@ manifest 的 `id`。
   toolkit），而不是用 `sys.prefix` 猜测。
 - 本地推理里没有稳定译法的技术术语（`KV`、`prefill`、`token`、`temperature`、
   `top_p`、`tg` / `pp` 等）在所有语言中都保留原文。
+- **错误给的是人话，不是错误码。** 宿主会用标识符回答（`app_surface_session_expired` 等），
+  卡片与面板把它们映射成一句话，并重试一次、轮询退避。卡片会话过期无法在卡片内部续期
+  （票据在 iframe 加载时发出），所以「关掉卡片再打开」就是解法 —— 那行字会直说，而不是甩出内码。
+- **哪些是实测、哪些是本 App 定的。** 有出处的数字（并发每槽让出 0.6 GiB 显存、每请求慢
+  10–25%、256K 下每槽约 3.6 GB 内存）来自 Strata 自己的文档与日志；**显存分档是本 App 的产品规则**，
+  不是引擎的规则。
 
 ### 开发
 
