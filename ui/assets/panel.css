@@ -936,10 +936,19 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* One button, so no two-column grid: the vestigial `grid-template-columns: 1fr 1fr` put
+ * the save button alone in the first column with an empty second column beside it, which
+ * is why it sat flush left. Centred, at its own size — not stretched to the full row. */
 .edit-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-actions .btn {
+  flex: 0 0 auto;
+  max-width: 100%;
 }
 
 .btn.warn {

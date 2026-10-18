@@ -163,3 +163,25 @@ test("the switch is a compact row, never the full-width input box", () => {
   assert.match(css, /\.field input\[type="checkbox"\] \{[^}]*width: 15px/);
   assert.match(css, /\.cf-switch-notes \{[^}]*padding-left: 23px/);
 });
+
+test("the params editor's save button is centred at its own size", () => {
+  const css = read("ui/assets/panel.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (sel) => {
+    const m = css.match(new RegExp(`\\${sel}\\s*\\{([^}]*)\\}`));
+    return m ? m[1] : "";
+  };
+  const box = rule(".edit-actions");
+  assert.ok(box.length > 0, ".edit-actions exists");
+  // Centre, not "the first column of a two-column grid" (which is what left it flush left).
+  assert.match(box, /display:\s*flex/);
+  assert.match(box, /justify-content:\s*center/);
+  assert.doesNotMatch(box, /grid-template-columns/, "no vestigial two-column grid");
+  // And the button keeps its own size: the request was "centre it", not "stretch it".
+  const btn = rule(".edit-actions .btn");
+  assert.match(btn, /flex:\s*0 0 auto/);
+  assert.doesNotMatch(box + btn, /(^|[;\s])width:\s*100%/, "not stretched full width");
+  // The markup side is a single-button row.
+  const html = read("ui/panel.html");
+  const row = html.match(/<div class="edit-actions">([\s\S]*?)<\/div>/)[1];
+  assert.equal((row.match(/<button/g) || []).length, 1, "one button in the row");
+});
