@@ -135,3 +135,31 @@ test("the ids on both sides match, and the handler is wired with an optional gua
   assert.ok(js.includes(`document.getElementById("${id}")`), "and looked up by the same id");
   assert.match(js, new RegExp(`els\\.parallelOn\\?\\.addEventListener\\("change", onParallelSwitch\\)`));
 });
+
+test("the switch is a compact row, never the full-width input box", () => {
+  const html = read("ui/panel.html");
+  const form = html.match(/<form id="editForm"[\s\S]*?<\/form>/)[0];
+  const group = [...form.matchAll(/<fieldset class="group">([\s\S]*?)<\/fieldset>/g)]
+    .map((m) => m[1])
+    .find((g) => g.includes("edit.parallelLegend"));
+  assert.ok(group, "the concurrency group exists");
+  // The checkbox lives in its own row, and no `.field` wrapper holds it: a `.field` is the
+  // full-width input box (width:100%, border, padding), which made an empty slab.
+  assert.match(group, /<div class="cf-switch">\s*\n\s*<label class="cf-switch-row">/);
+  assert.match(group, /<label class="cf-switch-row">\s*\n\s*<input id="ed-parallelOn" type="checkbox">/);
+  assert.doesNotMatch(
+    group,
+    /<label class="field">[^]*?<input id="ed-parallelOn"/,
+    "the switch must not sit inside a .field",
+  );
+  // Its notes are a nested block (indented), not three full rows.
+  assert.match(group, /<div class="cf-switch-notes">/);
+  // The number field (a real text input) keeps `.field`, which is what it is for.
+  assert.match(group, /<label class="field" id="ed-parallelField"[^>]*>[\s\S]*?data-key="parallel"/);
+  // CSS: the compact row, and the checkbox guard inside `.field` for anything added later.
+  const css = read("ui/assets/panel.css");
+  assert.match(css, /\.cf-switch-row \{[^}]*display: flex/);
+  assert.match(css, /\.cf-switch-row input\[type="checkbox"\] \{[^}]*width: 15px/);
+  assert.match(css, /\.field input\[type="checkbox"\] \{[^}]*width: 15px/);
+  assert.match(css, /\.cf-switch-notes \{[^}]*padding-left: 23px/);
+});

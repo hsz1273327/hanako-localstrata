@@ -868,6 +868,52 @@ body {
   border-color: transparent;
 }
 
+/* A CHECKBOX is not a text input: without this it inherits the full-width box above and
+ * turns into an empty slab (settings.css has the same guard for its own page). */
+.field input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--accent, #10b981);
+}
+
+/* ── A switch row (the concurrency toggle) ──────────────────────────────────
+ * Deliberately NOT a `.field`: a `.field` is the full-width input box, which is right for
+ * "label + text box" and wrong for "checkbox + label". One compact row, and the notes
+ * hang under the text (indented by the box + gap) instead of taking a row each. */
+.cf-switch {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cf-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text, #3b3d3f);
+  cursor: pointer;
+}
+
+.cf-switch-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent, #10b981);
+}
+
+.cf-switch-notes {
+  display: grid;
+  gap: 2px;
+  padding-left: 23px; /* 15 px box + 8 px gap: the notes line up under the text */
+}
+
 .diff-box {
   border: 1px solid rgba(217, 164, 65, 0.4);
   border-radius: 8px;

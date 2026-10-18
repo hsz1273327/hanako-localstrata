@@ -213,12 +213,21 @@
                the KV group and are a different thing).
                A SWITCH, not a 1/2/3 pick: "one at a time" and "off" are the same thing
                (an absent key), so the switch simply writes the key or removes it. -->
-          <label class="field"><span data-i18n="edit.parallelEnable">Allow several requests at once</span>
-            <input id="ed-parallelOn" type="checkbox">
-            <span class="field-hint muted" data-i18n="edit.parallelHint">Off writes no key at all</span>
-            <span class="field-hint muted" id="ed-parallelTier"></span>
-            <span class="field-hint warn" id="ed-parallelBlocked" hidden></span>
-          </label>
+          <!-- A switch ROW, not a `.field`: `.field` draws the full-width input box (border,
+               padding, accent focus ring) for text inputs, so a checkbox inside it became an
+               empty highlighted slab with the box drifting along the row. The hints are the
+               switch's footnote: indented under the label, not one full row each. -->
+          <div class="cf-switch">
+            <label class="cf-switch-row">
+              <input id="ed-parallelOn" type="checkbox">
+              <span data-i18n="edit.parallelEnable">Allow several requests at once</span>
+            </label>
+            <div class="cf-switch-notes">
+              <span class="field-hint muted" data-i18n="edit.parallelHint">Off writes no key at all</span>
+              <span class="field-hint muted" id="ed-parallelTier"></span>
+              <span class="field-hint warn" id="ed-parallelBlocked" hidden></span>
+            </div>
+          </div>
           <label class="field" id="ed-parallelField" hidden><span data-i18n="edit.parallel">Requests at once</span>
             <input id="ed-parallel" data-key="parallel" type="number" min="2" max="8" step="1">
             <span class="field-hint muted" id="ed-parallelRange"></span>
