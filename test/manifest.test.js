@@ -125,6 +125,21 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(js, /net\.lanExposed === true/);
   assert.match(js, /card\.scopeLan/);
   assert.match(js, /card\.scopeLocal/);
+  // Host codes are mapped to short sentences; prose passes through, and an unknown code
+  // falls back to one generic line that still names it.
+  assert.match(js, /\[\/\^app_surface_session_\/, "card\.errSession"\]/);
+  assert.match(js, /card\.errUnavailable/);
+  assert.match(js, /card\.errRuntime/);
+  assert.match(js, /card\.errDenied/);
+  assert.match(js, /tp\("card\.errGeneric", \{ code: text \}\)/);
+  // Nothing shows a raw host code: both the poll and the buttons go through it.
+  assert.doesNotMatch(js, /setMessage\(String\(e\?\.message \|\| e\)\)/, "no raw message on screen");
+  assert.match(js, /setMessage\(describeError\(String\(e\?\.message \|\| e\)\)\)/);
+  // Self-heal: one retry, then a slower poll that NEVER stops.
+  assert.match(js, /isSessionError\(raw\)/);
+  assert.match(js, /slowPoll = true/);
+  assert.match(js, /state\.refreshSec \* \(slowPoll \? 4 : 1\)/);
+  assert.match(js, /Math\.min\(Math\.max\(2, base\), 60\)/);
   // Same backend as the full panel — no second API for the card.
   const literal = [...js.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(literal)].sort(), ["status"], "only GET /status by name");

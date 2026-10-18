@@ -10,7 +10,7 @@
 // Backend: exactly the two routes the full panel already uses — GET /status and
 // POST /start|/stop. Nothing new.
 import { hana } from "./sdk.js";
-import { loadLang, setLang, t, applyI18n } from "./i18n.js";
+import { loadLang, setLang, t, tp, applyI18n } from "./i18n.js";
 
 setLang(loadLang());
 
@@ -49,6 +49,37 @@ const STATE_KEYS = {
 };
 
 const state = { status: null, working: false, refreshSec: 5 };
+
+// ── Errors: host codes are not sentences ─────────────────────────────────────
+//
+// The host answers with codes (`app_surface_session_expired`, …). Showing one raw is
+// what put a red `app_surface_session_expired` on the card for a whole night. They map
+// to four short sentences; prose (our own backend's errors) passes through untouched.
+//
+// A surface session cannot be renewed from here: the token arrives in the iframe URL
+// (`readSurfaceSession`, ui/assets/sdk.js:2344) and is sent as
+// `X-Hana-App-Surface-Session` (:2403) — there is no setter and no re-handshake call.
+// So an expired session is fixed by a NEW iframe (close and reopen the card); what we
+// can do is retry once in case the host was only restarting, then stop hammering.
+const ERROR_KEYS = [
+  [/^app_surface_session_/, "card.errSession"],
+  [/^app_uninstalled$|^app_unloaded$|^app_disabled$/, "card.errUnavailable"],
+  [/^app_runtime_stopped$|^app_service_/, "card.errRuntime"],
+  [/^app_role_unavailable$|^app_capability_/, "card.errDenied"],
+];
+
+function isSessionError(raw) {
+  return /^app_surface_session_/.test(String(raw || "").trim());
+}
+
+// A code is a single lowercase identifier; anything with a space or a CJK sentence in
+// it is already human text and is left alone.
+function describeError(raw) {
+  const text = String(raw || "").trim();
+  if (!/^[a-z][a-z0-9_.:-]*$/.test(text)) return text;
+  for (const [re, key] of ERROR_KEYS) if (re.test(text)) return t(key);
+  return tp("card.errGeneric", { code: text });
+}
 
 function rate(value) {
   return Number.isFinite(value) ? `${value} t/s` : "—";
@@ -95,14 +126,33 @@ function paint(s) {
   els.start.disabled = state.working || busy;
   els.stop.disabled = state.working || busy;
   if (Number.isFinite(s.refreshSec) && s.refreshSec >= 2) state.refreshSec = s.refreshSec;
-  if (!state.working) setMessage(s.error || "");
+  if (!state.working) setMessage(s.error ? describeError(s.error) : "");
 }
+
+// Polling backs off while the surface session is broken (×4, up to 60 s) instead of
+// hammering a dead session every 5 s — but it never stops, so a host that comes back
+// clears the message on its own.
+let slowPoll = false;
 
 async function refresh() {
   try {
     paint(await api("status"));
+    slowPoll = false;
+    return;
   } catch (e) {
-    setMessage(String(e?.message || e));
+    const raw = String(e?.message || e);
+    if (isSessionError(raw)) {
+      // One retry: a host restart or a reload race throws this for a moment.
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        paint(await api("status"));
+        slowPoll = false;
+        return;
+      } catch {
+        slowPoll = true;
+      }
+    }
+    setMessage(describeError(raw));
   }
 }
 
@@ -115,7 +165,7 @@ async function act(verb) {
     await api(verb, { method: "POST" });
     await refresh();
   } catch (e) {
-    setMessage(String(e?.message || e));
+    setMessage(describeError(String(e?.message || e)));
   } finally {
     state.working = false;
     await refresh();
@@ -126,10 +176,12 @@ async function act(verb) {
 let timer = null;
 function schedule() {
   window.clearTimeout(timer);
+  const base = state.refreshSec * (slowPoll ? 4 : 1);
+  const ms = Math.min(Math.max(2, base), 60) * 1000;
   timer = window.setTimeout(async () => {
     if (!state.working && !document.hidden) await refresh();
     schedule();
-  }, state.refreshSec * 1000);
+  }, ms);
 }
 
 els.start.addEventListener("click", () => act("start"));
