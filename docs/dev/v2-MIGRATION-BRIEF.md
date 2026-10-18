@@ -5,13 +5,13 @@ Hana 已升级到 **1.1.0-beta**，插件体系从 v1 变成 **v2 App**。本项
 ## 官方文档位置（权威，遇事查它）
 
 ```
-/home/hsz/.hanako/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS.md
-/home/hsz/.hanako/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS_EN.md
+<HANA_HOME>/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS.md
+<HANA_HOME>/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS_EN.md
 ```
 
 创建工具（scaffold + 校验）：
 ```
-/home/hsz/.hanako/skills/hana-app-creator/
+<HANA_HOME>/skills/hana-app-creator/
 ├── SKILL.md                      # 开发指南
 ├── scripts/create_hana_app.py    # 生成骨架
 ├── scripts/validate_app.mjs      # 校验
@@ -162,10 +162,10 @@ await hana.clipboard.writeText(text);  // 需 capability: app/ui.clipboard-write
 
 ```bash
 # 校验
-node /home/hsz/.hanako/skills/hana-app-creator/scripts/validate_app.mjs <app目录>
+node <HANA_HOME>/skills/hana-app-creator/scripts/validate_app.mjs <app目录>
 
 # 环境能力检查
-node /home/hsz/.hanako/skills/hana-app-creator/scripts/check_env.mjs
+node <HANA_HOME>/skills/hana-app-creator/scripts/check_env.mjs
 ```
 
-安装位置：`~/.hanako/apps/hanako-localstrata/`（目录名必须等于 manifest.id）。
+安装位置：`<HANA_HOME>/apps/hanako-localstrata/`（目录名必须等于 manifest.id）。

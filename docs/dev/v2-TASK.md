@@ -6,11 +6,11 @@
 2. **`BRIEF.md`** —— 项目背景（Strata 是什么、功能清单、用户偏好）
 3. **`v1-reference/`** —— v1 的完整实现（要迁移的源）
 4. 需要查权威细节时读官方文档：
-   `/home/hsz/.hanako/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS.md`
+   `<HANA_HOME>/artifacts/server/1.1.0-beta-linux-x64-a00e70f7a4cb0541-gdb59a912a88a8f92/APPS.md`
 
 ## 目标
 
-把 v1 插件（`v1-reference/`）完整迁移为 v2 App，**功能不减**，安装在 `~/.hanako/apps/hanako-localstrata/`。
+把 v1 插件（`v1-reference/`）完整迁移为 v2 App，**功能不减**，安装在 `<HANA_HOME>/apps/hanako-localstrata/`。
 
 ## 当前仓库状态
 
@@ -101,12 +101,12 @@ export default defineApp(async (sdk) => { /* 注册工具 */ });
 
 ```bash
 # 1. 校验
-node /home/hsz/.hanako/skills/hana-app-creator/scripts/validate_app.mjs /home/hsz/workspace/GitHub/hsz1273327/hanako-localstrata
+node <HANA_HOME>/skills/hana-app-creator/scripts/validate_app.mjs <repo>
 
 # 2. 安装到 apps 目录
-mkdir -p ~/.hanako/apps
+mkdir -p <HANA_HOME>/apps
 rsync -a --delete --exclude='.git' --exclude='v1-reference' --exclude='*.v2.*' \
-  <仓库>/ ~/.hanako/apps/hanako-localstrata/
+  <仓库>/ <HANA_HOME>/apps/hanako-localstrata/
 ```
 
 **注意**：`sdk/` 目录很大（官方 SDK），必须一起复制。
@@ -121,7 +121,7 @@ rsync -a --delete --exclude='.git' --exclude='v1-reference' --exclude='*.v2.*' \
 ## 验证标准
 
 1. `validate_app.mjs` 通过
-2. 装到 `~/.hanako/apps/hanako-localstrata/` 后，Hana 能识别（可能需要用户在设置里批准）
+2. 装到 `<HANA_HOME>/apps/hanako-localstrata/` 后，Hana 能识别（可能需要用户在设置里批准）
 3. 卡片能打开，显示状态
 4. 工具能被 Agent 调用（`strata_status`）
 5. 路由可用（`/api/apps/hanako-localstrata/routes/...`）

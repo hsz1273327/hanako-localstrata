@@ -10,7 +10,7 @@
 
 **用户场景**：用户在自己的电脑上跑了一个 125B 大模型（通过 Strata），但每次开机都要手动敲命令拉起服务，很麻烦。这个插件的目标是在 OpenHanako 的侧栏提供一个面板，随时查看状态、一键启停。
 
-**仓库位置**：`/home/hsz/workspace/GitHub/hsz1273327/hanako-localstrata`
+**仓库位置**：`<repo>`
 
 ---
 
@@ -21,19 +21,19 @@
 **用户的实际部署**：
 | 项 | 值 |
 |---|---|
-| 项目目录 | `/data/hanako/Strata` |
-| Python 环境 | `/home/hsz/miniconda3/envs/strata/bin/python`（conda 环境）|
+| 项目目录 | `<strata-dir>` |
+| Python 环境 | `<python>`（conda 环境）|
 | 服务端口 | 8080 |
-| 配置文件 | `/data/hanako/Strata/strata-iq3_s.json` |
-| 数据目录 | `/data/hanako/Strata-data` |
+| 配置文件 | `<strata-dir>/strata-iq3_s.json` |
+| 数据目录 | `<strata-data>` |
 | 模型 | Qwen3.8-Flash-Next IQ3_S（125B MoE，量化后 47GB）|
 | 硬件 | RTX 4060 Ti 16G + 91G 内存 + Ryzen 7700 |
 
 **启动命令**（官方方式）：
 ```bash
-/path/to/python /data/hanako/Strata/serve/server.py \
+/path/to/python <strata-dir>/serve/server.py \
   --engine strata \
-  --config /data/hanako/Strata/strata-iq3_s.json \
+  --config <strata-dir>/strata-iq3_s.json \
   --port 8080
 ```
 
@@ -67,7 +67,7 @@ GET http://127.0.0.1:8080/api/requests
 
 2. **Strata 是单序列的** —— 一次只处理一个请求，多个请求会排队（不会失败，只是等）。这是设计如此，不是 bug。
 
-3. **它的日志在** `/data/hanako/Strata/strata-iq3_s.log`，里面每个请求会打印速度：
+3. **它的日志在** `<strata-dir>/strata-iq3_s.log`，里面每个请求会打印速度：
    ```
    strata serve: prompt 17 tokens = 0 reused + 17 read in 462 ms (36.8 tok/s), 2 generated in 164 ms (12.2 tok/s)
    strata serve: decode expert cache hit rate: 28.7% (535 hits / 1863 lookups)
@@ -75,9 +75,9 @@ GET http://127.0.0.1:8080/api/requests
    ```
 
 4. **参考实现**：Strata 自带的 Web 面板是很好的参考：
-   - `/data/hanako/Strata/serve/web/monitor.js` — 数据获取逻辑
-   - `/data/hanako/Strata/serve/web/monitor.html` — UI 结构
-   - `/data/hanako/Strata/serve/web/tokens.css` — 配色（绿 accent `#10b981`）
+   - `<strata-dir>/serve/web/monitor.js` — 数据获取逻辑
+   - `<strata-dir>/serve/web/monitor.html` — UI 结构
+   - `<strata-dir>/serve/web/tokens.css` — 配色（绿 accent `#10b981`）
 
 ---
 

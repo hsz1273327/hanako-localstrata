@@ -33,19 +33,19 @@ const configText = (args) => JSON.stringify({ exe: "strata", args, port: 8080 },
 
 const NEW_KEYS = ["vramReserve", "prefill", "poolWorkers", "specMinP", "suffixDraft", "conversationSlots", "vramElastic"];
 
-// The real install's args, verbatim (read-only copy: /data/hanako/Strata/strata-iq3_s.json).
-// Used to prove our reading and writing are a fixed point on the shape that is
-// actually deployed — the closest thing to a live check available here.
+// The args a deployed install carries, in the same SHAPE as setup.py writes them (the
+// roots are neutral on purpose: a fixture must not mirror one machine's layout). Used to
+// prove our reading and writing are a fixed point on a realistic config.
 const REAL_ARGS = [
-  "--pack", "/data/hanako/Strata-data/packs/iq3_s",
-  "--native", "/data/hanako/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf",
-  "--ple-gguf", "/data/hanako/Strata-data/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf",
-  "--expert-profile", "/data/hanako/Strata/data/expert-profile.bin",
+  "--pack", "/srv/strata-data/packs/iq3_s",
+  "--native", "/srv/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf",
+  "--ple-gguf", "/srv/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf",
+  "--expert-profile", "/srv/strata/data/expert-profile.bin",
   "--expert-cache", "auto",
   "--prefill", "auto",
   "--spec", "4",
   "--spec-min-p", "0.5",
-  "--mtp", "/data/hanako/Strata-data/mtp/rt",
+  "--mtp", "/srv/strata-data/mtp/rt",
   "--conversation-cache-mib", "8192",
   "--conversation-cache-slots", "4",
   "--max-context", "262144",

@@ -3,10 +3,10 @@
 All notable changes to this App. Versions follow the App's own `manifest.json`
 (`version`, plus `minAppVersion` for the Hana build it needs).
 
-## 1.1.0 — unreleased (current working tree)
+## 1.1.0 — 2026-10-18
 
-The version in `manifest.json` is still **1.1.0-beta**; the entries below are what that
-build now contains. Nothing here waits on a version bump.
+`manifest.json` says **`1.1.0`**; `minAppVersion` stays at `1.1.0-beta` (that is the Hana
+build this App needs, a separate axis from the App's own version).
 
 ### Added
 

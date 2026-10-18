@@ -143,9 +143,9 @@ async function profilesPayload(ctx) {
 test("a local config's vision block is reported read-only", async () => {
   const dir = tmpDir();
   writeVisionConfig(dir, {
-    exe: "/data/hanako/Strata/engine/strata-vision",
-    mmproj: "/data/hanako/Strata-data/models/mmproj-Qwen3.8-Flash-Next-BF16.gguf",
-    model: "/data/hanako/Strata-data/models/IQ3_S/a.gguf",
+    exe: "/srv/strata/engine/strata-vision",
+    mmproj: "/srv/strata-data/models/mmproj-Qwen3.8-Flash-Next-BF16.gguf",
+    model: "/srv/strata-data/models/IQ3_S/a.gguf",
     gpu: false,
     max_tokens: 300,
     threads: 8,

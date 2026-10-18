@@ -147,3 +147,12 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Local Strata installs: a real config, its backups, logs and session files must never be
+# committed. The App writes them next to the Strata checkout, not into this repo, so a
+# match here means something leaked in.
+strata-*.json
+*.shared-settings.json
+*.bak
+*.bak-*
+.hanako-localstrata/

@@ -243,9 +243,12 @@ test("a single-file model (no shard suffix) resolves by name, and refuses anothe
 });
 
 test("the real deployment's config is rewritten identically, byte for byte", (t) => {
-  // Real evidence when this machine is the one that ran setup; skipped elsewhere.
-  const real = "/data/hanako/Strata/strata-iq3_s.json";
-  if (!fs.existsSync(real)) return t.skip("no local deployment on this machine");
+  // Real evidence when a deployment exists — but the path is NEVER hardcoded here: point
+  // HANA_STRATA_REAL_CONFIG at a strata-*.json to run it, otherwise it skips.
+  const real = String(process.env.HANA_STRATA_REAL_CONFIG || "");
+  if (!real || !fs.existsSync(real)) {
+    return t.skip("set HANA_STRATA_REAL_CONFIG=<path to a strata-*.json> to run this");
+  }
   const text = fs.readFileSync(real, "utf8");
   const flat = flatConfig(parseJsonText(text), null);
   const r = resolveModelDirOps(text, flat.modelDir);
@@ -258,10 +261,10 @@ test("the real deployment's config is rewritten identically, byte for byte", (t)
     sharedText: "{}",
   });
   assert.equal(newMainText, text, "writing the value it already has must not change a byte");
-  // And the two real directories it could point at both resolve.
-  for (const dir of ["/data/hanako/Strata-data/models/IQ3_S", "/home/hsz/workspace/runingdata/models/IQ3_S"]) {
-    if (fs.existsSync(dir)) assert.equal(resolveModelDirOps(text, dir).error, undefined, dir);
-  }
+  // The directory it already points at must resolve (that is the identity rewrite above);
+  // a second real folder is optional and comes from the environment too.
+  const other = String(process.env.HANA_STRATA_REAL_MODELS || "");
+  if (other && fs.existsSync(other)) assert.equal(resolveModelDirOps(text, other).error, undefined, other);
 });
 
 test("the params group and its i18n copy exist in all six languages", () => {

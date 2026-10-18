@@ -145,14 +145,14 @@ test("ggufDirFromConfig prefers explicit fields, else the --native folder", () =
 
 test("localRuntimeValues reads the live local process and config", () => {
   const cmdline =
-    "/home/hsz/miniconda3/envs/strata/bin/python /data/hanako/Strata/serve/server.py " +
-    "--engine strata --config /data/hanako/Strata/strata-iq3_s.json --port 8080 --gpu 0";
+    "/srv/python/bin/python3 /srv/strata/serve/server.py " +
+    "--engine strata --config /srv/strata/strata-iq3_s.json --port 8080 --gpu 0";
   const configJson = {
     args: [
       "--engine",
       "strata",
       "--native",
-      "/data/hanako/Strata-data/models/IQ3_S/Qwen3.8-...-00001-of-00002.gguf",
+      "/srv/strata-data/models/IQ3_S/Qwen3.8-...-00001-of-00002.gguf",
     ],
   };
   const cfg = {
@@ -175,9 +175,9 @@ test("localRuntimeValues reads the live local process and config", () => {
   const status = { state: "running", configFile: "strata-live.json", settings: {} };
   const { values, sources } = localRuntimeValues({ cmdline, configJson, cfg, status });
 
-  assert.equal(values.strataDir, "/data/hanako/Strata");
+  assert.equal(values.strataDir, "/srv/strata");
   assert.equal(sources.strataDir, "runtime");
-  assert.equal(values.pythonPath, "/home/hsz/miniconda3/envs/strata/bin/python");
+  assert.equal(values.pythonPath, "/srv/python/bin/python3");
   assert.equal(sources.pythonPath, "runtime");
   assert.equal(values.configFile, "strata-iq3_s.json");
   assert.equal(sources.configFile, "runtime");
@@ -185,7 +185,7 @@ test("localRuntimeValues reads the live local process and config", () => {
   assert.equal(sources.port, "runtime");
   assert.equal(values.gpu, "0");
   assert.equal(sources.gpu, "runtime");
-  assert.equal(values.ggufDir, "/data/hanako/Strata-data/models/IQ3_S");
+  assert.equal(values.ggufDir, "/srv/strata-data/models/IQ3_S");
   assert.equal(sources.ggufDir, "runtime");
 });
 
@@ -414,19 +414,19 @@ test("buildRunningReport surfaces a live value missing from the profile", async 
 
   const status = { state: "running", configFile: "strata-iq3_s.json" };
   const cmdline =
-    "/home/hsz/miniconda3/envs/strata/bin/python /data/hanako/Strata/serve/server.py " +
-    "--config /data/hanako/Strata/strata-iq3_s.json --port 8080";
+    "/srv/python/bin/python3 /srv/strata/serve/server.py " +
+    "--config /srv/strata/strata-iq3_s.json --port 8080";
   const configJson = {
-    args: ["--native", "/data/hanako/Strata-data/models/IQ3_S/model-00001-of-00002.gguf"],
+    args: ["--native", "/srv/strata-data/models/IQ3_S/model-00001-of-00002.gguf"],
   };
   const report = await buildRunningReport(ctx, { status, cmdline, configJson });
 
   assert.equal(report.running, true);
   assert.equal(report.method, "local");
   assert.equal(report.profileType, "local");
-  assert.equal(report.values.ggufDir, "/data/hanako/Strata-data/models/IQ3_S");
+  assert.equal(report.values.ggufDir, "/srv/strata-data/models/IQ3_S");
   assert.equal(report.sources.ggufDir, "runtime");
-  assert.equal(report.values.strataDir, "/data/hanako/Strata");
+  assert.equal(report.values.strataDir, "/srv/strata");
   assert.equal(report.sources.strataDir, "runtime");
   assert.equal(report.values.port, 8080);
   assert.equal(report.sources.port, "runtime");

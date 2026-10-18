@@ -11,7 +11,7 @@
 
 ## 参考实现（重要）
 
-`/home/hsz/.hanako/apps/session-insight/manifest.json` 是现成的范例，它的写法：
+`<HANA_HOME>/apps/session-insight/manifest.json` 是现成的范例，它的写法：
 
 ```json
 "cards": [
@@ -72,12 +72,12 @@
 
 ### 同步
 
-改完同步到 `/home/hsz/.hanako/apps/hanako-localstrata/`（用 rsync，排除 `.git`、`v1-reference`、`test`、`*.md` 里只留必要的）。
+改完同步到 `<HANA_HOME>/apps/hanako-localstrata/`（用 rsync，排除 `.git`、`v1-reference`、`test`、`*.md` 里只留必要的）。
 
 ## 验证
 
 ```bash
-node /home/hsz/.hanako/skills/hana-app-creator/scripts/validate_app.mjs --dir .
+node <HANA_HOME>/skills/hana-app-creator/scripts/validate_app.mjs --dir .
 ```
 
 要求 **0 error**。
