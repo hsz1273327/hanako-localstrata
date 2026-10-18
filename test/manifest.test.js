@@ -130,11 +130,30 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(js, /lastIndexOf\("-"\)/);
   assert.match(js, /card\.vision/);
   assert.match(js, /card\.noVision/);
+  // Order: state → model+vision → speeds → action (the model line sits under the
+  // state line, above the numbers).
+  const at = (marker) => html.indexOf(marker);
+  assert.ok(at("slimState") < at("slimModelLine"), "model under the state");
+  assert.ok(at("slimModelLine") < at("slimTg"), "model above the speeds");
+  assert.ok(at("slimTg") < at("slimStart"), "speeds above the action");
+  // The eye is an inline SVG with a slash for the OFF state: the two states differ by
+  // SHAPE, not only by colour. Accessibility comes from aria-label + title, both set
+  // from the same two keys.
+  assert.match(html, /id="slimVision"[^>]*role="img"/);
+  assert.match(html, /class="slash"/);
+  assert.match(js, /els\.vision\.setAttribute\("aria-label", label\)/);
+  assert.match(js, /els\.vision\.title = label/);
+  assert.doesNotMatch(js, /els\.vision\.textContent/, "an icon does not print its label");
   // Style guards for that split.
   const cssText = read("ui/assets/card.css").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.match(cssText, /\.slim-model-pre \{[^}]*text-overflow: ellipsis/);
   assert.match(cssText, /\.slim-model-suf \{[^}]*flex: 0 0 auto/);
   assert.doesNotMatch(cssText, /\.slim-addr/);
+  // The icon's colour rules: off is muted (default), on is the status green, and the
+  // slash is hidden only when on.
+  assert.match(cssText, /\.slim-vision \{[^}]*color: var\(--text-muted/);
+  assert.match(cssText, /\.slim-vision\.on \{[^}]*color: var\(--green/);
+  assert.match(cssText, /\.slim-vision\.on \.slash \{[^}]*display: none/);
   for (const id of ["slimGpu", "slimMem", "slimOpen"]) {
     assert.ok(!html.includes(`id="${id}"`), `${id} does not belong on the slim view`);
   }
@@ -182,12 +201,19 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   // the slack stays at the bottom — centring made two equal voids, which read as holes.
   assert.match(code, /\.slim \{[^}]*justify-content: flex-start/);
   assert.doesNotMatch(code, /justify-content: center/);
-  // `min-height: 100%` lets the column reach the frame; elsewhere a hard height would
-  // mean "stretch to fill".
-  const rest = code.replace(/html,\s*\nbody\s*\{[^}]*\}/, "");
-  assert.doesNotMatch(rest, /[\s;{]height:\s*100%/);
+  // `min-height: 100%` lets the column reach the frame; a HARD height on the layout boxes
+  // would mean "stretch to fill". (The icon's inner `svg { height: 100% }` is a different
+  // thing: it fills its own 18 px box.)
+  const ruleOf = (selector) => {
+    const m = code.match(new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`));
+    return m ? m[1] : "";
+  };
+  for (const selector of [".slim", ".slim-main", ".slim-model", ".slim-rows"]) {
+    assert.doesNotMatch(ruleOf(selector), /(^|[;\s])height:\s*100%/, `${selector} must not stretch`);
+  }
+  assert.match(ruleOf(".slim"), /min-height:\s*100%/);
   // Type scale: the numbers are the subject (20px, tabular), the labels are footnotes.
-  const value = code.slice(code.indexOf(".slim-row dd {"), code.indexOf(".slim-actions {"));
+  const value = code.slice(code.indexOf(".slim-row dd {"), code.indexOf(".slim-btn {"));
   assert.match(value, /font-size: 22px/);
   assert.match(value, /font-variant-numeric: tabular-nums/);
   assert.match(code, /\.slim-state \{[^}]*font-size: 16px/);

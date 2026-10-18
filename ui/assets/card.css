@@ -36,10 +36,30 @@ body {
 .slim-main {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 0;
   width: 100%;
   max-width: 380px;
   min-width: 0;
+}
+
+/* Rhythm without a uniform gap: the model line hugs the state line (6 px), the speeds
+ * get a real break (18 px), the action another one (22 px). A single `gap` would have
+ * given every pair the same weight, which reads loose once the order is
+ * state → model → speeds → action. */
+.slim-model {
+  margin-top: 6px;
+}
+
+.slim-rows {
+  margin-top: 18px;
+}
+
+.slim-actions {
+  margin-top: 22px;
+}
+
+.slim-msg {
+  margin-top: 10px;
 }
 
 /* One line: dot + state + reach. The state is the loudest thing on the card. */
@@ -232,23 +252,46 @@ body {
   font-weight: 600;
 }
 
-/* 视觉 / 无视觉: the same quiet pill as 本地 / 局域网 — two states, no colour. */
+/* 视觉: an ICON, not a label. The shape carries the meaning (an open eye vs a slashed
+ * one) and the colour confirms it — bright green when the config reads images, muted
+ * grey when it does not. It never depends on hue alone. */
 .slim-vision {
   margin-left: auto;
   flex: 0 0 auto;
-  padding: 1px 8px;
-  border: 1px solid rgba(83, 125, 150, 0.3);
-  border-radius: 999px;
-  font-family: var(--font-ui, inherit);
-  font-size: 11px;
-  line-height: 1.5;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
   color: var(--text-muted, #8e9196);
-  white-space: nowrap;
 }
 
+.slim-vision svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Off: the eye plus its slash (both visible). */
+.slim-vision .slash {
+  display: inline;
+}
+
+/* On: the slash goes away and the eye is drawn a touch stronger, in the same green the
+ * status dot uses — no new colour semantic. */
 .slim-vision.on {
-  color: var(--text, inherit);
-  font-weight: 600;
+  color: var(--green, #3f9a55);
+}
+
+.slim-vision.on .slash {
+  display: none;
+}
+
+.slim-vision.on .eye,
+.slim-vision.on .pupil {
+  stroke-width: 2;
 }
 
 .slim-msg {

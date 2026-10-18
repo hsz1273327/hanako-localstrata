@@ -19,6 +19,21 @@
         <span id="slimScope" class="slim-scope" hidden></span>
       </header>
 
+      <!-- Model, and whether it reads images. The eye is a SHAPE first (an open eye vs a
+           slashed one) and a colour second, so it never relies on hue alone. -->
+      <p id="slimModelLine" class="slim-model" hidden>
+        <span class="slim-model-name">
+          <span id="slimModelPre" class="slim-model-pre"></span><span id="slimModelSuf" class="slim-model-suf"></span>
+        </span>
+        <span id="slimVision" class="slim-vision" hidden role="img">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="eye" d="M2.2 12S5.8 6.2 12 6.2 21.8 12 21.8 12 18.2 17.8 12 17.8 2.2 12 2.2 12Z"/>
+            <circle class="pupil" cx="12" cy="12" r="2.9"/>
+            <path class="slash" d="M4.4 19.6 19.6 4.4"/>
+          </svg>
+        </span>
+      </p>
+
       <dl class="slim-rows">
         <div class="slim-row"><dt data-i18n="label.tg">Decode</dt><dd id="slimTg">—</dd></div>
         <div class="slim-row"><dt data-i18n="label.pp">Prefill</dt><dd id="slimPp">—</dd></div>
@@ -28,13 +43,6 @@
         <button id="slimStart" class="slim-btn primary" type="button" data-i18n="action.start">Start</button>
         <button id="slimStop" class="slim-btn" type="button" data-i18n="action.stop">Stop</button>
       </div>
-
-      <p id="slimModelLine" class="slim-model" hidden>
-        <span class="slim-model-name">
-          <span id="slimModelPre" class="slim-model-pre"></span><span id="slimModelSuf" class="slim-model-suf"></span>
-        </span>
-        <span id="slimVision" class="slim-vision" hidden></span>
-      </p>
 
       <p id="slimMsg" class="slim-msg" hidden></p>
     </div>

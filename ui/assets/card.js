@@ -92,10 +92,16 @@ function paintFacts() {
   els.modelPre.textContent = parts.pre;
   els.modelSuf.textContent = parts.suf;
   els.modelLine.title = state.facts.model || "";
+  // The eye: an icon whose SHAPE says it (slash = off) and whose colour confirms it.
+  // The two i18n keys are the accessible label and the hover text — the same words the
+  // pill used to show, now spoken instead of written.
   const vision = state.facts.vision;
+  const on = vision === true;
   els.vision.hidden = vision === null || !state.facts.model;
-  els.vision.textContent = vision === true ? t("card.vision") : vision === false ? t("card.noVision") : "";
-  els.vision.className = `slim-vision${vision === true ? " on" : ""}`;
+  els.vision.className = `slim-vision${on ? " on" : ""}`;
+  const label = vision === null ? "" : t(on ? "card.vision" : "card.noVision");
+  els.vision.setAttribute("aria-label", label);
+  els.vision.title = label;
 }
 
 // ── Errors: host codes are not sentences ─────────────────────────────────────
