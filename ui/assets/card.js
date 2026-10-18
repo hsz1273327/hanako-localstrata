@@ -31,7 +31,10 @@ const els = {
   pp: document.getElementById("slimPp"),
   start: document.getElementById("slimStart"),
   stop: document.getElementById("slimStop"),
-  addr: document.getElementById("slimAddr"),
+  modelLine: document.getElementById("slimModelLine"),
+  modelPre: document.getElementById("slimModelPre"),
+  modelSuf: document.getElementById("slimModelSuf"),
+  vision: document.getElementById("slimVision"),
   msg: document.getElementById("slimMsg"),
 };
 
@@ -48,7 +51,52 @@ const STATE_KEYS = {
   "no-config": "state.noConfig",
 };
 
-const state = { status: null, working: false, refreshSec: 5 };
+const state = { status: null, working: false, refreshSec: 5, facts: { model: "", vision: null } };
+
+// ── The model, and whether it reads images ──────────────────────────────────
+//
+// Neither is on /status: the model name comes from the config view (`setup.model`,
+// lib/deployer/common.js:585 via setupFacts), the vision state from /profiles
+// (`vision.available`, common.js:1352 readVisionInfo). Both are one-shot reads at
+// boot, retried on a later poll if they failed — never part of the 5 s loop.
+//
+// The name is split at its LAST hyphen so a narrow card truncates the family prefix
+// and keeps the quantization (`…ud-iq4_xs`), which is the part that identifies the
+// size: an ellipsis that ate the suffix would leave "qwen3.8-…" on every row.
+function splitModel(name) {
+  const text = String(name || "").trim();
+  if (!text) return null;
+  const at = text.lastIndexOf("-");
+  if (at <= 0) return { pre: text, suf: "" };
+  return { pre: text.slice(0, at + 1), suf: text.slice(at + 1) };
+}
+
+async function loadFacts() {
+  const [settings, profiles] = await Promise.allSettled([api("settings"), api("profiles")]);
+  if (settings.status === "fulfilled") {
+    const model = String(settings.value?.setup?.model || "").trim();
+    if (model) state.facts.model = model;
+  }
+  if (profiles.status === "fulfilled") {
+    const v = profiles.value?.vision;
+    if (v && typeof v === "object") state.facts.vision = v.available === true;
+  }
+  paintFacts();
+}
+
+function paintFacts() {
+  // No model (no config / setup not run) shows an em dash rather than an empty line: a
+  // missing row would read as "this card is broken", which is a different fact.
+  const parts = splitModel(state.facts.model) || { pre: "—", suf: "" };
+  els.modelLine.hidden = false;
+  els.modelPre.textContent = parts.pre;
+  els.modelSuf.textContent = parts.suf;
+  els.modelLine.title = state.facts.model || "";
+  const vision = state.facts.vision;
+  els.vision.hidden = vision === null || !state.facts.model;
+  els.vision.textContent = vision === true ? t("card.vision") : vision === false ? t("card.noVision") : "";
+  els.vision.className = `slim-vision${vision === true ? " on" : ""}`;
+}
 
 // ── Errors: host codes are not sentences ─────────────────────────────────────
 //
@@ -108,15 +156,10 @@ function paint(s) {
     els.scope.textContent = t(lan ? "card.scopeLan" : "card.scopeLocal");
     const url = String(net.addressUrl || net.listenAddr || "");
     els.scope.title = url;
-    // The address itself, small and quiet: it is a fact about this service, not a label.
-    els.addr.hidden = !url;
-    els.addr.textContent = url;
   } else {
     els.scope.hidden = true;
     els.scope.textContent = "";
     els.scope.title = "";
-    els.addr.hidden = true;
-    els.addr.textContent = "";
   }
   els.tg.textContent = rate(s.metrics?.tg);
   els.pp.textContent = rate(s.metrics?.pp);
@@ -138,6 +181,9 @@ async function refresh() {
   try {
     paint(await api("status"));
     slowPoll = false;
+    // The model/vision read is one-shot; if it failed at boot (a race with the
+    // host's own start), pick it up on the first poll that gets through.
+    if (!state.facts.model) loadFacts().catch(() => {});
     return;
   } catch (e) {
     const raw = String(e?.message || e);
@@ -190,4 +236,7 @@ els.stop.addEventListener("click", () => act("stop"));
 applyI18n();
 await hana.ready();
 await refresh();
+// Once, not per poll: the installed model and its vision state only change when a
+// setup run rebuilds the config.
+await loadFacts().catch(() => {});
 schedule();

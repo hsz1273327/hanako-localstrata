@@ -114,9 +114,27 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(html, /data-hana-app-ui/);
   assert.match(js, /import \{ hana \} from "\.\/sdk\.js"/);
   // Three things only: state + reach, speed, start/stop.
-  for (const id of ["slimState", "slimScope", "slimTg", "slimPp", "slimStart", "slimStop", "slimAddr"]) {
+  for (const id of ["slimState", "slimScope", "slimTg", "slimPp", "slimStart", "slimStop", "slimModelLine", "slimVision"]) {
     assert.ok(html.includes(`id="${id}"`), `${id} is on the card`);
   }
+  // The address is gone: the 本地/局域网 pill already answers "who can reach it", and the
+  // line is now the model + vision.
+  assert.ok(!html.includes("slimAddr"), "no address line any more");
+  assert.doesNotMatch(`${html}\n${js}`, /network\.addressUrl/, "the address is not rendered");
+  // Model name and vision come from two one-shot reads, not from /status.
+  assert.match(js, /api\("settings"\)/);
+  assert.match(js, /api\("profiles"\)/);
+  assert.match(js, /settings\.value\?\.setup\?\.model/);
+  assert.match(js, /vision\.available === true|v\.available === true/);
+  // The name is split at the LAST hyphen so truncation keeps the quantization.
+  assert.match(js, /lastIndexOf\("-"\)/);
+  assert.match(js, /card\.vision/);
+  assert.match(js, /card\.noVision/);
+  // Style guards for that split.
+  const cssText = read("ui/assets/card.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(cssText, /\.slim-model-pre \{[^}]*text-overflow: ellipsis/);
+  assert.match(cssText, /\.slim-model-suf \{[^}]*flex: 0 0 auto/);
+  assert.doesNotMatch(cssText, /\.slim-addr/);
   for (const id of ["slimGpu", "slimMem", "slimOpen"]) {
     assert.ok(!html.includes(`id="${id}"`), `${id} does not belong on the slim view`);
   }
@@ -140,9 +158,12 @@ test("the slim view is wired, localised, and reuses the existing routes", () => 
   assert.match(js, /slowPoll = true/);
   assert.match(js, /state\.refreshSec \* \(slowPoll \? 4 : 1\)/);
   assert.match(js, /Math\.min\(Math\.max\(2, base\), 60\)/);
-  // Same backend as the full panel — no second API for the card.
+  // Same backend as the full panel — no second API for the card. The POLL touches only
+  // /status; the model + vision are one-shot reads of two routes the panel already uses.
   const literal = [...js.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(literal)].sort(), ["status"], "only GET /status by name");
+  assert.deepEqual([...new Set(literal)].sort(), ["profiles", "settings", "status"], "no new backend");
+  const poll = js.slice(js.indexOf("async function refresh()"), js.indexOf("async function act("));
+  assert.deepEqual([...new Set([...poll.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]))], ["status"], "the loop asks /status only");
   const verbs = [...js.matchAll(/act\("([^"]+)"\)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(verbs)].sort(), ["start", "stop"], "the same two actions the panel has");
   assert.doesNotMatch(js, /cards\.open/, "the slim view does not navigate: the page switcher does that");

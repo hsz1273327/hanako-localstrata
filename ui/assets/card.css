@@ -190,16 +190,65 @@ body {
   filter: brightness(1.06);
 }
 
-/* The service address: a fact, set small and quiet under the action. */
-.slim-addr {
+/* The model line: an identifier, not prose — 12px mono with a touch of weight, more
+ * important than the labels above and much quieter than the numbers.
+ *
+ * TRUNCATION: the name is split at its LAST hyphen. The family prefix is the only part
+ * allowed to shrink (ellipsis); the quantization suffix is `flex: 0 0 auto` so it can
+ * never be eaten. At a 320 px column the prefix gets roughly 200 px (≈28 mono chars at
+ * 12px): `qwen3.8-flash-next-iq3_s` fits whole, while
+ * `qwen3.8-flash-next-unsloth-ud-iq4_xs` becomes `qwen3.8-flash-next-unsloth-…ud-iq4_xs`
+ * — the size is still readable. */
+.slim-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
+  min-width: 0;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.4;
   color: var(--text-muted, #8e9196);
+}
+
+.slim-model-name {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.slim-model-pre {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.slim-model-suf {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--text, inherit);
+  font-weight: 600;
+}
+
+/* 视觉 / 无视觉: the same quiet pill as 本地 / 局域网 — two states, no colour. */
+.slim-vision {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 1px solid rgba(83, 125, 150, 0.3);
+  border-radius: 999px;
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted, #8e9196);
+  white-space: nowrap;
+}
+
+.slim-vision.on {
+  color: var(--text, inherit);
+  font-weight: 600;
 }
 
 .slim-msg {
