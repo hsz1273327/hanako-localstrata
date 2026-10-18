@@ -1348,12 +1348,19 @@ function syncParallelUi({ resetValue = false } = {}) {
   const configured = Number(state.config?.values?.parallel ?? PARALLEL_OFF);
   const on = configured >= 2;
 
-  els.parallelOn.checked = on;
+  // `.disabled` is a property of the MACHINE (the 8 GB tier) and is refreshed on every
+  // paint. `.checked` is the USER'S INTENT: it may only come from the config file on a
+  // fresh load (`resetValue`). This function is called from paint() every 5 s AND from
+  // `onParallelSwitch` itself, so writing `.checked` here made every click snap straight
+  // back — which reads as "the switch cannot be clicked at all".
   els.parallelOn.disabled = tier.disabled;
-  els.parallelField.hidden = !on;
+  if (resetValue) {
+    els.parallelOn.checked = on;
+    els.parallel.value = String(on ? configured : PARALLEL_OFF);
+  }
+  els.parallelField.hidden = !els.parallelOn.checked;
   els.parallel.min = String(bounds.min);
   els.parallel.max = String(bounds.max);
-  if (resetValue) els.parallel.value = String(on ? configured : PARALLEL_OFF);
 
   const vram = vramTierText(total);
   els.parallelTier.textContent = tier.disabled

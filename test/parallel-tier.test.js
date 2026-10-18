@@ -87,3 +87,51 @@ test("the number never goes below 2 — 1 means off, and off writes no key", () 
     assert.ok(def >= min && def <= max, `${mib}: ${def} is within ${min}..${max}`);
   }
 });
+
+// ── the panel switch: enabled/disabled vs checked ───────────────────────────
+//
+// A switch that "cannot be clicked" is usually not disabled at all: `syncParallelUi` is
+// called from paint() every refresh AND from the switch's own handler, so writing
+// `.checked` there snapped every click straight back to the file's value.
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
+
+test("a 16 GB card (16380 MiB) leaves the switch ENABLED", () => {
+  const t = parallelTier(16380);
+  assert.equal(t.tier, "16");
+  assert.equal(t.disabled, false, "16380 MiB must be allowed to turn concurrency on");
+});
+
+test("only the 8 GB tier disables it, and `.checked` is never refreshed while typing", () => {
+  const js = read("ui/assets/panel.js");
+  const fn = js.slice(js.indexOf("function syncParallelUi("), js.indexOf("function onParallelSwitch("));
+  assert.ok(fn.length > 0, "syncParallelUi exists");
+  // disabled comes from the tier alone
+  assert.match(fn, /els\.parallelOn\.disabled = tier\.disabled;/);
+  // `.checked` is assigned exactly once, and inside the resetValue guard
+  const checked = [...fn.matchAll(/els\.parallelOn\.checked\s*=/g)];
+  assert.equal(checked.length, 1, "one assignment, and it is the reset");
+  assert.match(fn, /if \(resetValue\) \{\s*\n\s*els\.parallelOn\.checked = on;/);
+  // paint() refreshes the switch's availability, never its value
+  const start = js.indexOf("function paint(s) {");
+  const paint = js.slice(start, js.indexOf("\n}\n", start) + 3);
+  assert.ok(paint.length > 20, "paint() was found");
+  assert.match(paint, /syncParallelUi\(\);/);
+  assert.doesNotMatch(paint, /resetValue: true/, "a repaint must not reset the user's input");
+  // …and the one place that DOES reset is a fresh config load.
+  const fill = js.slice(js.indexOf("function fillEditForm("), js.indexOf("function parallelTotalMiB("));
+  assert.match(fill, /syncParallelUi\(\{ resetValue: true \}\)/);
+});
+
+test("the ids on both sides match, and the handler is wired with an optional guard", () => {
+  const html = read("ui/panel.html");
+  const js = read("ui/assets/panel.js");
+  const id = "ed-parallelOn";
+  assert.ok(html.includes(`<input id="${id}" type="checkbox">`), "the checkbox is in the markup");
+  assert.ok(js.includes(`document.getElementById("${id}")`), "and looked up by the same id");
+  assert.match(js, new RegExp(`els\\.parallelOn\\?\\.addEventListener\\("change", onParallelSwitch\\)`));
+});
