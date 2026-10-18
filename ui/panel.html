@@ -206,6 +206,23 @@
         </fieldset>
 
         <fieldset class="group">
+          <legend><span data-i18n="edit.parallelLegend">Concurrency</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
+          <!-- Its own group, after KV: this one multiplies the KV budget, the VRAM the
+               expert cache can hold AND every request's speed, so it is a subject of its
+               own rather than one more KV knob (the parked-conversation settings live in
+               the KV group and are a different thing). -->
+          <label class="field"><span data-i18n="edit.parallel">Requests at once</span>
+            <select id="ed-parallel" data-key="parallel">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+            <span class="field-current"><span data-i18n="edit.parallelNow">Now</span> <code id="ed-parallelNow"></code></span>
+            <span class="field-hint muted" data-i18n="edit.parallelHint">One at a time by default</span>
+          </label>
+        </fieldset>
+
+        <fieldset class="group">
           <legend><span data-i18n="edit.expertsLegend">Experts &amp; memory</span> <span class="note" data-i18n="edit.needsRestart">restart required</span></legend>
           <label class="field"><span data-i18n="edit.expertCache">Expert cache</span>
             <input id="ed-expertCache" data-key="expertCache" type="text" autocomplete="off" spellcheck="false" placeholder="auto" data-i18n-placeholder="edit.expertCachePlaceholder">

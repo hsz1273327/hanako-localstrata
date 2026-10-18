@@ -206,6 +206,12 @@ test("a container whose config cannot be read reports hasConfig=false", async ()
   assert.ok(view.errors.main, "and the read failure is reported");
   // Every value is absent — which is why the editor used to open blank.
   for (const [key, value] of Object.entries(view.values)) {
+    // `parallel` reads as 1 when the key is absent, because 1 IS the engine's default:
+    // an unreadable config still answers "one at a time" instead of claiming concurrency.
+    if (key === "parallel") {
+      assert.equal(value, 1);
+      continue;
+    }
     assert.ok(isAbsent(value), `${key} must be absent`);
   }
   // The payload for that state is what the editor now guards on.

@@ -42,6 +42,7 @@ const EXPECTED_KEYS = [
   "kv",
   "sessionCache",
   "conversationSlots",
+  "parallel",
   "expertCache",
   "residentBudget",
   "vramReserve",
@@ -64,7 +65,7 @@ test("the params form is a list of themed groups, in subject order", () => {
   const g = groups();
   assert.deepEqual(
     g.map((x) => x.legend),
-    ["edit.modelLegend", "edit.kvLegend", "edit.expertsLegend", "edit.draftLegend", "edit.samplingLegend", "edit.sharedLegend"],
+    ["edit.modelLegend", "edit.kvLegend", "edit.parallelLegend", "edit.expertsLegend", "edit.draftLegend", "edit.samplingLegend", "edit.sharedLegend"],
     "one legend per subject",
   );
   // No "Startup": the name had no discriminating power. (The key is gone from

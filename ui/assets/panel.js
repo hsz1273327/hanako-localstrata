@@ -759,6 +759,7 @@ function paint(s) {
   paintVersion(s);
   paintConfig(s);
   paintConfigPick(s);
+  renderParallelNow(s);
   paintSpeeds(s.metrics);
   paintLogs(s.log);
 
@@ -1329,6 +1330,20 @@ function fmtEditValue(value) {
   return isAbsent(value) ? "—" : String(value);
 }
 
+function renderParallelNow(s) {
+  // Two numbers, side by side: what this config ASKS FOR (`parallel`, 1 = the default) and
+  // how many slots the engine actually opened. They differ when the sessions do not fit
+  // — the engine then runs fewer and says so (its log + `batch_slots`), which
+  // `docs/BATCHING.md:47` calls normal behaviour, not a failure.
+  const el = document.getElementById("ed-parallelNow");
+  if (!el) return;
+  const configured = String(state.config?.values?.parallel ?? 1);
+  const serving = Number(s?.concurrency?.serving);
+  el.textContent = Number.isFinite(serving) && serving > 0
+    ? tp("edit.parallelNowValue", { configured, serving: String(serving) })
+    : tp("edit.parallelNowUnknown", { configured });
+}
+
 // "引擎默认：X" is a DISPLAY, never a value.
 //
 // It shows only while the field is empty, so an empty field still answers "and
@@ -1478,7 +1493,30 @@ async function save() {
     setMessage(t("edit.noEdits"), "warn");
     return;
   }
+  // Turning concurrency ON changes what every request costs, so say it BEFORE the write:
+  // four facts, all measured (docs/BATCHING.md): the expert cache gives ~0.6 GiB per
+  // slot, each request slows down while the total goes up, the KV of every slot lives in
+  // RAM, and an engine that cannot fit them opens fewer slots (never a crash).
+  if (Number(edits.parallel) >= 2) {
+    const mem = state.status?.resources?.mem || {};
+    const freeGiB = Number.isFinite(mem.totalGiB) && Number.isFinite(mem.usedGiB)
+      ? Math.max(0, Math.round((mem.totalGiB - mem.usedGiB) * 10) / 10)
+      : null;
+    showConfirm({
+      title: t("edit.parallelWarnTitle"),
+      sub: tp("edit.parallelWarnBody", { n: Number(edits.parallel), free: freeGiB === null ? "—" : String(freeGiB) }),
+      confirmText: t("edit.parallelWarnGo"),
+      cancelText: t("edit.parallelWarnStay"),
+      trigger: els.saveBtn,
+      onConfirm: () => doSave(edits),
+    });
+    return;
+  }
+  return doSave(edits);
+}
 
+async function doSave(edits) {
+  if (state.working) return;
   state.working = true;
   paint(state.status || { state: "stopped" });
   setMessage(t("edit.saving"), "info");
