@@ -12,7 +12,7 @@
 // is REFUSED instead of a broken path being written. That check is exactly what
 // setup.py:1420's `gguf_dir_shards` lacks (it takes the folder's only `-00001-of-`
 // file whatever quantization it is), which is how an IQ3_S file set ended up inside
-// a config tagged IQ3_XXS with a `packs/iq3_xxs` rebuilt from those very files.
+// a config tagged IQ3_XXS with a `packs/q2_0` rebuilt from those very files.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -43,7 +43,7 @@ function fixture(base, { stem = "Qwen-GSQ-RCO-IQ3_S", mutate = (o) => o } = {}) 
       exe: "/opt/strata/engine/strata",
       args: [
         "--pack",
-        "/data/strata-data/packs/iq3_s",
+        "/data/strata-data/packs/iq2_xs",
         "--native",
         path.join(base, name(1)),
         "--ple-gguf",
@@ -62,8 +62,8 @@ function fixture(base, { stem = "Qwen-GSQ-RCO-IQ3_S", mutate = (o) => o } = {}) 
         "int8",
       ],
       cwd: "/data/strata",
-      tokenizer: "/data/strata-data/packs/iq3_s/tokenizer",
-      model_name: "qwen3.8-flash-next-iq3_s",
+      tokenizer: "/data/strata-data/packs/iq2_xs/tokenizer",
+      model_name: "qwen3.8-flash-next-iq2_xs",
       vision: { model: path.join(base, name(1)), encoder: "cpu" },
       port: 8080,
     }),
@@ -143,10 +143,10 @@ test("a moved set rewrites exactly the three paths and nothing else", () => {
   assert.equal(arg("--ple-gguf"), path.join(dst, "Qwen-GSQ-RCO-IQ3_S-00002-of-00002.gguf"));
   assert.equal(after.vision.model, path.join(dst, "Qwen-GSQ-RCO-IQ3_S-00001-of-00002.gguf"));
   // Everything that is NOT a shard path stays put.
-  assert.equal(arg("--pack"), "/data/strata-data/packs/iq3_s");
+  assert.equal(arg("--pack"), "/data/strata-data/packs/iq2_xs");
   assert.equal(arg("--expert-profile"), "/data/strata/data/expert-profile.bin");
   assert.equal(arg("--mtp"), "/data/strata-data/mtp/rt");
-  assert.equal(after.tokenizer, "/data/strata-data/packs/iq3_s/tokenizer");
+  assert.equal(after.tokenizer, "/data/strata-data/packs/iq2_xs/tokenizer");
   assert.equal(after.exe, "/opt/strata/engine/strata");
   assert.equal(after.cwd, "/data/strata");
   // The only difference between the two texts is those two shard values (each name

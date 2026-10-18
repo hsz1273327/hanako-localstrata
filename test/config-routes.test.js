@@ -489,16 +489,16 @@ import { backupTargetName, backupCurrentConfig } from "../routes/config.js";
 test("the backup name shape is the one the config picker can list", () => {
   // `^strata-....json$` is exactly lib/deployer/common.js listConfigFiles' filter,
   // so anything we accept stays selectable — and anything else is refused.
-  assert.deepEqual(backupTargetName("strata-iq3_s-vision.json", "strata-iq3_s.json"), {
-    name: "strata-iq3_s-vision.json",
+  assert.deepEqual(backupTargetName("strata-iq2_xs-vision.json", "strata-iq2_xs.json"), {
+    name: "strata-iq2_xs-vision.json",
     error: null,
   });
   assert.deepEqual(backupTargetName("  strata-a_b.c-1.json ", "current.json"), { name: "strata-a_b.c-1.json", error: null });
   // Empty = no backup (the behaviour we had before this field existed).
-  assert.deepEqual(backupTargetName("", "strata-iq3_s.json"), { name: null, error: null });
-  assert.deepEqual(backupTargetName(null, "strata-iq3_s.json"), { name: null, error: null });
+  assert.deepEqual(backupTargetName("", "strata-iq2_xs.json"), { name: null, error: null });
+  assert.deepEqual(backupTargetName(null, "strata-iq2_xs.json"), { name: null, error: null });
   // The current name is a no-op, not an error.
-  assert.deepEqual(backupTargetName("strata-iq3_s.json", "strata-iq3_s.json"), { name: null, error: null });
+  assert.deepEqual(backupTargetName("strata-iq2_xs.json", "strata-iq2_xs.json"), { name: null, error: null });
   // No path separators, no other extension, no leading dot, must keep the prefix.
   // (A trailing space is trimmed, so it lands on a valid name rather than an error.)
   for (const bad of ["../escape.json", "sub/dir.json", "strata-x.txt", "backup.json", ".strata-x.json", "strata a.json", "strata-"]) {

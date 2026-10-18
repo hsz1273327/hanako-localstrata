@@ -23,8 +23,8 @@ const PICKER_SHAPE = /^strata-[A-Za-z0-9._-]+\.json$/;
 const at = (iso) => new Date(2026, 9, 16, 23, 8, 0); // 2026-10-16 23:08 local
 
 test("the default is the current name plus today's date, and the picker can list it", () => {
-  assert.equal(backupDefaultName("strata-iq3_s.json", { now: at() }), "strata-iq3_s-20261016.json");
-  assert.match(backupDefaultName("strata-iq3_s.json", { now: at() }), PICKER_SHAPE, "must satisfy the picker's shape");
+  assert.equal(backupDefaultName("strata-iq2_xs.json", { now: at() }), "strata-iq2_xs-20261016.json");
+  assert.match(backupDefaultName("strata-iq2_xs.json", { now: at() }), PICKER_SHAPE, "must satisfy the picker's shape");
   // Zero padding matters (a January date must not read as 202611).
   assert.equal(backupDefaultName("strata-a.json", { now: new Date(2026, 0, 5) }), "strata-a-20260105.json");
   // Local date, not UTC: near midnight the two disagree, and the user's own local
@@ -39,9 +39,9 @@ test("the default is the current name plus today's date, and the picker can list
 });
 
 test("the same day twice gets the time, and nothing is silently renamed", () => {
-  const taken = ["strata-iq3_s.json", "strata-iq3_s-20261016.json"];
-  assert.equal(backupDefaultName("strata-iq3_s.json", { now: at(), existing: taken }), "strata-iq3_s-20261016-2308.json");
-  assert.match(backupDefaultName("strata-iq3_s.json", { now: at(), existing: taken }), PICKER_SHAPE);
+  const taken = ["strata-iq2_xs.json", "strata-iq2_xs-20261016.json"];
+  assert.equal(backupDefaultName("strata-iq2_xs.json", { now: at(), existing: taken }), "strata-iq2_xs-20261016-2308.json");
+  assert.match(backupDefaultName("strata-iq2_xs.json", { now: at(), existing: taken }), PICKER_SHAPE);
   // Zero padded hours/minutes too (23:08 stays 2308, 09:05 becomes 0905).
   assert.equal(backupDefaultName("strata-a.json", { now: new Date(2026, 9, 16, 9, 5) }), "strata-a-20261016.json");
   assert.equal(
@@ -59,8 +59,8 @@ test("the same day twice gets the time, and nothing is silently renamed", () => 
   // picker's real implementation on a real directory.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "strata-backup-name-"));
   try {
-    const name = backupDefaultName("strata-iq3_s.json", { now: at() });
-    fs.writeFileSync(path.join(dir, "strata-iq3_s.json"), "{}");
+    const name = backupDefaultName("strata-iq2_xs.json", { now: at() });
+    fs.writeFileSync(path.join(dir, "strata-iq2_xs.json"), "{}");
     fs.writeFileSync(path.join(dir, name), "{}");
     assert.ok(listConfigFiles(dir).includes(name), "the produced default must show up in the config picker");
   } finally {

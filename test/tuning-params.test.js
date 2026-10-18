@@ -37,7 +37,7 @@ const NEW_KEYS = ["vramReserve", "prefill", "poolWorkers", "specMinP", "suffixDr
 // roots are neutral on purpose: a fixture must not mirror one machine's layout). Used to
 // prove our reading and writing are a fixed point on a realistic config.
 const REAL_ARGS = [
-  "--pack", "/srv/strata-data/packs/iq3_s",
+  "--pack", "/srv/strata-data/packs/iq2_xs",
   "--native", "/srv/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf",
   "--ple-gguf", "/srv/models/IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf",
   "--expert-profile", "/srv/strata/data/expert-profile.bin",

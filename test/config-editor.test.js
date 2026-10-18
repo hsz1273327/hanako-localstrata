@@ -61,7 +61,7 @@ function makeCtx(values = {}) {
 
 // A config file with the REAL shape (an `args` array + a `sampling` block, as
 // setup.py writes it) plus its sibling shared-settings file.
-function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
+function writeRealConfig(dir, { tag = "iq2_xs", port = 8080 } = {}) {
   fs.writeFileSync(
     path.join(dir, `strata-${tag}.json`),
     JSON.stringify(
@@ -71,7 +71,7 @@ function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
         exe: "strata",
         args: [
           "--pack",
-          "/data/packs/iq3_s",
+          "/data/packs/iq2_xs",
           "--native",
           "/data/models/IQ3_S/a.gguf",
           "--spec",
@@ -96,8 +96,8 @@ function writeRealConfig(dir, { tag = "iq3_s", port = 8080 } = {}) {
           "4",
         ],
         cwd: dir,
-        model_name: "Qwen3.8-IQ3_S",
-        log: "strata-iq3_s.log",
+        model_name: "Qwen3.8-IQ2_XS",
+        log: "strata-iq2_xs.log",
         lib_dirs: [],
         port,
         gpu: "0",
@@ -153,7 +153,7 @@ test("a local deployment reads every parameter out of its config file", async ()
   writeRealConfig(dir);
   const ctx = makeCtx({
     strataDir: dir,
-    configFile: "strata-iq3_s.json",
+    configFile: "strata-iq2_xs.json",
     profiles: [localProfile({ strataDir: dir })],
     activeProfileId: "p1",
   });
@@ -161,7 +161,7 @@ test("a local deployment reads every parameter out of its config file", async ()
   const view = await getConfigView(ctx, { platform: "linux" });
 
   assert.equal(view.hasConfig, true, "a readable config is a selected config");
-  assert.equal(view.configFile, "strata-iq3_s.json");
+  assert.equal(view.configFile, "strata-iq2_xs.json");
   assert.equal(view.errors.main, null);
   // The values the form is filled from — none of them may be empty.
   assert.equal(view.values.context, 262144);
@@ -191,7 +191,7 @@ test("a container whose config cannot be read reports hasConfig=false", async ()
   const docker = {
     available: () => true,
     compose: { available: () => false },
-    inspect: () => ({ Name: "/strata", Config: { Image: "strata:latest", Env: ["PORT=8080", "MODEL=IQ3_S"] }, State: { Status: "exited" } }),
+    inspect: () => ({ Name: "/strata", Config: { Image: "strata:latest", Env: ["PORT=8080", "MODEL=IQ2_XS"] }, State: { Status: "exited" } }),
     exec: () => "",
     catFile: () => null,
   };
@@ -202,7 +202,7 @@ test("a container whose config cannot be read reports hasConfig=false", async ()
   const view = await getConfigView(ctx, { docker, platform: "linux" });
 
   assert.equal(view.hasConfig, false, "an unreadable config must NOT claim to be a config");
-  assert.equal(view.configFile, "strata-iq3_s.json", "the name is still reported (it comes from the container env)");
+  assert.equal(view.configFile, "strata-iq2_xs.json", "the name is still reported (it comes from the container env)");
   assert.ok(view.errors.main, "and the read failure is reported");
   // Every value is absent — which is why the editor used to open blank.
   for (const [key, value] of Object.entries(view.values)) {
@@ -224,8 +224,8 @@ test("the config view reports what setup built it as (表一's data)", async () 
   // absent key means setup did not record it (this install's config has no
   // `backend`) — shown as such rather than guessed.
   const { setupFacts } = await import("../lib/deployer/common.js");
-  assert.deepEqual(setupFacts({ model_name: "qwen3.8-flash-next-iq3_s", gpu: 0 }), {
-    model: "qwen3.8-flash-next-iq3_s",
+  assert.deepEqual(setupFacts({ model_name: "qwen3.8-flash-next-iq2_xs", gpu: 0 }), {
+    model: "qwen3.8-flash-next-iq2_xs",
     backend: undefined,
     gpu: "0",
   });
@@ -236,9 +236,9 @@ test("the config view reports what setup built it as (表一's data)", async () 
 
   //…and the canonical view carries it alongside the editable values.
   const view = buildConfigView({
-    configFile: "strata-iq3_s.json",
-    mainName: "strata-iq3_s.json",
-    sharedName: "strata-iq3_s.shared-settings.json",
+    configFile: "strata-iq2_xs.json",
+    mainName: "strata-iq2_xs.json",
+    sharedName: "strata-iq2_xs.shared-settings.json",
     mainText: JSON.stringify({ model_name: "m", gpu: 0, args: ["--max-context", "262144", "--kv", "int8"] }),
     sharedText: "{}",
   });
@@ -271,8 +271,8 @@ function tarOf(name, content) {
 
 test("the docker-cp tar stream is decoded to the file it carries", () => {
   const json = '{\n  "port": 8080,\n  "args": ["--max-context", "262144"]\n}';
-  const tar = tarOf("strata-iq3_s.json", json);
-  assert.ok(tar.startsWith("strata-iq3_s.json"), "the raw stream starts with the file name");
+  const tar = tarOf("strata-iq2_xs.json", json);
+  assert.ok(tar.startsWith("strata-iq2_xs.json"), "the raw stream starts with the file name");
   assert.equal(tarEntryText(tar), json, "and the decoded entry is the file, byte for byte");
   // The decoded text is what the config reader expects.
   assert.equal(parseOf(tarEntryText(tar)).port, 8080);
@@ -287,13 +287,13 @@ function parseOf(text) {
 }
 
 test("a raw tar blob is not mistaken for a config", () => {
-  const tar = tarOf("strata-iq3_s.json", '{"port": 8080}');
-  const view = buildConfigView({ configFile: "strata-iq3_s.json", mainName: "strata-iq3_s.json", sharedName: "s.json", mainText: tar, sharedText: null });
+  const tar = tarOf("strata-iq2_xs.json", '{"port": 8080}');
+  const view = buildConfigView({ configFile: "strata-iq2_xs.json", mainName: "strata-iq2_xs.json", sharedName: "s.json", mainText: tar, sharedText: null });
   assert.equal(view.hasConfig, false, "the header garbage must not claim to be a config");
   assert.ok(view.errors.main, "and the failure is reported");
 
   // The decoded text IS a config.
-  const good = buildConfigView({ configFile: "strata-iq3_s.json", mainName: "strata-iq3_s.json", sharedName: "s.json", mainText: tarEntryText(tar), sharedText: null });
+  const good = buildConfigView({ configFile: "strata-iq2_xs.json", mainName: "strata-iq2_xs.json", sharedName: "s.json", mainText: tarEntryText(tar), sharedText: null });
   assert.equal(good.hasConfig, true);
   assert.equal(good.values.port, 8080);
 });
@@ -354,20 +354,20 @@ test("an empty value that never had one is ignored, not reported as a clear", ()
 // momentarily unreadable keeps its name but gains values, and the old
 // name-only guard left the form showing the empty first answer forever.
 test("the editor refills when the answer changes, not only when the name does", () => {
-  const empty = { configFile: "strata-iq3_s.json", hasConfig: true, values: {} };
-  const filled = { configFile: "strata-iq3_s.json", hasConfig: true, values: { context: 262144, kv: "int8" } };
+  const empty = { configFile: "strata-iq2_xs.json", hasConfig: true, values: {} };
+  const filled = { configFile: "strata-iq2_xs.json", hasConfig: true, values: { context: 262144, kv: "int8" } };
 
   // First answer (empty) is taken, then the same file becomes readable.
   assert.equal(needsRefill(null, empty), true, "the first answer is always taken");
   assert.equal(
-    needsRefill({ file: "strata-iq3_s.json", values: valuesFingerprint(empty.values) }, filled),
+    needsRefill({ file: "strata-iq2_xs.json", values: valuesFingerprint(empty.values) }, filled),
     true,
     "the SAME file with values must refill — this is the bug that left the form blank",
   );
 
   // An unchanged answer never refills (a poll must not stomp typing).
   assert.equal(
-    needsRefill({ file: "strata-iq3_s.json", values: valuesFingerprint(filled.values) }, filled),
+    needsRefill({ file: "strata-iq2_xs.json", values: valuesFingerprint(filled.values) }, filled),
     false,
   );
   // A different file always refills.

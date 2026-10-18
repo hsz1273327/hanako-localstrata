@@ -91,3 +91,60 @@ test("the ignore rules that keep them out are still there", () => {
     assert.ok(ignore.includes(pattern), `.gitignore must keep ${pattern}`);
   }
 });
+
+// ── The quieter half: things that identify a machine without being a path ──────
+//
+// A GPU model, a VRAM figure, a distro path, a timezone, or a real config name each only
+// narrows the machine a little; together they pin it. These checks take the shapes that
+// are mechanical. Free text ("a card with 399 MiB free") is not detectable by pattern —
+// that is a review rule, not a guard.
+
+test("no GPU/CPU model names in our own code, tests or docs", () => {
+  const offenders = [];
+  for (const { full, rel } of FILES) {
+    if (!TEXT.test(rel) || rel.startsWith("sdk/")) continue;
+    // `lib/gpu.js` IS the card catalog the profile form offers — that is the product's
+    // data, not a description of this machine.
+    // The card catalog is product data (the profile form's GPU list), not a description
+    // of this machine: `lib/gpu.js` plus its labels and the test that reads them.
+    if (rel === "lib/gpu.js" || rel === "ui/assets/i18n.js" || rel === "test/no-local-env.test.js") continue;
+    if (/^test\/container-fields/.test(rel)) continue;
+    const text = fs.readFileSync(full, "utf8");
+    text.split("\n").forEach((line, i) => {
+      if (/\b(RTX|GTX|RX)\s?\d{3,4}\b/.test(line)) offenders.push(`${rel}:${i + 1} ${line.trim().slice(0, 60)}`);
+      if (/\b(Ryzen|Threadripper|EPYC|Xeon)\b/.test(line)) offenders.push(`${rel}:${i + 1} ${line.trim().slice(0, 60)}`);
+    });
+  }
+  assert.deepEqual(offenders, [], `hardware model names (say "a 16 GB card" instead):\n${offenders.join("\n")}`);
+});
+
+test("no private network address, distro path or timezone from a developer machine", () => {
+  const offenders = [];
+  for (const { full, rel } of FILES) {
+    if (!TEXT.test(rel) || rel.startsWith("sdk/")) continue;
+    if (rel === "test/no-local-env.test.js") continue;
+    const text = fs.readFileSync(full, "utf8");
+    text.split("\n").forEach((line, i) => {
+      // 192.168.x.x style EXAMPLES keep the x: this only flags real octets.
+      if (/\b(?:10\.\d+\.\d+|192\.168\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+)\.\d+\b/.test(line)) {
+        offenders.push(`${rel}:${i + 1} private address`);
+      }
+      if (/miniconda|anaconda|\/envs\/[a-z0-9_-]+\//i.test(line)) offenders.push(`${rel}:${i + 1} distro path`);
+      if (/\+0[89]00\b|\bCST\b|Asia\/Shanghai/.test(line)) offenders.push(`${rel}:${i + 1} timezone`);
+    });
+  }
+  assert.deepEqual(offenders, [], `machine-local network / distro / timezone:\n${offenders.join("\n")}`);
+});
+
+test("no real deployment's config name", () => {
+  const offenders = [];
+  for (const { full, rel } of FILES) {
+    if (!TEXT.test(rel) || rel.startsWith("sdk/")) continue;
+    if (rel === "test/no-local-env.test.js") continue;
+    const text = fs.readFileSync(full, "utf8");
+    text.split("\n").forEach((line, i) => {
+      if (/strata-iq3_s|strata-iq3_xxs/i.test(line)) offenders.push(`${rel}:${i + 1} real config name`);
+    });
+  }
+  assert.deepEqual(offenders, [], `use strata-<model>.json in copy:\n${offenders.join("\n")}`);
+});

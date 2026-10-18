@@ -29,7 +29,7 @@ const fixture = (mutate = (o) => o) =>
       exe: "/opt/strata/engine/strata",
       args: ["--pack", "/p", "--native", "/m/a.gguf", "--max-context", "262144"],
       cwd: "/opt/strata",
-      model_name: "qwen3.8-flash-next-iq3_s",
+      model_name: "qwen3.8-flash-next-iq2_xs",
       sampling: { temperature: 0.7, top_p: 0.9 },
       port: 8080,
     }),

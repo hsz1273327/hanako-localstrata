@@ -118,7 +118,7 @@ test("an unknown vision value is ignored by the spec and refused by validation",
 function writeVisionConfig(dir, vision) {
   const cfg = { host: "0.0.0.0", port: 8080, args: ["--max-context", "262144"], api_key: "k" };
   if (vision) cfg.vision = vision;
-  fs.writeFileSync(path.join(dir, "strata-iq3_s.json"), JSON.stringify(cfg, null, 2));
+  fs.writeFileSync(path.join(dir, "strata-iq2_xs.json"), JSON.stringify(cfg, null, 2));
 }
 
 const localProfile = (dir) => ({
@@ -150,7 +150,7 @@ test("a local config's vision block is reported read-only", async () => {
     max_tokens: 300,
     threads: 8,
   });
-  const ctx = makeCtx({ strataDir: dir, configFile: "strata-iq3_s.json", profiles: [localProfile(dir)], activeProfileId: "p2" });
+  const ctx = makeCtx({ strataDir: dir, configFile: "strata-iq2_xs.json", profiles: [localProfile(dir)], activeProfileId: "p2" });
   const payload = await profilesPayload(ctx);
   assert.deepEqual(payload.vision, {
     available: true,
@@ -163,7 +163,7 @@ test("a local config's vision block is reported read-only", async () => {
 test("vision off (no block) and a container profile report no local vision", async () => {
   const dir = tmpDir();
   writeVisionConfig(dir, null);
-  const off = makeCtx({ strataDir: dir, configFile: "strata-iq3_s.json", profiles: [localProfile(dir)], activeProfileId: "p2" });
+  const off = makeCtx({ strataDir: dir, configFile: "strata-iq2_xs.json", profiles: [localProfile(dir)], activeProfileId: "p2" });
   assert.deepEqual((await profilesPayload(off)).vision, { available: false, encoder: "", mmproj: "", exe: "" });
 
   // A container keeps its config inside the container: unknown from here.

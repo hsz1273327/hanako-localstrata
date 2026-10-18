@@ -239,11 +239,11 @@ test("the setup parameters are whitelisted, in setup's own value domains", () =>
 
 test("a re-run passes the requested flags in setup's spelling, and nothing else", async () => {
   resetFirstRunState();
-  const dir = makeStrataDir({ config: { name: "strata-iq3_s.json", data: { args: ["--max-context", "262144"], port: 8080 } } });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { args: ["--max-context", "262144"], port: 8080 } } });
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {}, configCandidates: [] }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/IQ3_S", configFile: "strata-iq3_s.json" }),
+    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/IQ3_S", configFile: "strata-iq2_xs.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {
@@ -253,7 +253,7 @@ test("a re-run passes the requested flags in setup's spelling, and nothing else"
       child.stderr = new EventEmitter();
       queueMicrotask(() => {
         // The same tag as before = the earlier file is rewritten (setup keeps .bak).
-        fs.writeFileSync(path.join(dir, "strata-iq3_s.json"), JSON.stringify({ args: ["--max-context", "131072"], port: 8080 }));
+        fs.writeFileSync(path.join(dir, "strata-iq2_xs.json"), JSON.stringify({ args: ["--max-context", "131072"], port: 8080 }));
         child.emit("close", 0);
       });
       return child;
@@ -356,7 +356,7 @@ test("local first run drives a real setup.py process and discovers the config (P
 
 test("existing config does not enter the first-run setup path (regression)", async () => {
   resetFirstRunState();
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 18080 } } });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 18080 } } });
   const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3" });
 
   const status = await getStatus(ctx);

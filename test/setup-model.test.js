@@ -156,15 +156,15 @@ test("the catalog is setup's: families, sizes, and the family a size belongs to"
 
 test("the current config's model_name is parsed back into (family, size)", () => {
   // setup.py:5454 writes `<family name>-<model lowercased>`, no tag.
-  assert.deepEqual(parseModelName("qwen3.8-flash-next-iq3_s"), { family: "qwen", model: "IQ3_S" });
-  assert.deepEqual(parseModelName("qwen3.8-flash-next-iq3_xxs"), { family: "qwen", model: "IQ3_XXS" });
-  assert.deepEqual(parseModelName("swift-1.5-iq3_xxs"), { family: "swift", model: "IQ3_XXS" });
+  assert.deepEqual(parseModelName("qwen3.8-flash-next-iq2_xs"), { family: "qwen", model: "IQ2_XS" });
+  assert.deepEqual(parseModelName("qwen3.8-flash-next-q2_0"), { family: "qwen", model: "Q2_0" });
+  assert.deepEqual(parseModelName("swift-1.5-iq2_xs"), { family: "swift", model: "IQ2_XS" });
   // The Coder / Unsloth names start with the plain family's name: the longest match
   // has to win.
   assert.deepEqual(parseModelName("qwen3.8-flash-next-coder-iq1_m"), { family: "coder", model: "IQ1_M" });
   assert.deepEqual(parseModelName("qwen3.8-flash-next-unsloth-ud-iq4_xs"), { family: "unsloth", model: "UD-IQ4_XS" });
   // A size outside the family it claims is not a match; nor is junk.
-  assert.equal(parseModelName("swift-1.5-iq3_s"), null);
+  assert.equal(parseModelName("swift-1.5-q2_0"), null, "Q2_0 ships in qwen only");
   assert.equal(parseModelName(""), null);
   assert.equal(parseModelName("llama-3-8b"), null);
 });
@@ -197,8 +197,8 @@ test("the size travels to setup as its own flags, paired and validated", () => {
 });
 
 test("the dialog's plan: a recommendation, a current entry, and every size with a verdict", () => {
-  const p = setupModelPlan({ memGiB: 91.15, vramGiB: 16, currentName: "qwen3.8-flash-next-iq3_s" });
-  assert.deepEqual(p.current, { family: "qwen", model: "IQ3_S" });
+  const p = setupModelPlan({ memGiB: 91.15, vramGiB: 16, currentName: "qwen3.8-flash-next-iq2_xs" });
+  assert.deepEqual(p.current, { family: "qwen", model: "IQ2_XS" });
   assert.ok(p.models.length >= 7, "one entry per (release, size) pair");
   for (const m of p.models) {
     assert.equal(typeof m.familyTitle, "string");

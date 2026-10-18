@@ -137,13 +137,13 @@ test("no-config when there are no strata-*.json files", async () => {
 });
 
 test("auto-selects the newest config when none is selected (no setup)", async () => {
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 18080 } } });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 18080 } } });
   const status = await getStatus(makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3" }));
   // The config field is an optional override now: an existing config is found
   // automatically, so the first-run path is not entered (zero regression).
   assert.notEqual(status.state, "no-config");
   assert.notEqual(status.state, "needs-config");
-  assert.equal(status.configFile, "strata-demo.json");
+  assert.equal(status.configFile, "strata-iq2_xs.json");
   assert.equal(status.autoSelected, true);
   assert.equal(needsInitialSetup(status), false);
 });
@@ -165,14 +165,14 @@ test("config selected but no server on this port: stopped or starting", async ()
   // process presence; on a clean host it would be "stopped". Both are valid
   // here — the point is that the config-selected branch is reached (not
   // needs-config / no-config).
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 18081 } } });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 18081 } } });
   const status = await getStatus(
-    makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" }),
+    makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" }),
   );
   assert.ok(["stopped", "starting"].includes(status.state), `unexpected state ${status.state}`);
   if (status.state === "starting") assert.ok(status.pids.length > 0);
   assert.equal(status.port, 18081);
-  assert.deepEqual(status.configCandidates.map((c) => c.file), ["strata-demo.json"]);
+  assert.deepEqual(status.configCandidates.map((c) => c.file), ["strata-iq2_xs.json"]);
 });
 
 test("running when /v1/status answers", async () => {
@@ -188,9 +188,9 @@ test("running when /v1/status answers", async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
   try {
-    const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port } } });
+    const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port } } });
     const status = await getStatus(
-      makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" }),
+      makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" }),
     );
     assert.equal(status.state, "running");
     assert.equal(status.version.local, "9.9.9");
@@ -203,9 +203,9 @@ test("running when /v1/status answers", async () => {
 // ── Windows branch: smoke test only (no PowerShell here) ──────────────────
 
 test("win32 branch does not throw on a Linux host", async () => {
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 18082 } } });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 18082 } } });
   const status = await getStatus(
-    makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" }),
+    makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" }),
     { platform: "win32" },
   );
   assert.ok(typeof status.state === "string");
@@ -278,8 +278,8 @@ test("killPid returns false for a non-existent PID", () => {
 // ── Port resolution ───────────────────────────────────────────────────────
 
 test("resolvePort prefers the plugin override, then the config file", () => {
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { port: 12345 } } });
-  const cfg = { strataDir: dir, configFile: "strata-demo.json" };
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 12345 } } });
+  const cfg = { strataDir: dir, configFile: "strata-iq2_xs.json" };
   assert.equal(resolvePort({ ...cfg, port: 9999 }), 9999);
   assert.equal(resolvePort({ ...cfg, port: 0 }), 12345);
 });
@@ -289,12 +289,12 @@ test("resolvePort prefers the plugin override, then the config file", () => {
 test("source applyConfigEdits edits main + shared files and backs them up", async () => {
   const dir = makeStrataDir();
   fs.writeFileSync(
-    path.join(dir, "strata-demo.json"),
+    path.join(dir, "strata-iq2_xs.json"),
     JSON.stringify({ args: ["--max-context", "32768", "--kv", "int8"], port: 18083, sampling: { temperature: 0.7 } }, null, 2),
   );
-  fs.writeFileSync(path.join(dir, "strata-demo.shared-settings.json"), JSON.stringify({ max_tokens: 4096 }, null, 2));
+  fs.writeFileSync(path.join(dir, "strata-iq2_xs.shared-settings.json"), JSON.stringify({ max_tokens: 4096 }, null, 2));
 
-  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" });
+  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" });
   const result = await applyConfigEdits(ctx, { context: 65536, max_tokens: 8192 });
   assert.equal(result.saved, true);
   assert.equal(result.restartRequired, true);
@@ -309,8 +309,8 @@ test("source applyConfigEdits edits main + shared files and backs them up", asyn
 });
 
 test("source applyConfigEdits rejects unknown fields", async () => {
-  const dir = makeStrataDir({ config: { name: "strata-demo.json", data: { args: [], port: 18084 } } });
-  fs.writeFileSync(path.join(dir, "strata-demo.shared-settings.json"), JSON.stringify({}, null, 2));
-  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-demo.json" });
+  const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { args: [], port: 18084 } } });
+  fs.writeFileSync(path.join(dir, "strata-iq2_xs.shared-settings.json"), JSON.stringify({}, null, 2));
+  const ctx = makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" });
   await assert.rejects(() => applyConfigEdits(ctx, { nope: 1 }), /未知字段: nope/);
 });

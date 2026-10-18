@@ -618,7 +618,7 @@ test("the shared key fragment mounts standalone (the local side's path)", () => 
     const host = document.createElement("div");
     const key = createApiKeyField(host, {
       idPrefix: "pfl-",
-      apiKeySource: () => ({ file: "strata-iq3_s.json", hasKey: true }),
+      apiKeySource: () => ({ file: "strata-iq2_xs.json", hasKey: true }),
     });
     // It mounted itself: a secret input, with its label in the shared copy.
     assert.equal(host.children[0], key.field);
@@ -629,7 +629,7 @@ test("the shared key fragment mounts standalone (the local side's path)", () => 
 
     // The local-only third source is visible: the selected config file.
     key.render("");
-    assert.match(key.refs.source.textContent, /strata-iq3_s\.json/);
+    assert.match(key.refs.source.textContent, /strata-iq2_xs\.json/);
 
     // Mask round-trip: what the backend returned goes back out unchanged…
     key.render("********");

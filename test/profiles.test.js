@@ -532,7 +532,7 @@ test("running service locks the in-use profile only", async () => {
   try {
     const profile = localProfile({ id: "run", name: "default", strataDir: dir, pythonPath: "/usr/bin/python3", port });
     const spare = localProfile({ id: "spare", name: "spare", strataDir: "/elsewhere" });
-    fs.writeFileSync(path.join(dir, "strata-demo.json"), JSON.stringify({ port }));
+    fs.writeFileSync(path.join(dir, "strata-iq2_xs.json"), JSON.stringify({ port }));
 
     const ctx = makeCtx({});
     await writeProfiles(ctx, [profile, spare], "run");

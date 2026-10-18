@@ -146,7 +146,7 @@ test("ggufDirFromConfig prefers explicit fields, else the --native folder", () =
 test("localRuntimeValues reads the live local process and config", () => {
   const cmdline =
     "/srv/python/bin/python3 /srv/strata/serve/server.py " +
-    "--engine strata --config /srv/strata/strata-iq3_s.json --port 8080 --gpu 0";
+    "--engine strata --config /srv/strata/strata-iq2_xs.json --port 8080 --gpu 0";
   const configJson = {
     args: [
       "--engine",
@@ -179,7 +179,7 @@ test("localRuntimeValues reads the live local process and config", () => {
   assert.equal(sources.strataDir, "runtime");
   assert.equal(values.pythonPath, "/srv/python/bin/python3");
   assert.equal(sources.pythonPath, "runtime");
-  assert.equal(values.configFile, "strata-iq3_s.json");
+  assert.equal(values.configFile, "strata-iq2_xs.json");
   assert.equal(sources.configFile, "runtime");
   assert.equal(values.port, 8080);
   assert.equal(sources.port, "runtime");
@@ -412,10 +412,10 @@ test("buildRunningReport surfaces a live value missing from the profile", async 
   ]);
   ctx._store.activeProfileId = "p1";
 
-  const status = { state: "running", configFile: "strata-iq3_s.json" };
+  const status = { state: "running", configFile: "strata-iq2_xs.json" };
   const cmdline =
     "/srv/python/bin/python3 /srv/strata/serve/server.py " +
-    "--config /srv/strata/strata-iq3_s.json --port 8080";
+    "--config /srv/strata/strata-iq2_xs.json --port 8080";
   const configJson = {
     args: ["--native", "/srv/strata-data/models/IQ3_S/model-00001-of-00002.gguf"],
   };

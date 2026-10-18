@@ -24,16 +24,16 @@
 | 项目目录 | `<strata-dir>` |
 | Python 环境 | `<python>`（conda 环境）|
 | 服务端口 | 8080 |
-| 配置文件 | `<strata-dir>/strata-iq3_s.json` |
+| 配置文件 | `<strata-dir>/strata-<model>.json` |
 | 数据目录 | `<strata-data>` |
 | 模型 | Qwen3.8-Flash-Next IQ3_S（125B MoE，量化后 47GB）|
-| 硬件 | RTX 4060 Ti 16G + 91G 内存 + Ryzen 7700 |
+| 硬件 | `<GPU>`（≤16 GB 显存）+ `<RAM>` GiB 内存 + `<CPU>` |
 
 **启动命令**（官方方式）：
 ```bash
 /path/to/python <strata-dir>/serve/server.py \
   --engine strata \
-  --config <strata-dir>/strata-iq3_s.json \
+  --config <strata-dir>/strata-<model>.json \
   --port 8080
 ```
 
@@ -67,7 +67,7 @@ GET http://127.0.0.1:8080/api/requests
 
 2. **Strata 是单序列的** —— 一次只处理一个请求，多个请求会排队（不会失败，只是等）。这是设计如此，不是 bug。
 
-3. **它的日志在** `<strata-dir>/strata-iq3_s.log`，里面每个请求会打印速度：
+3. **它的日志在** `<strata-dir>/strata-<model>.log`，里面每个请求会打印速度：
    ```
    strata serve: prompt 17 tokens = 0 reused + 17 read in 462 ms (36.8 tok/s), 2 generated in 164 ms (12.2 tok/s)
    strata serve: decode expert cache hit rate: 28.7% (535 hits / 1863 lookups)

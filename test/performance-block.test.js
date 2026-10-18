@@ -102,9 +102,9 @@ test("the resources / logs blocks keep their own rules (this change is scoped)",
 // ── the data side: WHICH log file the metrics come from ─────────────────────
 //
 // The install folder holds several logs, and two of them are written while the
-// service runs: the server's (`strata-iq3_s.log`, the one the CONFIG declares, where
+// service runs: the server's (`strata-iq2_xs.log`, the one the CONFIG declares, where
 // `strata serve: … read in N ms (X tok/s), … generated in N ms (Y tok/s)` lines live)
-// and the ENGINE's own (`strata-strata-iq3_s.log`, `[strata] done: 220 tokens in 7 s
+// and the ENGINE's own (`strata-strata-iq2_xs.log`, `[strata] done: 220 tokens in 7 s
 // (49.2 tok/s)` — a format parseMetrics does not match). Picking "the newest by
 // mtime" therefore alternated between them within seconds, so the Performance rows
 // were empty half the time and the block hid itself.
@@ -113,19 +113,19 @@ test("metrics come from the log the CONFIG declares, not from the newest file", 
   const { readRecentLogs } = await import("../lib/deployer/source.js");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "perf-log-"));
   try {
-    const declared = path.join(dir, "strata-iq3_s.log");
-    const engine = path.join(dir, "strata-strata-iq3_s.log");
+    const declared = path.join(dir, "strata-iq2_xs.log");
+    const engine = path.join(dir, "strata-strata-iq2_xs.log");
     fs.writeFileSync(declared, "strata serve: prompt 903 tokens = 0 reused + 903 read in 2021 ms (446.9 tok/s), 220 generated in 4497 ms (48.9 tok/s)\n");
     // The engine's log is the NEWEST one — that is what used to win the mtime race.
     fs.writeFileSync(engine, "[strata] done: 220 tokens in 7 s (49.2 tok/s) (stop, cancel=False)\n");
     fs.utimesSync(declared, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
     fs.writeFileSync(
-      path.join(dir, "strata-iq3_s.json"),
-      JSON.stringify({ log: declared, args: [], model_name: "qwen3.8-flash-next-iq3_s" }),
+      path.join(dir, "strata-iq2_xs.json"),
+      JSON.stringify({ log: declared, args: [], model_name: "qwen3.8-flash-next-iq2_xs" }),
     );
-    const cfg = { strataDir: dir, configFile: "strata-iq3_s.json" };
+    const cfg = { strataDir: dir, configFile: "strata-iq2_xs.json" };
     const log = readRecentLogs(cfg, 5);
-    assert.equal(log.file, "strata-iq3_s.log", "the declared log, even though the engine's is newer");
+    assert.equal(log.file, "strata-iq2_xs.log", "the declared log, even though the engine's is newer");
     assert.equal(log.metrics.tg, 48.9, "and its numbers are the measured ones");
     assert.equal(log.metrics.pp, 446.9);
     // The engine log alone would have produced nothing — that was the flicker.
@@ -135,10 +135,10 @@ test("metrics come from the log the CONFIG declares, not from the newest file", 
     // No declared log / unreadable config → still answer, newest first (old behaviour).
     fs.rmSync(declared);
     const fallback = readRecentLogs(cfg, 5);
-    assert.equal(fallback.file, "strata-strata-iq3_s.log");
-    fs.rmSync(path.join(dir, "strata-iq3_s.json"));
+    assert.equal(fallback.file, "strata-strata-iq2_xs.log");
+    fs.rmSync(path.join(dir, "strata-iq2_xs.json"));
     const none = readRecentLogs(cfg, 5);
-    assert.ok(["strata-strata-iq3_s.log", null].includes(none.file));
+    assert.ok(["strata-strata-iq2_xs.log", null].includes(none.file));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
