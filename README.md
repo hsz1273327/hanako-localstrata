@@ -2,6 +2,8 @@
 
 > A Hana app to monitor, configure and control a local **Strata** inference service.
 
+`1.1.1` · Hana `1.1.0-beta`+ · Windows 10/11 & Linux
+
 [English](#english) · [中文](#中文)
 
 ---
@@ -51,12 +53,17 @@ single **Save** (the writer only touches the fields that changed).
 - **Setup with parameters** — “Run setup…” can pass the choices setup takes
   (`--vision`, `--low-ram`, `--kv-streaming`, `--context`, `--kv`, `--gguf-dir`, and a
   pinned `--family`/`--model`), plus “keep the current settings as…” which copies the
-  config (and its shared-settings sibling) to a name you choose before the run.
+  config (and its shared-settings sibling) to a name you choose before the run. Every
+  setup this app starts carries `--no-browser`, so a first launch or an update never
+  pops a browser window; setup's config records `open_browser: false` and the
+  `run-<model>.sh` / `.bat` it writes has no `--open` either.
 - **Cards** — the App contributes a whole-page card (everything: status, config, logs,
   the parameter editor) and a slim one: state, model + vision, speed, start/stop. The
   slim view is also the right-hand function panel, so it can sit beside a conversation.
   Dragging it onto a **page** gives you that panel; the desktop surface refuses cards
-  that carry one (the host's rule).
+  that carry one (the host's rule). While the service is stopped, the slim card also
+  carries the environment picker (persisted through `POST /profiles/select`); while it
+  runs, that spot shows the running profile's name and type, read-only.
 - **Logs** — tail of the Strata log.
 - **First-run setup** — set the Strata directory, a Python interpreter and
   (optionally) a GGUF model folder in Hana's settings page (App **Local
@@ -66,7 +73,9 @@ single **Save** (the writer only touches the fields that changed).
 - **Environment profiles** — each profile is either a **local** Strata source
   checkout or a **container**. Manage them in Hana's settings page (App
   **Local Strata**) and pick one to start on the stop page; while a service is
-  running, the in-use profile is locked against edits and deletes.
+  running, the in-use profile is locked against edits and deletes. A local profile
+  also owns a **required** `dataDir`, the folder setup writes its model data into
+  (see *Two deployments on one machine*).
 
 ### Requirements
 
@@ -115,6 +124,41 @@ The app itself talks to the local Strata API (`127.0.0.1` / `localhost`) and to
 `api.github.com` for release checks. Docker is driven through the `docker` CLI,
 so pulls do not go through the app's network whitelist.
 
+### Two deployments on one machine
+
+Two deployments on one host (a CUDA checkout next to an ROCm one, a container next
+to a source checkout) are supported side by side. Every piece of state that used to
+be shared is now per deployment:
+
+- **`dataDir` is a required field of a local profile.** Each local profile owns the
+  folder setup writes `models` / `packs` / `mtp` into, and **every** setup and update
+  run passes it as `--data-dir`. There is no default and no fallback: a profile saved
+  before the field existed is listed in the panel with `dataDir` missing, and setup
+  refuses to run instead of guessing a path. (A container profile expresses the same
+  place with a `/data` mount plus `STRATA_DATA`.)
+- **Each deployment keeps its own setup settings file.** `setup.py` stores `data_dir`
+  and `installs` in one per-user `settings.json`, and treats both as folders an older
+  install left model files in, moving them into the current run's folder — so two
+  deployments overwrote each other's value and migrated each other's data. Setup and
+  update runs are now given a config home inside the deployment (`<strataDir>/.config`,
+  through `XDG_CONFIG_HOME` on POSIX and `APPDATA` on Windows), written only when
+  missing. Nothing to configure and nothing in the UI: an unwritable directory is one
+  line in the setup log and the run continues.
+- **A process belongs to the deployment it runs from.** Detection used to be one
+  machine-wide `pgrep -f serve/server.py`: a stopped profile reported *starting*, its
+  Start button answered `already: true`, and Stop could signal the neighbour's pid.
+  Detection now accepts only a server whose command line (or, for a `cd <dir> && …`
+  launch, whose working directory) points into that Strata directory, and a TCP probe
+  on the profile's own resolved port (profile → config file → 8080) is the second,
+  independent signal. A listener on the port with none of the deployment's processes
+  behind it is reported as a port conflict, and Start says why instead of launching a
+  server that cannot bind.
+- **Setup never opens a browser.** The first-run job, “Run setup…”, a new config and
+  the update's `setup.py --update` all carry `--no-browser`. Starting the service was
+  already silent: `serve/server.py` opens a browser only when given `--open`, which
+  this app never passes. Container profiles are untouched — their image runs its own
+  setup.
+
 ### Permissions
 
 On install, Hana shows a review card listing the capabilities this app requests.
@@ -147,6 +191,7 @@ Configured in Hana's settings page (app **Local Strata**):
 | Key | Default | Meaning |
 |---|---|---|
 | `strataDir` | — | Path to the Strata project (per profile; set in this settings page) |
+| `dataDir` | — | **Required** on a local profile: the folder setup writes its model data into (`--data-dir`). A container profile expresses it as a `/data` mount plus `STRATA_DATA` |
 | `pythonPath` | — | Python interpreter; empty = auto-detect `python3` / `python.exe` |
 | `ggufDir` | — | Local-profile fallback: folder with the GGUF shards (`setup.py --gguf-dir`). A container profile carries its own host-model directory / container path pair instead. Empty = first start downloads the model |
 | `configFile` | — | Optional override; empty = auto-use the newest `strata-*.json` (or generate one on first start) |
@@ -189,6 +234,18 @@ node <hana-app-creator>/scripts/validate_app.mjs --dir . --json
 Requires a Hana install that provides `scripts/validate-app.mjs`
 (`HANA_APP_TOOLS_ROOT` can point at the Hana Server directory).
 
+**Packaging** builds from a copy that holds tracked sources only: the packer zips the
+directory it is handed, so a `.git` folder or an earlier build sitting inside it ends up
+*in* the package (and a `dist-extensions/` in the tree adds a copy of the previous zip).
+The directory name has to equal the manifest `id`.
+
+```bash
+rsync -a --exclude .git --exclude dist-extensions --exclude node_modules \
+  ./ /tmp/pack/hanako-localstrata/
+HANA_ROOT=<hana server dir> node <hana-app-creator>/scripts/pack_app.mjs \
+  --dir /tmp/pack/hanako-localstrata --publisher <publisher> --out ./dist-extensions
+```
+
 ### License
 
 [MIT](./LICENSE)
@@ -228,17 +285,22 @@ Requires a Hana install that provides `scripts/validate-app.mjs`
 - **带参数的 setup** —— 「运行 setup…」可以把 setup 的选择传进去（`--vision`、
   `--low-ram`、`--kv-streaming`、`--context`、`--kv`、`--gguf-dir`，以及钉死的
   `--family`/`--model`）；还有「当前设置备份为」，在跑之前把这份 config（连同它的
-  shared-settings 兄弟文件）复制成你指定的名字。
+  shared-settings 兄弟文件）复制成你指定的名字。本 App 起的每一次 setup 都带
+  `--no-browser`，首启或更新都不会弹出浏览器窗口；setup 写出的配置里记着
+  `open_browser: false`，它生成的 `run-<model>.sh` / `.bat` 也没有 `--open`。
 - **卡片** —— 这个 App 提供两张卡：整页卡（全部内容：状态、配置、日志、参数编辑）
   与瘦卡（状态、模型与视觉、速度、启停）。瘦卡也是右侧功能面板的视图，可以停在对话旁边；
   把它拖到**页面**上右栏就会出现；桌面（home）会拒绝带功能面板的卡片（平台规则）。
+  服务停止时，瘦卡上也带环境选择器（选中后经 `POST /profiles/select` 落库）；服务运行
+  时那个位置显示当前 profile 的名字与类型，只读。
 - **日志** —— Strata 日志尾部。
 - **首次配置引导** —— 在 Hana 设置页（App **Local Strata**）填写 Strata 目录、
   Python 解释器与（可选的）GGUF 模型目录；没有可用配置时，同一个启动按钮会先跑
   `setup.py` 再启动服务。
 - **环境配置（profiles）** —— 每套配置要么是**本机（源码）**、要么是**容器**。
   在 Hana 设置页（App **Local Strata**）管理，在停机页选择要启动的那套；服务运行中
-  会锁定正在使用的那套（不允许改 / 删）。
+  会锁定正在使用的那套（不允许改 / 删）。本机配置还拥有一个**必填**的 `dataDir`
+  ——setup 写模型数据的目录（见「同一台机器上的两套部署」）。
 - **随 Hana 启动** —— 可选是否随 Hana 一起拉起 Strata。
 
 ### 要求
@@ -279,6 +341,32 @@ Strata** 里增删改）。一套配置就是一种运行 Strata 的方式，分
 App 只访问本机 Strata API（`127.0.0.1` / `localhost`），以及用于版本检查的
 `api.github.com`。
 
+### 同一台机器上的两套部署
+
+同一台机器上并排跑两套部署（一张 CUDA 卡一套、一张 ROCm 卡一套，或者容器挨着源码
+部署）是被支持的。凡是过去可能被共享的状态，现在都按部署分开：
+
+- **`dataDir` 是本机配置的必填字段。** 每套本机配置拥有 setup 写 `models` / `packs` /
+  `mtp` 的那个目录，**每次** setup 与更新都会把它作为 `--data-dir` 传进去。没有默认值、
+  没有兜底：字段引入之前保存的配置会在面板里显示为缺 `dataDir`，setup 直接拒绝运行，
+  而不是替你猜一个路径。（容器配置用 `/data` 挂载加 `STRATA_DATA` 表达同一个位置。）
+- **每套部署各自维护自己的 setup 设置文件。** `setup.py` 把 `data_dir` 与 `installs`
+  记在一份按用户共享的 `settings.json` 里，并把这两处都当成「旧安装留下的模型目录」，
+  把里面的模型文件搬进本次运行的目录——于是两套部署互相覆盖那个值、互相搬走对方的数据。
+  现在 setup 与更新的运行会拿到指向部署内部的配置主目录（`<strataDir>/.config`，POSIX
+  走 `XDG_CONFIG_HOME`，Windows 走 `APPDATA`），只在缺失时创建。不需要配置，UI 里也没有
+  这一项：目录不可写只是 setup 日志里的一行，运行继续。
+- **进程属于「它所在的目录」。** 以前检测是一条机器级的 `pgrep -f serve/server.py`：
+  停着的配置显示「启动中」，启动按钮返回 `already: true`，停止还会去给隔壁那套的 pid
+  发信号。现在只认命令行（`cd <目录> && …` 这种启动方式则认工作目录）指向这套 Strata
+  目录的服务进程，再加上「在这套配置自己解析出的端口上做一次 TCP 探测」
+  （profile → 配置文件 → 8080）作为第二个独立信号。端口有人在听、却找不到这套部署的
+  进程时，按端口冲突上报，启动会直说原因，而不是去起一个绑不上端口的服务。
+- **setup 不再弹浏览器。** 首启任务、「运行 setup…」、新建配置，以及更新里的
+  `setup.py --update`，全部带 `--no-browser`。启动服务本来就不弹：`serve/server.py`
+  只在收到 `--open` 时才开浏览器，本 App 从不传它。容器配置不受影响——它们的 setup
+  由镜像自己跑。
+
 ### 权限
 
 安装时 Hana 会弹出审阅卡，列出本 App 申请的能力。**四项都是必需，没有一项是「以防万一」才申请的**：
@@ -308,6 +396,7 @@ manifest 的 `id`。
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `strataDir` | — | Strata 项目目录（按配置，在本设置页填写） |
+| `dataDir` | — | 本机配置**必填**：setup 写模型数据的目录（`--data-dir`）。容器配置用 `/data` 挂载加 `STRATA_DATA` 表达 |
 | `pythonPath` | — | Python 解释器；留空则自动探测 `python3` / `python.exe` |
 | `ggufDir` | — | 本机配置的模型目录（`setup.py --gguf-dir`）。容器配置在界面上另填宿主模型目录 / 容器内路径。留空则首次启动下载模型 |
 | `configFile` | — | 可选覆盖；留空则自动使用最新的 `strata-*.json`（没有则在首次启动时生成） |
@@ -343,6 +432,17 @@ node <hana-app-creator>/scripts/validate_app.mjs --dir . --json
 
 需要一个提供 `scripts/validate-app.mjs` 的 Hana 安装
 （可用 `HANA_APP_TOOLS_ROOT` 指向 Hana Server 目录）。
+
+**打包**要从一份只有源码的副本里打：打包器会把交给它的整个目录塞进 zip，所以仓库里
+的 `.git`、或者上一次的产物只要在里面，就会跟着进包（树里有个 `dist-extensions/`，包里
+就会多出一份上一版 zip）。目录名必须等于 manifest 的 `id`。
+
+```bash
+rsync -a --exclude .git --exclude dist-extensions --exclude node_modules \
+  ./ /tmp/pack/hanako-localstrata/
+HANA_ROOT=<hana server dir> node <hana-app-creator>/scripts/pack_app.mjs \
+  --dir /tmp/pack/hanako-localstrata --publisher <publisher> --out ./dist-extensions
+```
 
 ### 许可证
 

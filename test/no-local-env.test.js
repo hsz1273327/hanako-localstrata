@@ -19,7 +19,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Directories that are generated, vendored from somewhere else, or deliberately examples.
-const SKIP_DIRS = new Set([".git", "node_modules", "v1-reference"]);
+// `dist-extensions` is the packed app package: its entry file necessarily carries the
+// publisher name, and the zip is rebuilt (new hash) on every release.
+const SKIP_DIRS = new Set([".git", "node_modules", "v1-reference", "dist-extensions"]);
 const TEXT = /\.(md|js|mjs|cjs|json|html|css|txt|sh|yml|yaml)$/i;
 // Paths the tests are allowed to use because they are visibly fake.
 const FAKE_HOME = /^\/home\/(u|user|tester|you|me|alice|bob)\b/;

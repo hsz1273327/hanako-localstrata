@@ -156,3 +156,7 @@ strata-*.json
 *.bak
 *.bak-*
 .hanako-localstrata/
+
+# Packed app package (pack_app.mjs --out ./dist-extensions). Build output: the entry
+# file carries the publisher name and the zip's hash changes on every pack.
+dist-extensions/
