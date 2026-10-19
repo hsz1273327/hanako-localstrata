@@ -171,17 +171,8 @@ function fmtUptime(sec) {
 }
 
 // Compare dotted numeric versions: "0.1.38" vs "0.1.40.3" → -1 / 0 / 1.
-function compareVersions(a, b) {
-  const pa = String(a || "").split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = String(b || "").split(".").map((n) => parseInt(n, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const x = pa[i] || 0;
-    const y = pb[i] || 0;
-    if (x !== y) return x < y ? -1 : 1;
-  }
-  return 0;
-}
+// Moved to ui/assets/version-row.js (with the update-row decision) and re-exported so
+// this file keeps one copy of the rule.
 
 // Label-value rows: [[label, value, extraClass?, copyValue?, hint?, action?], ...]
 // action = { label, onClick } renders a small button on the right.
@@ -420,36 +411,28 @@ function paintVersion(s) {
   }
 
   const version = s?.version;
+  // An unknown local version stays an em dash — the row never invents a number. But it
+  // no longer hides the update action: versionRowPlan() treats "unknown" as "not
+  // provably up to date" (see ui/assets/version-row.js).
   const local = typeof version?.local === "string" ? version.local : null;
   const latest = typeof version?.latest === "string" ? version.latest : null;
   rows.push([t("label.version"), local || "—"]);
-  if (version?.checkState === "checked" && latest) {
-    if (local && compareVersions(latest, local) > 0) {
-      if (RUNNING_STATES.has(s.state)) {
-        rows.push([
-          t("label.latestVersion"),
-          tp("version.available", { version: latest }),
-          "update",
-          undefined,
-          t("version.stopToUpdate"),
-        ]);
-      } else {
-        rows.push([
-          t("label.latestVersion"),
-          tp("version.available", { version: latest }),
-          "update",
-          undefined,
-          undefined,
-          { label: t("common.update"), onClick: (btn) => promptUpdate(latest, btn) },
-        ]);
-      }
-    } else if (local) {
-      rows.push([t("label.latestVersion"), t("version.upToDate")]);
-    } else {
-      rows.push([t("label.latestVersion"), latest]);
-    }
+  const plan = versionRowPlan({ state: s?.state, local, latest, checkState: version?.checkState });
+  if (plan === "action-update" || plan === "hint-stop") {
+    rows.push([
+      t("label.latestVersion"),
+      tp("version.available", { version: latest }),
+      "update",
+      undefined,
+      plan === "hint-stop" ? t("version.stopToUpdate") : undefined,
+      plan === "hint-stop" ? undefined : { label: t("common.update"), onClick: (btn) => promptUpdate(latest, btn) },
+    ]);
+  } else if (plan === "up-to-date") {
+    rows.push([t("label.latestVersion"), t("version.upToDate")]);
   } else if (version?.checkState === "error") {
     rows.push([t("label.latestVersion"), t("version.checkFailed")]);
+  } else if (latest) {
+    rows.push([t("label.latestVersion"), latest]);
   } else {
     rows.push([t("label.latestVersion"), t("version.checking")]);
   }

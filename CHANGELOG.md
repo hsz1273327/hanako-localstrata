@@ -84,6 +84,16 @@ build this App needs, a separate axis from the App's own version).
   instead of a URL.
 
   **卡片底部改为显示模型与视觉。** 原来那行地址换成了模型名和一个视觉图标。
+- The update action no longer disappears while the service is stopped. The local version
+  used to come only from the running server's status, so a stopped service showed
+  "version: —" and the update row collapsed to a bare version number — although stopping
+  is the update pipeline's own first step. It now also reads the engine's
+  `engine/BUILD.json`, and an unknown local version counts as "not provably up to date",
+  so the update button is offered.
+
+  **服务停止时也能更新了。** 本地版本以前只取自运行中服务的状态，停机就显示
+  「版本 —」，更新那一行只剩一个版本号——而更新流程本来就是先停服。现在同时读引擎的
+  `engine/BUILD.json`；本地版本未知时按「无法确认是否最新」处理，因此仍会给出更新入口。
 - The Performance block no longer disappears when the metrics window is momentarily
   empty, and metrics are read from the log the config declares rather than whichever log
   file has the newest mtime.

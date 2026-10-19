@@ -44,12 +44,17 @@ test("running state hides the parameter editor and shows it only when stopped", 
 });
 
 test("running state drops the update action button but keeps the version row", () => {
-  // The running branch pushes the latest-version row with the hint and WITHOUT
-  // the 6th (action) element.
-  assert.match(
-    panelJs,
-    /if \(RUNNING_STATES\.has\(s\.state\)\) \{\s*rows\.push\(\[\s*t\("label\.latestVersion"\),\s*tp\("version\.available", \{ version: latest \}\),\s*"update",\s*undefined,\s*t\("version\.stopToUpdate"\),\s*\]\);/,
-  );
+  // The DECISION now lives in ui/assets/version-row.js (versionRowPlan), so this asserts
+  // the wiring: the row follows the plan, the "hint-stop" branch carries the hint and no
+  // action, and the "action-update" branch renders the real update button.
+  const plan = "ui/assets/version-row.js";
+  const ver = fs.readFileSync(path.join(ROOT, plan), "utf8");
+  assert.match(ver, /export function versionRowPlan\(/);
+  assert.match(ver, /RUNNING\.has\(String\(state \|\| ""\)\) \? "hint-stop" : "action-update"/);
+  assert.match(panelJs, /const plan = versionRowPlan\(\{ state: s\?\.state, local, latest, checkState: version\?\.checkState \}\)/);
+  // hint-stop: the hint, NO sixth element (no action).
+  assert.match(panelJs, /plan === "hint-stop" \? t\("version\.stopToUpdate"\) : undefined/);
+  assert.match(panelJs, /plan === "hint-stop" \? undefined : \{ label: t\("common\.update"\), onClick: \(btn\) => promptUpdate\(latest, btn\) \}/);
   // The stopped path still renders the real update button.
   assert.match(panelJs, /label: t\("common\.update"\), onClick: \(btn\) => promptUpdate\(latest, btn\)/);
 });
