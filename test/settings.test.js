@@ -330,14 +330,15 @@ test("read-only editor disables every field and removes the save path", () => {
 });
 
 // The editor points at the fields a profile still needs before it can RUN, using
-// the readiness rule (lib/profiles.js profileReady: local → Strata dir;
-// container → image + container name). That is not the save-time requirement —
-// a local profile saves with an empty Strata dir but cannot start then.
+// the readiness rule (lib/profiles.js profileReady: local → Strata dir + data
+// dir; container → image + container name). That is not always the save-time
+// requirement — a container profile saves with an empty container name but
+// cannot start then.
 test("the editor marks empty start-required fields", () => {
   const src = fs.readFileSync(path.join(ROOT, "ui/assets/settings.js"), "utf8");
   const css = fs.readFileSync(path.join(ROOT, "ui/assets/settings.css"), "utf8");
   assert.match(src, /const START_REQUIRED_FIELDS = \{/);
-  assert.match(src, /local: \["profileStrataDir"\]/);
+  assert.match(src, /local: \["profileStrataDir", "profileDataDir"\]/);
   assert.match(src, /container: \["profileImageName", "profileContainerName"\]/);
   assert.match(src, /hint\.textContent = t\("field\.neededToStart"\)/);
   // Never shown in the read-only "view" variant (nothing can be filled there).

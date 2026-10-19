@@ -61,6 +61,8 @@ const els = {
   profileLocalFields: document.getElementById("pfLocalFields"),
   profileContainerFields: document.getElementById("pfContainerFields"),
   profileStrataDir: document.getElementById("pf-strataDir"),
+  profileDataDir: document.getElementById("pf-data-dir"),
+  profileDataDirPick: document.getElementById("pf-data-dir-pick"),
   profileLocalExtra: document.getElementById("pf-local-extra"),
   profileStrataDirPick: document.getElementById("pf-strataDir-pick"),
   profilePythonPath: document.getElementById("pf-pythonPath"),
@@ -798,6 +800,7 @@ function profileErrorText(error) {
   if (raw.includes("nameTaken")) return t("profile.errNameTaken");
   if (raw.includes("imageRequired")) return t("profile.errImageRequired");
   if (raw.includes("containerNameRequired")) return t("profile.errContainerNameRequired");
+  if (raw.includes("dataDirRequired")) return t("profile.errDataDirRequired");
   if (raw.includes("gpuModelRequired")) return t("profile.errGpuModelRequired");
   if (raw.includes("gpuModelUnknown")) return t("profile.errGpuModelUnknown");
   if (raw.includes("portInvalid")) return t("profile.errPortInvalid");
@@ -927,10 +930,11 @@ function setProfileEditorType(type) {
 
 // Fields that must hold a value before the profile can START — the readiness
 // rule (lib/profiles.js `profileReady`), which is not the same as the save-time
-// requirement (a local profile saves fine with an empty Strata directory but
-// cannot start then).
+// requirement (a container profile saves fine with an empty container name but
+// cannot start then). A local profile needs both roots: the checkout it runs
+// from and the directory setup writes its products into.
 const START_REQUIRED_FIELDS = {
-  local: ["profileStrataDir"],
+  local: ["profileStrataDir", "profileDataDir"],
   container: ["profileImageName", "profileContainerName"],
 };
 
@@ -974,6 +978,7 @@ function editorFields() {
     els.profileName,
     els.profileType,
     els.profileStrataDir,
+    els.profileDataDir,
     els.profilePythonPath,
     els.profileGpu,
     els.profileImageName,
@@ -992,6 +997,7 @@ function setEditorReadOnly(readOnly) {
   if (els.profileImagePull) els.profileImagePull.disabled = readOnly || imagePullBusy;
   // Pickers write into the fields, so they follow the same rule.
   if (els.profileStrataDirPick) els.profileStrataDirPick.disabled = readOnly;
+  if (els.profileDataDirPick) els.profileDataDirPick.disabled = readOnly;
   if (els.profilePythonPathPick) els.profilePythonPathPick.disabled = readOnly;
   // The whole shared container block — its inputs, its pickers and its row
   // buttons (the preset prompt's buttons included) — and the local key control.
@@ -1029,6 +1035,9 @@ async function openProfileEditor(profile, readOnly = false) {
   els.profileName.value = profile?.name || "";
   els.profileType.value = profile?.type === "container" ? "container" : "local";
   els.profileStrataDir.value = profile?.strataDir || "";
+  // Required, and empty for a profile saved before the field existed: the form
+  // shows the gap instead of offering a guess.
+  els.profileDataDir.value = profile?.dataDir || "";
   els.profilePythonPath.value = profile?.pythonPath || "";
   els.profileGpu.value = profile?.gpu || "";
   els.profileImageName.value = profile?.imageName || "";
@@ -1118,8 +1127,18 @@ async function saveProfile() {
       setProfileMessage(t("profile.errPortInvalid"), "error");
       return;
     }
+    // Required: setup writes this environment's packs, MTP files and model here.
+    // Caught here as well as in the backend (validateProfile) so the message
+    // appears without a round trip — and so an old profile cannot be saved with
+    // the gap still in it.
+    const dataDir = els.profileDataDir.value.trim();
+    if (!dataDir) {
+      setProfileMessage(t("profile.errDataDirRequired"), "error");
+      return;
+    }
     body.port = port;
     body.strataDir = els.profileStrataDir.value.trim();
+    body.dataDir = dataDir;
     body.pythonPath = els.profilePythonPath.value.trim();
     body.gpu = els.profileGpu.value.trim();
     // The local override: the mask round-trips as "unchanged", empty clears.
@@ -1253,6 +1272,9 @@ els.profileImagePull.addEventListener("click", pullImage);
 // The resolved compose path is derived from the container name.
 els.profileContainerName.addEventListener("input", () => containerFields.refreshDeployPath());
 els.profileStrataDirPick.addEventListener("click", () => pickDirectory(els.profileStrataDir));
+// Where this environment's products land. Its own picker: the two roots are
+// different folders and are never derived from one another.
+els.profileDataDirPick.addEventListener("click", () => pickDirectory(els.profileDataDir));
 // The interpreter is a file: file mode, and the field may stay empty (the App
 // falls back to the system python3) or hold a bare command name.
 els.profilePythonPathPick.addEventListener("click", () => pickFile(els.profilePythonPath));

@@ -24,6 +24,30 @@ import {
 } from "../lib/firstrun.js";
 import { getStatus } from "../lib/strata.js";
 
+// A cfg shaped like `readAllConfig`'s answer. The data directory is a PROFILE
+// field (setup's own remembered `data_dir` is never consulted), so every fixture
+// below carries an active profile — exactly what the real reader produces.
+const DATA_DIR = "/srv/strata-data";
+
+function localCfg(dir, extra = {}) {
+  return {
+    strataDir: dir,
+    pythonPath: "/usr/bin/python3",
+    ggufDir: "",
+    configFile: "",
+    activeProfile: { id: "p1", name: "default", type: "local", strataDir: dir, dataDir: DATA_DIR },
+    ...extra,
+  };
+}
+
+// The stored form (ctx.config), for the tests that go through the real reader.
+function localStore(dir, pythonPath = "/usr/bin/python3") {
+  return {
+    profiles: [{ id: "p1", name: "default", type: "local", strataDir: dir, pythonPath, dataDir: DATA_DIR }],
+    activeProfileId: "p1",
+  };
+}
+
 const tmpRoots = [];
 
 function tmpDir() {
@@ -137,7 +161,7 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
         ? { state: "no-config", launch: { method: "local" }, settings: {}, configCandidates: [] }
         : { state: "running", launch: { method: "local" } };
     },
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: gguf, configFile: "" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: gguf }),
     saveSelectedConfig: async (_ctx, file) => {
       saved = file;
     },
@@ -195,6 +219,7 @@ test("local first run spawns setup.py with --gguf-dir, selects the config and st
 test("the setup parameters are whitelisted, in setup's own value domains", () => {
   assert.deepEqual(Object.keys(SETUP_PARAMS).sort(), [
     "context",
+    "dataDir",
     "family",
     "ggufDir",
     "kv",
@@ -209,6 +234,13 @@ test("the setup parameters are whitelisted, in setup's own value domains", () =>
   assert.equal(SETUP_PARAMS.ggufDir.path, true);
   assert.deepEqual(validateSetupParams({ ggufDir: "/models/IQ3_S" }).clean, { ggufDir: "/models/IQ3_S" });
   assert.deepEqual(validateSetupParams({ ggufDir: "" }).clean, {});
+
+  // `--data-dir` is in the table for its flag spelling only: the value belongs to
+  // the profile, so a request may not set it and validateSetupParams refuses it.
+  assert.equal(SETUP_PARAMS.dataDir.flag, "--data-dir");
+  assert.equal(SETUP_PARAMS.dataDir.fromProfile, true);
+  assert.deepEqual(validateSetupParams({ dataDir: "/srv/elsewhere" }).clean, {});
+  assert.match(validateSetupParams({ dataDir: "/srv/elsewhere" }).errors.join(), /dataDir/);
 
   const ok = validateSetupParams({ vision: "gpu", lowRam: "resident", kvStreaming: "on", context: "131072", kv: "k8v4" });
   assert.deepEqual(ok.errors, []);
@@ -243,7 +275,7 @@ test("a re-run passes the requested flags in setup's spelling, and nothing else"
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {}, configCandidates: [] }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/IQ3_S", configFile: "strata-iq2_xs.json" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: "/models/IQ3_S", configFile: "strata-iq2_xs.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {
@@ -276,8 +308,12 @@ test("a re-run passes the requested flags in setup's spelling, and nothing else"
     assert.equal(spawnedArgs[at + 1], value, `${flag} takes setup's own value`);
   }
   assert.ok(spawnedArgs.includes("--setup") && spawnedArgs.includes("--yes") && spawnedArgs.includes("--no-start"));
-  // Not ours to pass: the hardware side, the profile's paths, setup's derivations.
-  for (const flag of ["--backend", "--gpu", "--gpus", "--data-dir", "--port", "--resident-budget-gib", "--vram-reserve-mib"]) {
+  // The profile's data directory, every run, in setup's spelling.
+  const at = spawnedArgs.indexOf("--data-dir");
+  assert.ok(at >= 0, "--data-dir must always be passed");
+  assert.equal(spawnedArgs[at + 1], DATA_DIR);
+  // Not ours to pass: the hardware side, setup's derivations, the other paths.
+  for (const flag of ["--backend", "--gpu", "--gpus", "--port", "--resident-budget-gib", "--vram-reserve-mib"]) {
     assert.equal(spawnedArgs.includes(flag), false, `${flag} must not be passed`);
   }
 });
@@ -288,7 +324,7 @@ test("a re-run with nothing asked for passes no parameter flags (setup decides)"
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {}, configCandidates: [] }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { configFile: "strata-a.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {
@@ -303,6 +339,8 @@ test("a re-run with nothing asked for passes no parameter flags (setup decides)"
   await beginFirstRun(makeCtx({ strataDir: dir }), { io, force: true, startAfter: false, setup: {} });
   await waitForDone();
   for (const spec of Object.values(SETUP_PARAMS)) {
+    // A profile-owned value is not a "parameter": it is always passed.
+    if (spec.fromProfile) continue;
     assert.equal(spawnedArgs.includes(spec.flag), false, `${spec.flag} must not appear`);
   }
 });
@@ -343,7 +381,7 @@ test("local first run drives a real setup.py process and discovers the config (P
   };
 
   // pythonPath=/bin/sh so the shell-script setup.py is actually executed.
-  await beginFirstRun(makeCtx({ strataDir: dir, pythonPath: "/bin/sh" }), { io });
+  await beginFirstRun(makeCtx(localStore(dir, "/bin/sh")), { io });
   const state = await waitForDone(5000);
   assert.equal(state.error, null);
   assert.equal(state.done, true);
@@ -391,7 +429,7 @@ test("beginFirstRun does not start a second job while one is running", async () 
       running
         ? { state: "running", launch: { method: "local" } }
         : { state: "no-config", launch: { method: "local" }, settings: {} },
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/m", configFile: "" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: "/m" }),
     saveSelectedConfig: async () => {},
     startService: async () => ({ started: true, state: "starting" }),
     sleep: async () => gate,

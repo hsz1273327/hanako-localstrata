@@ -545,6 +545,13 @@ function paintConfig(s) {
   if (prof && !SETUP_STATES.has(s.state)) {
     rows.push([t("label.profile"), `${prof.name} (${profileTypeLabel(prof.type)})`]);
   }
+  // Where this environment writes its products. The value comes from the
+  // PROFILE (setup's own remembered `data_dir` is not consulted any more), so the
+  // row says where it comes from; an empty one shows as "—" and is already named
+  // by the "missing fields" line next to the start button.
+  if (prof && prof.type !== "container" && !SETUP_STATES.has(s.state)) {
+    rows.push([t("field.localDataDir"), prof.dataDir || "—", null, null, t("label.dataDirSource")]);
+  }
   if (isDockerMethod(s) && s.docker) {
     rows.push([t("label.container"), s.docker.containerName || "—"]);
     const prof = s.profile;
@@ -1658,6 +1665,7 @@ function ensurePluginForm() {
     localFields: root.querySelector("#psLocalFields"),
     containerFields: root.querySelector("#psContainerFields"),
     strataDir: root.querySelector("#ps-strataDir"),
+    dataDir: root.querySelector("#ps-data-dir"),
     pythonPath: root.querySelector("#ps-pythonPath"),
     gpu: root.querySelector("#ps-gpu"),
     imageName: root.querySelector("#ps-imageName"),
@@ -1725,6 +1733,8 @@ function fillProfileEditorFields(profile) {
   pluginFormEls.name.value = profile?.name || "";
   pluginFormEls.type.value = profile?.type || "local";
   pluginFormEls.strataDir.value = profile?.strataDir || "";
+  // Required, and empty for a profile saved before the field existed.
+  pluginFormEls.dataDir.value = profile?.dataDir || "";
   pluginFormEls.pythonPath.value = profile?.pythonPath || "";
   pluginFormEls.gpu.value = profile?.gpu || "";
   pluginFormEls.imageName.value = profile?.imageName || "";
@@ -1868,6 +1878,7 @@ function collectProfileEdits() {
   } else {
     body.port = Number(pluginFormEls.port.value) || 0;
     body.strataDir = pluginFormEls.strataDir.value.trim();
+    body.dataDir = pluginFormEls.dataDir.value.trim();
     body.pythonPath = pluginFormEls.pythonPath.value.trim();
     body.gpu = pluginFormEls.gpu.value.trim();
     // The local override: the mask round-trips as "unchanged", empty clears.
@@ -1998,6 +2009,7 @@ const SAVE_ERROR_KEYS = {
   nameTaken: "profile.errNameTaken",
   imageRequired: "profile.errImageRequired",
   containerNameRequired: "profile.errContainerNameRequired",
+  dataDirRequired: "profile.errDataDirRequired",
   gpuModelRequired: "profile.errGpuModelRequired",
   gpuModelUnknown: "profile.errGpuModelUnknown",
   portInvalid: "profile.errPortInvalid",
@@ -2005,6 +2017,13 @@ const SAVE_ERROR_KEYS = {
 
 async function saveProfileEdit() {
   if (state.working || !state.editingProfileId || !pluginFormEls) return;
+  // The same required-field check the backend runs (validateProfile), done here
+  // first so the message lands without a round trip. A local profile's data
+  // directory is required and has no default.
+  if (pluginFormEls.type.value !== "container" && !pluginFormEls.dataDir.value.trim()) {
+    setPsMessage(t("profile.errDataDirRequired"), "error");
+    return;
+  }
   state.working = true;
   els.profileDrawerSave.disabled = true;
   setPsMessage(t("profile.saving"), "info");
@@ -2036,6 +2055,7 @@ function setPsMessage(text, kind = "info") {
 // field copy so the hint and the editor say the same thing.
 const START_FIELD_LABELS = {
   strataDir: "field.strataDir",
+  dataDir: "field.localDataDir",
   image: "field.imageName",
   containerName: "field.containerName",
 };

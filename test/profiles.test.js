@@ -79,9 +79,23 @@ test("readiness: a filled container profile is ready; an empty one names its fie
     missingProfileFields(normalizeProfile({ type: "container", image: "strata:latest", containerName: "" })),
     ["containerName"],
   );
-  // Local readiness keys off the Strata directory only.
-  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "/srv/Strata" })), []);
-  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "" })), ["strataDir"]);
+  // Local readiness needs BOTH roots: the checkout it runs from and the
+  // directory setup writes its products into (dataDir).
+  assert.deepEqual(
+    missingProfileFields(normalizeProfile({ type: "local", strataDir: "/srv/Strata", dataDir: "/srv/Strata-data" })),
+    [],
+  );
+  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "/srv/Strata" })), ["dataDir"]);
+  assert.deepEqual(missingProfileFields(normalizeProfile({ type: "local", strataDir: "" })), [
+    "strataDir",
+    "dataDir",
+  ]);
+  // A container profile is untouched by this field: its storage is a VolumeBind
+  // plus STRATA_DATA, so it asks for neither of the two local roots.
+  assert.deepEqual(
+    missingProfileFields(normalizeProfile({ type: "container", image: "strata", containerName: "strata" })),
+    [],
+  );
 });
 
 // The status payload must carry the readiness verdict (and the missing keys) per
@@ -106,6 +120,10 @@ test("the status payload carries each profile's readiness", async () => {
   assert.deepEqual(byId.c1.missing, []);
   assert.equal(byId.l1.ready, true);
   assert.deepEqual(byId.l1.missing, []);
+  // The panel's service section shows where this environment writes; the value
+  // rides on the profile view (a container reports none).
+  assert.equal(byId.l1.dataDir, "/srv/strata-data");
+  assert.equal(byId.c1.dataDir, undefined);
 });
 
 function makeCtx(values = {}) {
@@ -139,6 +157,9 @@ function localProfile(overrides = {}) {
     id: "p-local",
     name: "default",
     type: "local",
+    // Both roots, like a complete local profile: the checkout it runs from and
+    // the directory setup writes its products into.
+    dataDir: "/srv/strata-data",
     ...overrides,
   });
 }
@@ -186,6 +207,7 @@ test("validateProfile enforces name uniqueness and container fields", () => {
   const list = [localProfile({ id: "a", name: "default" })];
   assert.deepEqual(validateProfile({ type: "local", name: "default" }, { profiles: list, isNew: true }).errors, [
     "nameTaken",
+    "dataDirRequired",
   ]);
   assert.deepEqual(
     validateProfile({ type: "container", name: "c" }, { profiles: list, isNew: true }).errors,
@@ -472,10 +494,16 @@ test("saveProfile rejects a duplicate name and missing container fields", async 
     () => saveProfile(ctx, { name: "bad", type: "container" }),
     /imageRequired/,
   );
-  await saveProfile(ctx, { name: "first", type: "local", strataDir: "/a" });
+  await saveProfile(ctx, { name: "first", type: "local", strataDir: "/a", dataDir: "/a-data" });
   await assert.rejects(
-    () => saveProfile(ctx, { name: "first", type: "local", strataDir: "/b" }),
+    () => saveProfile(ctx, { name: "first", type: "local", strataDir: "/b", dataDir: "/b-data" }),
     /nameTaken/,
+  );
+  // The data directory is required: a local profile without one is refused
+  // (setup would otherwise fall back to its own remembered value).
+  await assert.rejects(
+    () => saveProfile(ctx, { name: "third", type: "local", strataDir: "/c" }),
+    /dataDirRequired/,
   );
 });
 

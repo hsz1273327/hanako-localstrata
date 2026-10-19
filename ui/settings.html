@@ -110,6 +110,14 @@
               <button id="pf-strataDir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
             </div>
           </label>
+          <label class="field" for="pf-data-dir">
+            <span data-i18n="field.localDataDir">Data directory</span>
+            <input id="pf-data-dir" type="text" autocomplete="off" spellcheck="false" placeholder="/path/to/Strata-data" required>
+            <div class="field-inline">
+              <button id="pf-data-dir-pick" class="btn small" type="button" data-i18n="field.pickPath">Choose…</button>
+            </div>
+            <span class="field-hint" data-i18n="field.localDataDirHint">Where this environment keeps its packs, MTP files and the downloaded model (setup.py --data-dir). Required; every environment has its own.</span>
+          </label>
           <label class="field" for="pf-pythonPath">
             <span data-i18n="field.pythonPath">Python interpreter</span>
             <input id="pf-pythonPath" type="text" autocomplete="off" spellcheck="false" placeholder="python3" data-i18n-placeholder="field.pythonPathPlaceholder">

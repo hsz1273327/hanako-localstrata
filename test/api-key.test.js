@@ -89,7 +89,7 @@ const containerProfile = (over = {}) =>
   });
 
 const localProfile = (over = {}) =>
-  normalizeProfile({ id: "p2", name: "src", type: "local", strataDir: "/srv/Strata", ...over });
+  normalizeProfile({ id: "p2", name: "src", type: "local", strataDir: "/srv/Strata", dataDir: "/srv/strata-data", ...over });
 
 // ── precedence ────────────────────────────────────────────────────────────
 
@@ -237,15 +237,15 @@ test("a local profile's override saves, masks and drives the effective key", asy
   assert.equal(resolveApiKey(await readAllConfig(ctx)), "FILEKEY");
 
   // The local form now saves an override like the container one.
-  const saved = await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: "LOCAL-OVERRIDE" });
+  const saved = await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, dataDir: "/srv/strata-data", apiKey: "LOCAL-OVERRIDE" });
   assert.equal(findProfile((await readAllConfig(ctx)).profiles, "p2").apiKey, "LOCAL-OVERRIDE");
   assert.equal(saved.profile.apiKey, API_KEY_MASK, "masked on the way back");
   assert.equal(resolveApiKey(await readAllConfig(ctx)), "LOCAL-OVERRIDE", "the override beats the config file");
 
   // The mask keeps it; empty clears it and the config file takes over again.
-  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: API_KEY_MASK });
+  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, dataDir: "/srv/strata-data", apiKey: API_KEY_MASK });
   assert.equal(resolveApiKey(await readAllConfig(ctx)), "LOCAL-OVERRIDE");
-  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, apiKey: "" });
+  await call("/profiles/save", { id: "p2", name: "src", type: "local", strataDir: dir, dataDir: "/srv/strata-data", apiKey: "" });
   assert.equal(findProfile((await readAllConfig(ctx)).profiles, "p2").apiKey, "");
   assert.equal(resolveApiKey(await readAllConfig(ctx)), "FILEKEY", "back to the config file");
 });

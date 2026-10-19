@@ -92,12 +92,26 @@ function makeLocalDir({ runningPort = null } = {}) {
 function localCtx(dir, extra = {}) {
   return makeCtx({
     profiles: [
-      { id: "p1", name: "default", type: "local", strataDir: dir, pythonPath: "/usr/bin/python3", gpu: "", ggufDir: "", port: 0 },
+      { id: "p1", name: "default", type: "local", strataDir: dir, dataDir: "/srv/strata-data", pythonPath: "/usr/bin/python3", gpu: "", ggufDir: "", port: 0 },
     ],
     activeProfileId: "p1",
     configFile: "strata-a.json",
     ...extra,
   });
+}
+
+// A `readAllConfig`-shaped cfg for the injected io. The data directory is a
+// PROFILE field (setup's remembered value is never consulted), so the fixture
+// carries an active profile — what the real reader always produces.
+function localCfg(dir, extra = {}) {
+  return {
+    strataDir: dir,
+    pythonPath: "/usr/bin/python3",
+    ggufDir: "",
+    configFile: "",
+    activeProfile: { id: "p1", name: "default", type: "local", strataDir: dir, dataDir: "/srv/strata-data" },
+    ...extra,
+  };
 }
 
 // ── selectConfig ──────────────────────────────────────────────────────────
@@ -181,7 +195,7 @@ test("startConfigSetup runs the setup job with startAfter:false and never starts
 
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/x", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: "/models/x", configFile: "strata-a.json" }),
     saveSelectedConfig: async (_ctx, file) => {
       saved = file;
     },
@@ -228,7 +242,7 @@ test("startConfigSetup forwards only whitelisted setup parameters", async (t) =>
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/x", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: "/models/x", configFile: "strata-a.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {
@@ -537,7 +551,7 @@ test("startConfigSetup backs up first, then runs setup, and never fakes a target
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "/models/x", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { ggufDir: "/models/x", configFile: "strata-a.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {
@@ -674,7 +688,7 @@ test("startConfigSetup refuses an unusable GGUF folder without starting a job", 
   let spawned = false;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { configFile: "strata-a.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: () => {
@@ -697,7 +711,7 @@ test("the GGUF folder the dialog names is what setup is given", async (t) => {
   let spawnedArgs = null;
   const io = {
     getStatus: async () => ({ state: "stopped", launch: { method: "local" }, settings: {} }),
-    readAllConfig: async () => ({ strataDir: dir, pythonPath: "/usr/bin/python3", ggufDir: "", configFile: "strata-a.json" }),
+    readAllConfig: async () => localCfg(dir, { configFile: "strata-a.json" }),
     saveSelectedConfig: async () => {},
     sleep: async () => {},
     spawn: (cmd, args) => {

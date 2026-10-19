@@ -21,6 +21,23 @@ Patch release: an update could not be started while the service was stopped.
   **服务停止时也能更新了。** 本地版本以前只取自运行中服务的状态，停机就显示
   「版本 —」，更新那一行只剩一个版本号——而更新流程本来就是先停服。现在同时读引擎的
   `engine/BUILD.json`；本地版本未知时按「无法确认是否最新」处理，因此仍会给出更新入口。
+- **The data directory belongs to the profile.** `setup.py` keeps one `data_dir` in
+  `~/.config/strata/settings.json` and reuses it, and this App never passed
+  `--data-dir` at all — so two deployments on one machine shared that single memory
+  and a setup run for the second one wrote its packs and MTP files into the first
+  one's folder. The directory is now a **required** property of a local profile
+  (a container profile keeps expressing the same place with `VolumeBinds` +
+  `STRATA_DATA`), with no default and no fallback, and **every** setup run passes
+  `--data-dir <profile.dataDir>`. A profile saved before the field existed stays
+  empty: the panel lists it as a missing field and setup refuses to run instead of
+  guessing a path.
+
+  **数据目录属于配置本身。** `setup.py` 把 `data_dir` 记在 `~/.config/strata/settings.json`
+  里并复用，而本 App 从不传 `--data-dir`——同一台机器上的两套部署共用了这一条记忆，给第二套
+  跑 setup 会把它的 packs 与 MTP 写进第一套的目录。现在这个目录是**本机配置的必填属性**
+  （容器配置仍用 `VolumeBinds` + `STRATA_DATA` 表达同一个位置），没有默认值、没有兜底，
+  并且**每次** setup 都传 `--data-dir <profile.dataDir>`。字段引入前存下的配置保持为空：
+  面板会把它列为缺失字段，setup 直接拒绝运行，而不是猜一个路径。
 
 ## 1.1.0 — 2026-10-18
 
