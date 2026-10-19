@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "hanako-localstrata",
   "name": "Strata Console",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Monitor and control your local Strata inference service.",
   "entry": "index.js",
   "icon": "assets/icon.svg",
