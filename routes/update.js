@@ -11,7 +11,7 @@
 //   3) 停止服务（复用 lib/strata.js 的精确匹配 + 排除自身）
 //   4) git fetch --tags --force origin
 //   5) git checkout <tag>
-//   6) {pythonPath} {strataDir}/setup.py --update --yes --data-dir {dataDir}
+//   6) {pythonPath} {strataDir}/setup.py --update --yes --no-browser --data-dir {dataDir}
 //      （仅当环境自带 CUDA 时注入 STRATA_NVCC / NVCC_PREPEND_FLAGS / LDFLAGS）
 //   7) 重启服务
 //   全过程写日志到 {strataDir}/strata-update.log（stdout+stderr，脱敏）。
@@ -53,6 +53,15 @@ const STEPS = [
 
 function ts() {
   return new Date().toISOString();
+}
+
+// The argv the update's setup run gets. Pure and exported so the test can pin the
+// one thing that matters here: `--no-browser`, for the same reason the first-run
+// job passes it (lib/firstrun.js's setupArgs) — the plugin is its own UI, so a
+// browser window popping up out of an update is noise. setup.py accepts the flag
+// on the `--update` branch too (one parser, setup.py:4610).
+export function updateSetupArgs(setupPy, dataDir) {
+  return [setupPy, "--update", "--yes", "--no-browser", "--data-dir", dataDir];
 }
 
 function idleState() {
@@ -409,7 +418,7 @@ async function performUpdate(ctx, cfg, tag) {
   await runCommand(
     "setup.py --update",
     python.path,
-    [path.join(cfg.strataDir, "setup.py"), "--update", "--yes", "--data-dir", dataDir],
+    updateSetupArgs(path.join(cfg.strataDir, "setup.py"), dataDir),
     { cwd: cfg.strataDir, env },
   );
 

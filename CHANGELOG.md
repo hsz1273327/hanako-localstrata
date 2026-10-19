@@ -32,6 +32,26 @@ slim card could not switch environments.
 
 ### Fixed / 修复
 
+- **Setup never opens a browser.** Strata's setup opens the chat page by default:
+  `open_browser` defaults to true, lands in the config, and `run-<model>.sh` / `.bat`
+  is written with `--open`. For an app that *is* the UI, a browser window appearing
+  from a first launch or out of an update is noise. Every setup run this App starts now
+  passes `--no-browser` — the first-run job (local `--setup`, and the “Run setup…” /
+  new-config paths that reuse it) and the update's `setup.py --update`. As a side effect
+  the config records `open_browser: false` and the run script setup writes has no
+  `--open` either, so a hand-run script stays quiet too. Starting the service was
+  already silent and stays that way: `serve/server.py` opens a browser only when it is
+  given `--open`, which this App never passes. Container profiles are untouched — their
+  image runs its own setup on first start and this App never spawns `setup.py` for them.
+
+  **setup 不再弹浏览器。** Strata 的 setup 默认会打开聊天页：`open_browser` 默认 true，会写进
+  配置，写出的 `run-<model>.sh` / `.bat` 里也带 `--open`。对于一个自己就是 UI 的 App 来说，
+  首启或更新时冒出一个浏览器窗口纯属噪音。现在本 App 起的每一次 setup 都传 `--no-browser`
+  ——首启任务（本机 `--setup`，以及复用它的「运行 setup…」与新建配置路径）和更新里的
+  `setup.py --update`。副作用是配置里记下 `open_browser: false`，setup 写出的运行脚本也不再
+  带 `--open`，手动跑那个脚本同样安静。启动服务本来就不弹，继续保持：`serve/server.py` 只在
+  收到 `--open` 时才开浏览器，本 App 从不传它。容器配置不受影响——它们的首次 setup 由镜像
+  自己完成，本 App 从不为它们启 `setup.py`。
 - The update action no longer disappears while the service is stopped. The local version
   used to come only from the running server's status, so a stopped service showed
   "version: —" and the update row collapsed to a bare version number — although stopping
