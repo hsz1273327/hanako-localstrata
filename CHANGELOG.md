@@ -59,6 +59,31 @@ slim card could not switch environments.
   （容器配置仍用 `VolumeBinds` + `STRATA_DATA` 表达同一个位置），没有默认值、没有兜底，
   并且**每次** setup 都传 `--data-dir <profile.dataDir>`。字段引入前存下的配置保持为空：
   面板会把它列为缺失字段，setup 直接拒绝运行，而不是猜一个路径。
+- **Each deployment keeps its own setup settings file.** `--data-dir` fixed *where* a run
+  writes, but `setup.py` still kept `data_dir` and `installs` in one per-user file
+  (`$XDG_CONFIG_HOME/strata/settings.json`; `%APPDATA%/Strata/settings.json` on Windows)
+  and treats both as places an older install left model files in, moving them into the
+  current run's folder. So whichever of two deployments ran setup last owned that value,
+  and the next run of the other one migrated the first one's data — twice, for real. A
+  local profile's setup/update run is now given a config home inside its own Strata
+  directory (`<strataDir>/.config`): `XDG_CONFIG_HOME` on POSIX and `APPDATA` on Windows,
+  with the same `strata` / `Strata` folder names `setup.py`'s own branch uses, so two
+  deployments no longer share the file. It is written only when missing, starting from
+  this profile's `dataDir` and `strataDir`; an existing file is left to setup, which
+  maintains it. Nothing to configure and nothing in the UI: an unwritable directory is
+  one line in the setup log and the run continues, and the service start is deliberately
+  not given the variable (it never reads that file).
+
+  **每套部署各自维护自己的 setup 设置文件。** `--data-dir` 解决了「一次运行往哪写」，但
+  `setup.py` 仍把 `data_dir` 与 `installs` 记在一份按用户共享的文件里
+  （`$XDG_CONFIG_HOME/strata/settings.json`，Windows 上是 `%APPDATA%/Strata/settings.json`），
+  并把这两处都当作「旧版本留下的模型目录」，把里面的模型文件搬进本次运行的目录：两套部署
+  谁最后跑 setup 谁就拥有那个值，另一套下次运行会把前一套的数据搬走——已真实发生过两次。
+  现在本机配置的 setup/更新运行会拿到指向自己 Strata 目录内部（`<strataDir>/.config`）的
+  配置主目录：POSIX 用 `XDG_CONFIG_HOME`，Windows 用 `APPDATA`，目录名照 `setup.py` 自己的
+  分支取 `strata` / `Strata`，两套部署不再共用这份文件。只在缺失时创建，起点就是这套配置的
+  `dataDir` 与 `strataDir`；已存在则交给 setup 自己维护。没有新字段，UI 也没有变化：目录不可写
+  只在 setup 日志里留一行、运行继续；启动服务时不注入这个变量（它根本不读那份文件）。
 
 ## 1.1.0 — 2026-10-18
 

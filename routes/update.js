@@ -30,6 +30,14 @@ import {
 } from "../lib/strata.js";
 import { resolvePython } from "../lib/python.js";
 import { commandExists } from "../lib/process.js";
+import {
+  describeSetupEnv,
+  ensureSetupSettings,
+  profileDataDir,
+  profileStrataDir,
+  setupSettingsPath,
+  withSetupConfigEnv,
+} from "../lib/setup-env.js";
 
 const UPDATE_LOG_NAME = "strata-update.log";
 
@@ -215,6 +223,17 @@ function buildEnv(cfg, cuda) {
   };
 }
 
+// What a setup / install class process gets: the CUDA hints above plus THIS
+// deployment's own settings location (lib/setup-env.js). The service start does
+// not go through here — it never reads setup's settings file, so it must not
+// carry the variable.
+//
+// Exported for the tests: the branch is the whole point (XDG_CONFIG_HOME on
+// POSIX, APPDATA on Windows), and it can be checked without a real setup run.
+export function setupRunEnv(cfg, cuda, platform = process.platform) {
+  return withSetupConfigEnv(buildEnv(cfg, cuda), profileStrataDir(cfg), platform);
+}
+
 function envSummary(cfg, cuda) {
   if (cuda.hasOwnCuda) {
     return `python 环境自带 CUDA: STRATA_NVCC=${cuda.nvccInEnv}, NVCC_PREPEND_FLAGS="-Xlinker --allow-shlib-undefined", LDFLAGS="-Wl,--allow-shlib-undefined"`;
@@ -223,8 +242,14 @@ function envSummary(cfg, cuda) {
 }
 
 // 从插件配置 + Strata 自己的 settings.json 推导数据目录，不新增配置项。
+// 优先级：配置自己的 dataDir（必填字段，上一轮已经接管这件事）→ 这套部署自己的
+// settings.json（setup 每次都会把 data_dir 写回）→ 旧的全局 settings.json（老部署）
+// → 启动配置里 --pack/--native 指向的目录 → 兜底默认。
 function deriveDataDir(cfg, platform = process.platform) {
-  for (const settingsPath of strataSettingsPaths(platform)) {
+  const fromProfile = profileDataDir(cfg);
+  if (fromProfile) return fromProfile;
+
+  for (const settingsPath of strataSettingsPaths(cfg, platform)) {
     try {
       const s = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
       if (typeof s?.data_dir === "string" && s.data_dir) return s.data_dir;
@@ -251,19 +276,28 @@ function deriveDataDir(cfg, platform = process.platform) {
 // Strata stores its settings.json under the platform config dir. Windows uses
 // %APPDATA% (roaming) with %LOCALAPPDATA% as a fallback; POSIX uses XDG.
 // The Windows locations are UNTESTED.
-function strataSettingsPaths(platform) {
+//
+// This deployment's own file comes FIRST: it is where a run started by this App
+// writes (setup gets XDG_CONFIG_HOME / APPDATA pointing there, see
+// lib/setup-env.js), and on a machine with more than one deployment the shared
+// per-user file belongs to whichever one ran last.
+function strataSettingsPaths(cfg, platform = process.platform) {
+  const own = setupSettingsPath(profileStrataDir(cfg), platform);
+  const shared = [];
   if (platform === "win32") {
     const bases = [process.env.APPDATA, process.env.LOCALAPPDATA].filter(Boolean);
     if (!bases.length) bases.push(path.join(os.homedir(), "AppData", "Roaming"));
-    return bases.map((b) => path.join(b, "strata", "settings.json"));
+    shared.push(...bases.map((b) => path.join(b, "Strata", "settings.json")));
+  } else {
+    shared.push(
+      path.join(
+        process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+        "strata",
+        "settings.json",
+      ),
+    );
   }
-  return [
-    path.join(
-      process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
-      "strata",
-      "settings.json",
-    ),
-  ];
+  return own ? [own, ...shared] : shared;
 }
 
 function backupConfigFiles(cfg) {
@@ -365,8 +399,13 @@ async function performUpdate(ctx, cfg, tag) {
   // 6. 执行更新（编译引擎）。
   setStep(6);
   const dataDir = deriveDataDir(cfg);
-  const env = buildEnv(cfg, cuda);
+  const strataDir = profileStrataDir(cfg);
+  // setup.py 的 settings.json 只属于这套部署（lib/setup-env.js）：缺失时补一个
+  // 正确起点，已存在就交给 setup 自己维护；写不进去只记一行，不中断更新。
+  const settings = ensureSetupSettings({ strataDir, dataDir });
+  const env = setupRunEnv(cfg, cuda);
   log(`[${ts()}] dataDir=${dataDir}\n`);
+  for (const line of describeSetupEnv({ strataDir, settings })) log(`[${ts()}] ${line}\n`);
   await runCommand(
     "setup.py --update",
     python.path,
