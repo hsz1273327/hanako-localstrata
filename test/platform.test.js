@@ -160,17 +160,17 @@ test("pickConfigFile prefers the most recently used config", () => {
   assert.equal(pickConfigFile(dir, []), "");
 });
 
-test("config selected but no server on this port: stopped or starting", async () => {
-  // This host runs a real Strata process, so getStatus reports "starting" from
-  // process presence; on a clean host it would be "stopped". Both are valid
-  // here — the point is that the config-selected branch is reached (not
-  // needs-config / no-config).
+test("config selected but no server on this port: stopped", async () => {
+  // This host may well be running a real Strata (a second deployment). Its
+  // process belongs to its own folder and its own port, so this temp profile
+  // must still read as "stopped": `starting` here is the cross-deployment bug
+  // getStatus used to have (a machine-wide pgrep under the hood).
   const dir = makeStrataDir({ config: { name: "strata-iq2_xs.json", data: { port: 18081 } } });
   const status = await getStatus(
     makeCtx({ strataDir: dir, pythonPath: "/usr/bin/python3", configFile: "strata-iq2_xs.json" }),
   );
-  assert.ok(["stopped", "starting"].includes(status.state), `unexpected state ${status.state}`);
-  if (status.state === "starting") assert.ok(status.pids.length > 0);
+  assert.equal(status.state, "stopped");
+  assert.equal(status.pids, undefined);
   assert.equal(status.port, 18081);
   assert.deepEqual(status.configCandidates.map((c) => c.file), ["strata-iq2_xs.json"]);
 });

@@ -105,6 +105,31 @@ slim card could not switch environments.
   `dataDir` 与 `strataDir`；已存在则交给 setup 自己维护。没有新字段，UI 也没有变化：目录不可写
   只在 setup 日志里留一行、运行继续；启动服务时不注入这个变量（它根本不读那份文件）。
 
+- **Two deployments no longer see each other's process.** Every lifecycle decision
+  used one machine-wide `pgrep -f serve/server.py`, so with a second Strata on the same
+  host (a CUDA card and an ROCm card, say) each one saw the other: a stopped profile
+  reported 启动中, its 启动 button came back `already: true` and did nothing, and 停止
+  would have signalled the neighbour's pid. Detection is now scoped to the profile —
+  `listStrataPidsFor(strataDir)` only accepts a server whose command line points into
+  that deployment (or, for a `cd <dir> && python serve/server.py` launch, whose cwd is
+  it), and a port probe (`portListening`: one TCP handshake on the profile's own
+  resolved port — profile → config file → 8080, never a constant) supplies a second,
+  independent signal. A listener on the profile's port with none of its processes
+  behind it is reported as a port conflict, and `start()` says why instead of spawning
+  a server that cannot bind. Nothing on this path signals a process. Starting the
+  service in `test/setup-env.test.js` passes again on a machine that runs Strata.
+
+  **两套部署不再互相看到对方的进程。** 以前所有生命周期判断都基于一条机器级的
+  `pgrep -f serve/server.py`，于是同一台机器上的第二份 Strata（比如一张 CUDA 卡加一张
+  ROCm 卡）会被彼此看见：停着的配置显示「启动中」，「启动」按钮返回 `already: true`
+  什么也不做，「停止」还会去给隔壁那套的 pid 发信号。现在探测按配置收窄：
+  `listStrataPidsFor(strataDir)` 只认命令行指向这套部署的服务进程（`cd <目录> &&
+  python serve/server.py` 这种启动方式则认工作目录），并加上端口探测
+  （`portListening`：在这套配置自己解析出的端口上做一次 TCP 握手——profile → 配置文件 →
+  8080，不写死任何端口）作为第二个独立信号。端口被占、却找不到这套部署的进程时按端口冲突
+  上报，`start()` 直接说明原因，而不是去起一个绑不上端口的服务。这条路径上没有任何一处会
+  发信号。在真的跑着 Strata 的机器上，`test/setup-env.test.js` 重新通过。
+
 ## 1.1.0 — 2026-10-18
 
 `manifest.json` says **`1.1.0`**; `minAppVersion` stays at `1.1.0-beta` (that is the Hana

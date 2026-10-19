@@ -254,6 +254,7 @@ LDFLAGS="-Wl,--allow-shlib-undefined"
 新增 `lib/process.js` 统一收拢进程相关逻辑：
 
 - **进程列举**：Linux 用 `pgrep -f` + `/proc/<pid>/cmdline`；Windows 用 PowerShell `Get-CimInstance Win32_Process`（`wmic` 在新 Windows 已弃用）。全部通过 `execFileSync(cmd, [args])` 的参数数组调用，**绝不拼接 shell 字符串**。
+- **进程归属**：一台机器可能同时跑两套部署，所以「有没有 Strata 在跑」不能按机器回答。`listStrataPidsFor(strataDir)` 只认命令行（或 `cd <目录> && python serve/server.py` 的工作目录）落在这套部署里的进程；`portListening(port)` 在配置自己解析出的端口上做一次 TCP 握手作第二信号。机器级的 `listStrataPids()` 只用于诊断，不参与任何启停判断。
 - **杀进程**：统一走 Node 原生 `process.kill(pid, signal)`（Windows 上映射为 `TerminateProcess`）；`process.kill(pid, 0)` 做存活检测。
 - **Python 探测**（`lib/python.js`）：Windows 走 PATH 找 `python.exe` / `python3.exe` / `py.exe`；Linux 先固定路径（`/usr/bin/python3` 等）再走 PATH。
 - **更新命令**（`routes/update.js`）：统一 `spawn(python, [path.join(strataDir, "setup.py"), "--update", ...])`，Windows/Linux 同一套代码。更新前检测 `git` 是否可用，不可用直接报“未找到 git，无法更新”。
