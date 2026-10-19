@@ -11,6 +11,7 @@ import { createSetupFacts } from "./setup-facts.js";
 import { backupDefaultName } from "./backup-name.js";
 import { copyToClipboard } from "./clipboard.js";
 import { parallelTier, parallelBounds, parallelDefault, PARALLEL_OFF } from "./parallel-tier.js";
+import { versionRowPlan, compareVersions } from "./version-row.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
