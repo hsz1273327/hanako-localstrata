@@ -12,6 +12,12 @@ import { backupDefaultName } from "./backup-name.js";
 import { copyToClipboard } from "./clipboard.js";
 import { parallelTier, parallelBounds, parallelDefault, PARALLEL_OFF } from "./parallel-tier.js";
 import { versionRowPlan, compareVersions } from "./version-row.js";
+import {
+  canSelectProfile,
+  profileTypeLabel,
+  renderProfileOptions,
+  requestProfileSelect,
+} from "./profile-picker.js";
 
 // Resolve the UI language before anything renders.
 setLang(loadLang());
@@ -511,14 +517,15 @@ function paintAccessInfo(s) {
   }
 }
 
-function profileTypeLabel(type) {
-  return type === "container" ? t("profile.typeContainer") : t("profile.typeLocal");
-}
-
 // Current profile name + type marker (shown while a service is running).
 // The "current environment" control in the header. While running it is the
 // read-only name·type badge (clicking it opens the read-only detail drawer);
 // while stopped it is a picker that switches the current environment.
+// The option list and the guard live in ui/assets/profile-picker.js, shared with the
+// slim card; `envOptionsCache` is this document's own key so a poll never rebuilds
+// the dropdown under the user's hand.
+const envOptionsCache = { key: "" };
+
 function paintEnv(s) {
   const prof = s?.profile;
   const running = RUNNING_STATES.has(s.state);
@@ -532,7 +539,7 @@ function paintEnv(s) {
     els.profileBadge.title = t("profile.viewDetails");
     els.profileBadge.setAttribute("aria-label", t("profile.viewDetails"));
   } else if (show) {
-    renderEnvOptions(s.profiles);
+    renderProfileOptions(els.envSelect, s.profiles, envOptionsCache);
     els.envSelect.value = s.activeProfileId || "";
     els.envSelect.disabled = state.working;
   }
@@ -2091,26 +2098,6 @@ function canStartCurrent(s) {
   return s?.launch?.canStart !== false;
 }
 
-// Rebuild the picker's options only when the set of profiles changes, so a poll
-// never resets an open dropdown.
-let envOptionsKey = "";
-
-function renderEnvOptions(profiles) {
-  const list = Array.isArray(profiles) ? profiles : [];
-  const key = list.map((p) => `${p.id}:${p.name}:${p.type}`).join("|");
-  if (key === envOptionsKey) return;
-  envOptionsKey = key;
-  els.envSelect.replaceChildren();
-  for (const p of list) {
-    const opt = document.createElement("option");
-    opt.value = p.id;
-    // Name + type, the same pair the running badge shows.
-    opt.textContent = `${p.name || p.id} · ${profileTypeLabel(p.type)}`;
-    els.envSelect.append(opt);
-  }
-  els.envSelect.value = "";
-}
-
 // "Cannot start" is a property of the current environment, so the hint hangs on
 // the status card next to the start button — not on the picker.
 function paintStartHint(s) {
@@ -2123,12 +2110,14 @@ function paintStartHint(s) {
 // the same route the start flow uses) and then refreshes everything, so the
 // status / version / service-config cards follow the new environment.
 async function selectEnv(id) {
-  if (state.working || !id || id === state.status?.activeProfileId) return;
+  // The guard and the request live in ui/assets/profile-picker.js, shared with the slim
+  // card; the error surface and the refresh stay here (each host owns its own).
+  if (!canSelectProfile({ working: state.working, id, activeId: state.status?.activeProfileId })) return;
   state.working = true;
   els.envSelect.disabled = true;
   showError("");
   try {
-    await api("profiles/select", { method: "POST", body: JSON.stringify({ id }) });
+    await requestProfileSelect(api, id);
   } catch (e) {
     showError(String(e?.message || e));
   } finally {
@@ -2583,7 +2572,7 @@ function initLangSelect() {
 function relocalize() {
   applyI18n();
   for (const tpl of document.querySelectorAll("template")) applyI18n(tpl.content);
-  envOptionsKey = "";
+  envOptionsCache.key = "";
   if (state.status) paint(state.status);
   if (!els.profileDrawer.hidden && pluginFormEls) {
     const title = state.editingProfileId ? t("profile.editTitle") : t("profile.viewTitle");

@@ -203,7 +203,13 @@ test("the header picker switches the current environment and refreshes every car
   assert.match(panelJs, /els\.envSelectWrap\.hidden = !show \|\| running;/);
   assert.match(panelJs, /els\.envSelect\.addEventListener\("change", \(\) => selectEnv\(els\.envSelect\.value\)\)/);
   // Selecting persists the choice via the still-present route, then refreshes.
-  assert.match(panelJs, /await api\("profiles\/select", \{ method: "POST", body: JSON\.stringify\(\{ id \}\) \}\)/);
+  // The route + body shape moved into ui/assets/profile-picker.js (shared with the
+  // slim card), so the panel is pinned to the helper and the helper to the route.
+  assert.match(panelJs, /await requestProfileSelect\(api, id\)/);
+  assert.match(
+    read("ui/assets/profile-picker.js"),
+    /api\("profiles\/select", \{ method: "POST", body: JSON\.stringify\(\{ id \}\) \}\)/,
+  );
   assert.match(panelJs, /state\.working = false;\s*await refresh\(\);/);
 });
 

@@ -19,6 +19,23 @@
         <span id="slimScope" class="slim-scope" hidden></span>
       </header>
 
+      <!-- Which environment. While the service is down this is a picker (the choice is
+           persisted server-side); while it runs it is the name of the running one plus a
+           small type marker — a running service cannot switch underneath itself. Hidden
+           entirely when there is no profile view (an unsupported platform), so the card
+           never shows an empty control. -->
+      <div id="slimProfile" class="slim-profile" hidden>
+        <span id="slimEnvWrap" class="slim-env-wrap" hidden>
+          <select id="slimEnv" class="slim-env" aria-label="Select environment" data-i18n-aria-label="profile.selectEnv" title="Select environment" data-i18n-title="profile.selectEnv"></select>
+          <span class="slim-env-arrow" aria-hidden="true">&#x25BE;</span>
+        </span>
+        <p id="slimProfileView" class="slim-profile-view" hidden>
+          <span id="slimProfileName" class="slim-profile-name"></span>
+          <span class="slim-profile-sep" aria-hidden="true">·</span>
+          <span id="slimProfileType" class="slim-profile-type"></span>
+        </p>
+      </div>
+
       <!-- Model, and whether it reads images. The eye is a SHAPE first (an open eye vs a
            slashed one) and a colour second, so it never relies on hue alone. -->
       <p id="slimModelLine" class="slim-model" hidden>

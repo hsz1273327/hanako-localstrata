@@ -22,6 +22,14 @@ body {
   overflow: hidden;
 }
 
+/* `[hidden]` needs saying out loud here: this file gives several hidden elements a
+ * display of their own (.slim-model, .slim-vision, .slim-profile…), and an author
+ * `display` always beats the user-agent's `[hidden] { display: none }` rule. Without
+ * this, a hidden block still paints — an empty control that looks like a defect. */
+[hidden] {
+  display: none !important;
+}
+
 /* Top-aligned with breathing room, NOT centred: whatever the frame leaves over stays at
  * the bottom, which reads as a roomy margin instead of a second void. */
 .slim {
@@ -113,6 +121,109 @@ body {
 .slim-scope.lan {
   color: var(--text, inherit);
   font-weight: 600;
+}
+
+/* Which environment, right under the state line: a picker while stopped, a read-only
+ * name + type marker while running. One row, one quiet border at most — the state line
+ * above already carries the colour, so nothing here introduces a new accent.
+ *
+ * WIDTH: the card is 300–360 px wide and a profile name is the user's own words, so the
+ * control is full width and the NAME truncates (ellipsis) while the type marker stays
+ * whole — the type is short and fixed, and losing it would leave "… · " behind. */
+.slim-profile {
+  display: flex;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.slim-env-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+/* A native select with the native chrome removed: full width, 32 px tall, the card's
+ * own grey hairline and radius. `text-overflow` needs the overflow/white-space pair to
+ * have any effect on a select in Chromium. */
+.slim-env {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 26px 0 10px;
+  border: 1px solid rgba(83, 125, 150, 0.28);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, inherit);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--duration-fast, 150ms) ease;
+}
+
+.slim-env:hover:not(:disabled) {
+  border-color: rgba(83, 125, 150, 0.5);
+}
+
+.slim-env:focus-visible {
+  outline: 2px solid var(--accent, #10b981);
+  outline-offset: 1px;
+}
+
+.slim-env:disabled {
+  opacity: 0.5;
+  cursor: var(--control-disabled-cursor, default);
+}
+
+/* The "you can pick" cue: a single glyph in the control's own text colour. */
+.slim-env-arrow {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  font-size: 9px;
+  line-height: 1;
+  color: currentColor;
+  opacity: 0.65;
+}
+
+/* Running: the same `name · type` the full page's badge shows, but as text — no border,
+ * no pointer, nothing to click. The name is the loud half and truncates; the type marker
+ * is 11 px muted, so the two are told apart by size, not by a second colour. */
+.slim-profile-view {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text, inherit);
+}
+
+.slim-profile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slim-profile-sep {
+  flex: 0 0 auto;
+  color: var(--text-muted, #8e9196);
+}
+
+.slim-profile-type {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-muted, #8e9196);
+  white-space: nowrap;
 }
 
 /* Two rows: small label on the left, the NUMBER large on the right (tabular figures so

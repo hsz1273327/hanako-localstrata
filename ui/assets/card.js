@@ -11,6 +11,13 @@
 // POST /start|/stop. Nothing new.
 import { hana } from "./sdk.js";
 import { loadLang, setLang, t, tp, applyI18n } from "./i18n.js";
+import {
+  canSelectProfile,
+  isServiceRunning,
+  profileControlPlan,
+  renderProfileOptions,
+  requestProfileSelect,
+} from "./profile-picker.js";
 
 setLang(loadLang());
 
@@ -36,9 +43,14 @@ const els = {
   modelSuf: document.getElementById("slimModelSuf"),
   vision: document.getElementById("slimVision"),
   msg: document.getElementById("slimMsg"),
+  profile: document.getElementById("slimProfile"),
+  envWrap: document.getElementById("slimEnvWrap"),
+  env: document.getElementById("slimEnv"),
+  profileView: document.getElementById("slimProfileView"),
+  profileName: document.getElementById("slimProfileName"),
+  profileType: document.getElementById("slimProfileType"),
 };
 
-const RUNNING = new Set(["running", "starting", "stopping", "restarting"]);
 const STATE_KEYS = {
   running: "state.running",
   starting: "state.starting",
@@ -52,6 +64,11 @@ const STATE_KEYS = {
 };
 
 const state = { status: null, working: false, refreshSec: 5, facts: { model: "", vision: null } };
+
+// One cache of the last option set this document painted: a poll must not rebuild the
+// dropdown (that closes a native popup mid-choice). Same rule as the full page, own copy
+// because the two documents never share a DOM.
+const envOptionsCache = { key: "" };
 
 // ── The model, and whether it reads images ──────────────────────────────────
 //
@@ -146,7 +163,7 @@ function setMessage(text) {
 
 function paint(s) {
   state.status = s;
-  const running = RUNNING.has(s.state);
+  const running = isServiceRunning(s.state);
   const busy = s.state === "starting" || s.state === "stopping" || s.state === "restarting";
   els.dot.className = `dot ${s.state === "running" ? "running" : busy ? "starting" : "stopped"}`;
   els.state.textContent = t(STATE_KEYS[s.state] || "state.stopped");
@@ -175,7 +192,41 @@ function paint(s) {
   els.start.disabled = state.working || busy;
   els.stop.disabled = state.working || busy;
   if (Number.isFinite(s.refreshSec) && s.refreshSec >= 2) state.refreshSec = s.refreshSec;
+  paintProfile(s);
   if (!state.working) setMessage(s.error ? describeError(s.error) : "");
+}
+
+// ── Which environment ────────────────────────────────────────────────────────
+//
+// The full page owns this control in its header; the card gets the same semantics in
+// its own terms. Stopped = a picker (the choice is persisted server-side and the whole
+// card then follows the new environment). Running = the name of the environment that is
+// running, plus a small type marker: a running service cannot switch underneath itself
+// (the backend refuses), so offering a dropdown there would be a lie.
+//
+// No profile view (an unsupported platform, or a status that predates the shape) paints
+// nothing at all — an empty control reads as a broken card rather than as "not here".
+function paintProfile(s) {
+  const plan = profileControlPlan({
+    state: s?.state,
+    profile: s?.profile,
+    activeProfileId: s?.activeProfileId,
+    working: state.working,
+  });
+  els.profile.hidden = !plan.show;
+  els.envWrap.hidden = plan.mode !== "picker";
+  els.profileView.hidden = plan.mode !== "readonly";
+  if (!plan.show) return;
+  if (plan.mode === "readonly") {
+    els.profileName.textContent = plan.name;
+    els.profileType.textContent = plan.typeLabel;
+    // The name truncates before the type does; the tooltip gets the untruncated pair.
+    els.profileView.title = `${plan.name} · ${plan.typeLabel}`;
+    return;
+  }
+  renderProfileOptions(els.env, s?.profiles, envOptionsCache);
+  els.env.value = plan.selectedId;
+  els.env.disabled = plan.disabled;
 }
 
 // Polling backs off while the surface session is broken (×4, up to 60 s) instead of
@@ -225,6 +276,29 @@ async function act(verb) {
   }
 }
 
+// Switching the current environment persists it first (the same route, and the same body
+// shape, the full page's picker calls), then repaints everything the environment decides:
+// state, model, vision, speeds, buttons. The boot-time facts read is dropped on purpose —
+// the model name and the vision switch belong to the profile, so what we read for the old
+// one is stale the moment the choice changes.
+async function selectEnv(id) {
+  if (!canSelectProfile({ working: state.working, id, activeId: state.status?.activeProfileId })) return;
+  state.working = true;
+  els.env.disabled = true;
+  setMessage("");
+  try {
+    await requestProfileSelect(api, id);
+  } catch (e) {
+    setMessage(describeError(String(e?.message || e)));
+  } finally {
+    state.working = false;
+    await refresh();
+    state.facts = { model: "", vision: null };
+    await loadFacts().catch(() => {});
+    schedule();
+  }
+}
+
 let timer = null;
 function schedule() {
   window.clearTimeout(timer);
@@ -238,6 +312,7 @@ function schedule() {
 
 els.start.addEventListener("click", () => act("start"));
 els.stop.addEventListener("click", () => act("stop"));
+els.env.addEventListener("change", () => selectEnv(els.env.value));
 
 applyI18n();
 await hana.ready();

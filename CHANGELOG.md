@@ -7,7 +7,28 @@ Hana 构建版本，是另一条轴。
 
 ## 1.1.1 — 2026-10-19
 
-Patch release: an update could not be started while the service was stopped.
+Patch release: an update could not be started while the service was stopped, and the
+slim card could not switch environments.
+
+### Added / 新增
+
+- **The slim card can switch environments.** While the service is stopped, the
+  `Strata 状态` card now carries the same profile picker the full page has in its header:
+  pick one and it is persisted through `POST /profiles/select`, after which the whole card
+  (state, model, vision, speeds, start/stop) repaints against the new environment. While
+  the service runs, the picker is replaced by the running profile's name plus a small
+  local/container marker — read-only, because the backend refuses a switch under a live
+  service. An unsupported platform, or a status carrying no profile view, renders nothing
+  at all instead of an empty control. The option list, the guard and the request itself
+  now live in one module (`ui/assets/profile-picker.js`) shared with the full page, so the
+  two views cannot drift apart; the full page's behaviour is unchanged.
+
+  **瘦视图卡片也能切换环境了。** 服务停止时，「Strata 状态」卡片上出现了整页头部同款的
+  profile 选择器：选中后经 `POST /profiles/select` 落库，随后整张卡片（状态、模型、视觉、
+  速度、启停）按新环境重绘。服务运行时，选择器换成当前 profile 的名字加一个小号的
+  本地/容器标记——只读，因为后端本来就拒绝在服务运行中切换。平台不支持、或状态里没有
+  profile 视图时整块不渲染，而不是留一个空控件。选项列表、守卫与请求本身现在收在一个
+  模块（`ui/assets/profile-picker.js`）里与整页共用，两个视图不会再各写一套；整页行为不变。
 
 ### Fixed / 修复
 
